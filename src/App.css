@@ -1,116 +1,161 @@
-.logo.vite:hover {
-  filter: drop-shadow(0 0 2em #747bff);
+.app-shell {
+  display: flex;
+  min-height: 100vh;
 }
 
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafb);
-}
-:root {
-  font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
-  font-size: 16px;
-  line-height: 24px;
-  font-weight: 400;
-
-  color: #0f0f0f;
-  background-color: #f6f6f6;
-
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  -webkit-text-size-adjust: 100%;
+.app-sidebar {
+  display: flex;
+  flex: 0 0 var(--sidebar-width);
+  flex-direction: column;
+  background: var(--color-primary);
+  color: var(--color-text-on-primary);
 }
 
-.container {
+.app-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--header-height);
+  padding: var(--space-4);
+  border-bottom: 1px solid rgb(255 255 255 / 12%);
+}
+
+.app-brand-mark {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-md);
+  color: var(--color-accent);
+  font-weight: 700;
+}
+
+.app-brand-name {
   margin: 0;
-  padding-top: 10vh;
+  font-size: var(--font-size-base);
+  font-weight: 700;
+}
+
+.app-nav {
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  text-align: center;
+  gap: var(--space-1);
+  padding: var(--space-4) var(--space-3);
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: 0.75s;
-}
-
-.logo.tauri:hover {
-  filter: drop-shadow(0 0 2em #24c8db);
-}
-
-.row {
+.app-nav-link {
   display: flex;
-  justify-content: center;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  color: rgb(255 255 255 / 78%);
+  font-size: var(--font-size-sm);
+  text-decoration: none;
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast);
 }
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
+.app-nav-link:hover {
+  background: rgb(255 255 255 / 8%);
+  color: #ffffff;
+  text-decoration: none;
 }
 
-a:hover {
-  color: #535bf2;
+.app-nav-link--active {
+  background: rgb(176 141 87 / 18%);
+  color: #e7c88f;
 }
 
-h1 {
-  text-align: center;
+.app-nav-link--active:hover {
+  background: rgb(176 141 87 / 24%);
+  color: #f0d6a4;
 }
 
-input,
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  color: #0f0f0f;
-  background-color: #ffffff;
-  transition: border-color 0.25s;
-  box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
+.app-main {
+  flex: 1;
+  min-width: 0;
 }
 
-button {
-  cursor: pointer;
+.app-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: var(--header-height);
+  padding: var(--space-4) var(--space-6);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
 }
 
-button:hover {
-  border-color: #396cd8;
-}
-button:active {
-  border-color: #396cd8;
-  background-color: #e8e8e8;
+.app-topbar-title {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: 600;
 }
 
-input,
-button {
-  outline: none;
+.app-topbar-subtitle {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
 }
 
-#greet-input {
-  margin-right: 5px;
+.app-content {
+  width: 100%;
+  max-width: var(--content-max-width);
+  margin: 0 auto;
+  padding: var(--space-6);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    color: #f6f6f6;
-    background-color: #2f2f2f;
+.app-page-heading {
+  margin-bottom: var(--space-6);
+}
+
+.app-page-title {
+  margin-bottom: var(--space-2);
+  font-size: var(--font-size-2xl);
+  font-weight: 700;
+}
+
+.app-page-description {
+  margin-bottom: 0;
+  color: var(--color-text-muted);
+}
+
+@media (max-width: 768px) {
+  .app-shell {
+    flex-direction: column;
   }
 
-  a:hover {
-    color: #24c8db;
+  .app-sidebar {
+    flex-basis: auto;
   }
 
-  input,
-  button {
-    color: #ffffff;
-    background-color: #0f0f0f98;
+  .app-brand {
+    min-height: 56px;
   }
-  button:active {
-    background-color: #0f0f0f69;
+
+  .app-nav {
+    flex-direction: row;
+    overflow-x: auto;
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .app-nav-link {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .app-topbar {
+    padding: var(--space-3) var(--space-4);
+  }
+
+  .app-content {
+    padding: var(--space-4);
+  }
+
+  .app-page-title {
+    font-size: var(--font-size-xl);
   }
 }

@@ -12,15 +12,25 @@ mod dev_seed;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let initial_schema = include_str!("../../src/db/migrations/001_initial_schema.sql");
+    let initial_categories = include_str!("../../src/db/migrations/002_initial_categories.sql");
 
     let migrations = || {
-        vec![Migration {
-            version: 1,
-            description: "initial database schema",
-            sql: initial_schema,
-            kind: MigrationKind::Up,
-        }]
+        vec![
+            Migration {
+                version: 1,
+                description: "initial database schema",
+                sql: initial_schema,
+                kind: MigrationKind::Up,
+            },
+            Migration {
+                version: 2,
+                description: "initial jewelry categories",
+                sql: initial_categories,
+                kind: MigrationKind::Up,
+            },
+        ]
     };
+
 
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())

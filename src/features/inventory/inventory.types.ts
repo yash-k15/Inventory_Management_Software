@@ -22,6 +22,7 @@ export interface InventoryItem {
   name: string | null;
   imagePath: string | null;
   grossWeightMilli: number | null;
+  netWeightMilli: number | null;
   purityName: string | null;
   purityPercentBp: number | null;
   igiCertificateNumber: string | null;

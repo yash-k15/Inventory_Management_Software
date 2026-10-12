@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { convertFileSrc, invoke } from '@tauri-apps/api/core';
+import { appDataDir, join } from '@tauri-apps/api/path';
 import './InventoryScreen.css';
 
 import { getInventoryCategories, getInventoryItems } from './inventory.queries';
@@ -18,22 +19,23 @@ const INITIAL_FILTERS: InventoryFilters = {
 };
 
 function formatWeight(weightMilli: number | null): string {
-  if (weightMilli === null) {
-    return '—';
-  }
-
+  if (weightMilli === null) return '—';
   return `${(weightMilli / 1000).toFixed(3)} g`;
 }
 
 function formatPurity(
   purityName: string | null,
   purityPercentBp: number | null,
-): string {
-  if (purityName && purityPercentBp !== null) {
-    return `${purityName} (${(purityPercentBp / 100).toFixed(2)}%)`;
-  }
+): { name: string; percentage: string | null } {
+  if (!purityName) return { name: '—', percentage: null };
 
-  return purityName ?? '—';
+  return {
+    name: purityName,
+    percentage:
+      purityPercentBp !== null
+        ? `${(purityPercentBp / 100).toFixed(2)}%`
+        : null,
+  };
 }
 
 type Props = {
@@ -42,6 +44,7 @@ type Props = {
 
 function InventoryScreen({ onAddItem }: Props) {
   const [items, setItems] = useState<InventoryItem[]>([]);
+  const [imageUrls, setImageUrls] = useState<Record<number, string>>({});
   const [categories, setCategories] = useState<InventoryCategoryOption[]>([]);
   const [filters, setFilters] = useState<InventoryFilters>(INITIAL_FILTERS);
   const [isLoading, setIsLoading] = useState(true);
@@ -49,8 +52,10 @@ function InventoryScreen({ onAddItem }: Props) {
 
   const [isSeeding, setIsSeeding] = useState(false);
   const [seedMessage, setSeedMessage] = useState<string | null>(null);
-
   const [showCleanConfirmation, setShowCleanConfirmation] = useState(false);
+  const [showDevMenu, setShowDevMenu] = useState(false);
+
+  const devMenuRef = useRef<HTMLDivElement>(null);
 
   const loadInventory = useCallback(async () => {
     setIsLoading(true);
@@ -75,8 +80,72 @@ function InventoryScreen({ onAddItem }: Props) {
   }, [filters]);
 
   useEffect(() => {
+    let cancelled = false;
+
+    async function loadItemImages() {
+      const itemsWithImages = items.filter((item) => item.imagePath);
+
+      if (itemsWithImages.length === 0) {
+        setImageUrls({});
+        return;
+      }
+
+      try {
+        const dataDirectory = await appDataDir();
+
+        const entries = await Promise.all(
+          itemsWithImages.map(async (item) => {
+            const imagePath = await join(dataDirectory, item.imagePath!);
+
+            await invoke('allow_image_preview', { path: imagePath });
+
+            return [item.id, convertFileSrc(imagePath)] as const;
+          }),
+        );
+
+        if (!cancelled) {
+          setImageUrls(Object.fromEntries(entries));
+        }
+      } catch (err) {
+        console.error('Failed to load inventory images:', err);
+      }
+    }
+
+    void loadItemImages();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [items]);
+
+  useEffect(() => {
     void loadInventory();
   }, [loadInventory]);
+
+  useEffect(() => {
+    if (!showDevMenu) return;
+
+    function handleOutsideClick(event: MouseEvent) {
+      if (
+        event.target instanceof Node &&
+        !devMenuRef.current?.contains(event.target)
+      ) {
+        setShowDevMenu(false);
+      }
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') setShowDevMenu(false);
+    }
+
+    document.addEventListener('mousedown', handleOutsideClick);
+    document.addEventListener('keydown', handleEscape);
+
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [showDevMenu]);
 
   const updateFilter = <K extends keyof InventoryFilters>(
     key: K,
@@ -95,6 +164,7 @@ function InventoryScreen({ onAddItem }: Props) {
   const seedSampleInventory = async () => {
     setIsSeeding(true);
     setSeedMessage(null);
+    setShowDevMenu(false);
 
     try {
       const count = await invoke<number>('seed_dev_inventory');
@@ -113,6 +183,7 @@ function InventoryScreen({ onAddItem }: Props) {
   const cleanSampleInventory = async () => {
     setIsSeeding(true);
     setSeedMessage(null);
+    setShowDevMenu(false);
 
     try {
       const count = await invoke<number>('clean_dev_inventory');
@@ -129,79 +200,229 @@ function InventoryScreen({ onAddItem }: Props) {
     }
   };
 
+  const activeFilterCount = [
+    filters.categoryId !== null,
+    filters.certification !== 'all',
+  ].filter(Boolean).length;
+
+  const activeItemsCount = items.filter((item) => item.isArchived === 0).length;
+
   return (
     <div className='inventory-screen'>
-      <section className='app-page-heading'>
-        <div className='inventory-heading-row'>
-          <div>
-            <h2 className='app-page-title'>Inventory</h2>
-            <p className='app-page-description'>
-              Browse and search your jewelry catalog.
-            </p>
-          </div>
+      <header className='inventory-page-header'>
+        <div>
+          <h2 className='app-page-title'>Inventory</h2>
+          <p className='app-page-description'>
+            Browse and search your jewelry catalog.
+          </p>
+        </div>
+      </header>
 
-          <div className='inventory-heading-actions'>
-            {import.meta.env.DEV && (
-              <>
+      <section className='inventory-toolbar' aria-label='Inventory actions'>
+        <div className='inventory-toolbar-search'>
+          <svg viewBox='0 0 24 24' aria-hidden='true'>
+            <circle cx='11' cy='11' r='7' />
+            <path d='m16 16 4 4' />
+          </svg>
+          <input
+            type='search'
+            aria-label='Search inventory'
+            placeholder='Search item number or name...'
+            value={filters.search}
+            onChange={(event) => updateFilter('search', event.target.value)}
+          />
+        </div>
+
+        <button
+          type='button'
+          className='inventory-toolbar-button'
+          onClick={() => {
+            // Filtering behavior will be implemented in a later pass.
+          }}
+          title='Filtering will be implemented later'
+        >
+          <svg viewBox='0 0 24 24' aria-hidden='true'>
+            <path d='M4 5h16l-6.5 7.5V19l-3 1v-7.5L4 5Z' />
+          </svg>
+          <span>Filters</span>
+          {activeFilterCount > 0 && (
+            <span className='inventory-toolbar-count'>{activeFilterCount}</span>
+          )}
+        </button>
+
+        <button
+          type='button'
+          className='inventory-toolbar-button inventory-sort-button'
+          title='Sorting will be implemented later'
+          onClick={() => {
+            // Sorting behavior will be implemented in a later pass.
+          }}
+        >
+          <svg viewBox='0 0 24 24' aria-hidden='true'>
+            <path d='M8 4v16m0 0-4-4m4 4 4-4M16 20V4m0 0-4 4m4-4 4 4' />
+          </svg>
+          <span>Sort:</span>
+          <strong>Item number</strong>
+        </button>
+
+        <div className='inventory-toolbar-spacer' />
+
+        {import.meta.env.DEV && (
+          <div className='inventory-dev-menu' ref={devMenuRef}>
+            <button
+              type='button'
+              className='inventory-toolbar-button inventory-more-button'
+              aria-label='Development tools'
+              aria-haspopup='menu'
+              aria-expanded={showDevMenu}
+              onClick={() => setShowDevMenu((current) => !current)}
+              disabled={isSeeding}
+            >
+              <span aria-hidden='true'>•••</span>
+            </button>
+
+            {showDevMenu && (
+              <div className='inventory-dev-menu-panel' role='menu'>
                 <button
                   type='button'
-                  className='app-button app-button--primary'
-                  onClick={onAddItem}
-                >
-                  + Add item
-                </button>
-                <button
-                  type='button'
-                  className='app-button app-button--secondary'
+                  role='menuitem'
                   onClick={() => void seedSampleInventory()}
                   disabled={isLoading || isSeeding}
                 >
                   {isSeeding ? 'Working...' : 'Seed sample data'}
                 </button>
-
                 <button
                   type='button'
-                  className='app-button app-button--secondary'
-                  onClick={() => setShowCleanConfirmation(true)}
+                  role='menuitem'
+                  onClick={() => {
+                    setShowDevMenu(false);
+                    setShowCleanConfirmation(true);
+                  }}
                   disabled={isLoading || isSeeding}
                 >
                   Clean sample data
                 </button>
-              </>
+                <button
+                  type='button'
+                  role='menuitem'
+                  onClick={() => {
+                    setShowDevMenu(false);
+                    void loadInventory();
+                  }}
+                  disabled={isLoading || isSeeding}
+                >
+                  Refresh inventory
+                </button>
+              </div>
             )}
-
-            <button
-              type='button'
-              className='app-button app-button--secondary'
-              onClick={() => void loadInventory()}
-              disabled={isLoading || isSeeding}
-            >
-              Refresh
-            </button>
           </div>
-        </div>
-        {import.meta.env.DEV && seedMessage && (
-          <p className='app-muted' role='status'>
-            {seedMessage}
-          </p>
         )}
 
-        {import.meta.env.DEV && showCleanConfirmation && (
-          <div
-            className='app-card'
+        <button
+          type='button'
+          className='inventory-add-button'
+          onClick={onAddItem}
+        >
+          <span aria-hidden='true'>+</span> Add item
+        </button>
+      </section>
+
+      <div className='inventory-list-meta'>
+        <span>
+          {isLoading
+            ? 'Loading...'
+            : `${items.length} ${items.length === 1 ? 'item' : 'items'}`}
+        </span>
+
+        {filters.archiveStatus === 'active' && (
+          <button
+            type='button'
+            className='inventory-filter-chip'
+            onClick={() => updateFilter('archiveStatus', 'all')}
+            title='Show all items'
+          >
+            Active items
+            <span aria-hidden='true'>×</span>
+          </button>
+        )}
+
+        {filters.categoryId !== null && (
+          <button
+            type='button'
+            className='inventory-filter-chip'
+            onClick={() => updateFilter('categoryId', null)}
+          >
+            {categories.find((category) => category.id === filters.categoryId)
+              ?.name ?? 'Category'}
+            <span aria-hidden='true'>×</span>
+          </button>
+        )}
+
+        {filters.certification !== 'all' && (
+          <button
+            type='button'
+            className='inventory-filter-chip'
+            onClick={() => updateFilter('certification', 'all')}
+          >
+            {filters.certification === 'certified'
+              ? 'Certified'
+              : 'Not certified'}
+            <span aria-hidden='true'>×</span>
+          </button>
+        )}
+
+        {filters.archiveStatus !== 'active' && (
+          <button
+            type='button'
+            className='inventory-filter-chip'
+            onClick={() => updateFilter('archiveStatus', 'active')}
+          >
+            {filters.archiveStatus === 'archived'
+              ? 'Archived items'
+              : 'All items'}
+            <span aria-hidden='true'>×</span>
+          </button>
+        )}
+      </div>
+
+      {import.meta.env.DEV && seedMessage && (
+        <div className='inventory-dev-message' role='status'>
+          <span>{seedMessage}</span>
+          <button
+            type='button'
+            aria-label='Dismiss message'
+            onClick={() => setSeedMessage(null)}
+          >
+            ×
+          </button>
+        </div>
+      )}
+
+      {import.meta.env.DEV && showCleanConfirmation && (
+        <div
+          className='inventory-confirm-overlay'
+          role='presentation'
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !isSeeding) {
+              setShowCleanConfirmation(false);
+            }
+          }}
+        >
+          <section
+            className='inventory-confirm-dialog'
             role='alertdialog'
             aria-modal='true'
             aria-labelledby='clean-sample-title'
           >
             <h3 id='clean-sample-title'>Delete sample jewelry data?</h3>
             <p>
-              This will permanently delete sample items whose item numbers start
+              This permanently deletes sample items whose item numbers start
               with TEST-, along with unused test categories and purities.
             </p>
-            <div className='inventory-heading-actions'>
+            <div className='inventory-confirm-actions'>
               <button
                 type='button'
-                className='app-button app-button--secondary'
+                className='inventory-toolbar-button'
                 onClick={() => setShowCleanConfirmation(false)}
                 disabled={isSeeding}
               >
@@ -209,118 +430,18 @@ function InventoryScreen({ onAddItem }: Props) {
               </button>
               <button
                 type='button'
-                className='app-button app-button--secondary'
+                className='inventory-add-button'
                 onClick={() => void cleanSampleInventory()}
                 disabled={isSeeding}
               >
                 {isSeeding ? 'Cleaning...' : 'Confirm cleanup'}
               </button>
             </div>
-          </div>
-        )}
-      </section>
-
-      <section
-        className='inventory-filters app-card'
-        aria-label='Inventory filters'
-      >
-        <div className='inventory-search'>
-          <label htmlFor='inventory-search'>Search inventory</label>
-          <input
-            id='inventory-search'
-            className='app-input'
-            type='search'
-            placeholder='Search item number or name...'
-            value={filters.search}
-            onChange={(event) => updateFilter('search', event.target.value)}
-          />
+          </section>
         </div>
+      )}
 
-        <div className='inventory-filter-field'>
-          <label htmlFor='inventory-category'>Category</label>
-          <select
-            id='inventory-category'
-            className='app-select'
-            value={filters.categoryId ?? ''}
-            onChange={(event) =>
-              updateFilter(
-                'categoryId',
-                event.target.value === '' ? null : Number(event.target.value),
-              )
-            }
-          >
-            <option value=''>All categories</option>
-            {categories.map((category) => (
-              <option key={category.id} value={category.id}>
-                {category.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className='inventory-filter-field'>
-          <label htmlFor='inventory-certification'>Certification</label>
-          <select
-            id='inventory-certification'
-            className='app-select'
-            value={filters.certification}
-            onChange={(event) =>
-              updateFilter(
-                'certification',
-                event.target.value as InventoryFilters['certification'],
-              )
-            }
-          >
-            <option value='all'>All items</option>
-            <option value='certified'>Certified</option>
-            <option value='uncertified'>Not certified</option>
-          </select>
-        </div>
-
-        <div className='inventory-filter-field'>
-          <label htmlFor='inventory-archive'>Archive status</label>
-          <select
-            id='inventory-archive'
-            className='app-select'
-            value={filters.archiveStatus}
-            onChange={(event) =>
-              updateFilter(
-                'archiveStatus',
-                event.target.value as InventoryFilters['archiveStatus'],
-              )
-            }
-          >
-            <option value='active'>Active items</option>
-            <option value='archived'>Archived items</option>
-            <option value='all'>All items</option>
-          </select>
-        </div>
-
-        <button
-          type='button'
-          className='app-button app-button--secondary inventory-reset-button'
-          onClick={resetFilters}
-          disabled={isLoading}
-        >
-          Reset filters
-        </button>
-      </section>
-
-      <section
-        className='inventory-results app-card'
-        aria-label='Inventory results'
-      >
-        <div className='inventory-results-header'>
-          <div>
-            <h3 className='inventory-results-title'>Jewelry items</h3>
-            <p className='app-muted inventory-results-subtitle'>
-              {isLoading
-                ? 'Loading inventory...'
-                : `${items.length} ${items.length === 1 ? 'item' : 'items'} found`}
-            </p>
-          </div>
-        </div>
-
+      <section className='inventory-results' aria-label='Inventory results'>
         {isLoading ? (
           <div className='inventory-state' role='status'>
             <span className='inventory-spinner' aria-hidden='true' />
@@ -331,7 +452,7 @@ function InventoryScreen({ onAddItem }: Props) {
             <p>{error}</p>
             <button
               type='button'
-              className='app-button app-button--primary'
+              className='inventory-add-button'
               onClick={() => void loadInventory()}
             >
               Try again
@@ -342,11 +463,11 @@ function InventoryScreen({ onAddItem }: Props) {
             <div className='inventory-empty-mark' aria-hidden='true'>
               ◇
             </div>
-            <h4>No jewelry items found</h4>
-            <p className='app-muted'>Try changing your search or filters.</p>
+            <h3>No jewelry items found</h3>
+            <p>Try changing your search or filters.</p>
             <button
               type='button'
-              className='app-button app-button--secondary'
+              className='inventory-toolbar-button'
               onClick={resetFilters}
             >
               Clear filters
@@ -359,71 +480,154 @@ function InventoryScreen({ onAddItem }: Props) {
                 <tr>
                   <th scope='col'>Item</th>
                   <th scope='col'>Category</th>
-                  <th scope='col'>Gold weight</th>
-                  <th scope='col'>Purity</th>
+                  <th scope='col'>Gross wt.</th>
+                  <th scope='col'>Net wt.</th>
                   <th scope='col'>Diamonds</th>
                   <th scope='col'>Other stones</th>
-                  <th scope='col'>Certification</th>
+                  <th scope='col'>Purity</th>
+                  <th scope='col'>IGI</th>
+                  <th scope='col'>HUID</th>
                   <th scope='col'>Status</th>
                 </tr>
               </thead>
 
               <tbody>
-                {items.map((item) => (
-                  <tr key={item.id}>
-                    <td>
-                      <div className='inventory-item-cell'>
-                        <div
-                          className='inventory-image-placeholder'
-                          aria-label={`Image placeholder for ${item.itemNumber}`}
-                        >
-                          ◇
-                        </div>
+                {items.map((item) => {
+                  const purity = formatPurity(
+                    item.purityName,
+                    item.purityPercentBp,
+                  );
 
-                        <div className='inventory-item-info'>
-                          <strong>{item.itemNumber}</strong>
-                          {item.name && (
-                            <span className='app-muted'>{item.name}</span>
+                  return (
+                    <tr key={item.id}>
+                      <td className='inventory-item-column'>
+                        <div className='inventory-item-cell'>
+                          {imageUrls[item.id] ? (
+                            <img
+                              className='inventory-item-image'
+                              src={imageUrls[item.id]}
+                              alt={`${item.itemNumber} jewelry design`}
+                              onError={(event) => {
+                                event.currentTarget.style.display = 'none';
+                              }}
+                            />
+                          ) : (
+                            <div
+                              className='inventory-image-placeholder'
+                              aria-hidden='true'
+                            >
+                              ◇
+                            </div>
                           )}
-                          {item.huid && (
-                            <span className='inventory-secondary-detail'>
-                              HUID: {item.huid}
-                            </span>
-                          )}
+                          <div className='inventory-item-info'>
+                            <strong>{item.itemNumber}</strong>
+                            {item.name && (
+                              <span className='inventory-secondary-detail'>
+                                {item.name}
+                              </span>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    </td>
+                        {item.notes && (
+                          <p className='inventory-item-note'>
+                            <strong>Note:</strong> {item.notes}
+                          </p>
+                        )}
+                      </td>
 
-                    <td>{item.categoryName}</td>
-                    <td>{formatWeight(item.grossWeightMilli)}</td>
-                    <td>
-                      {formatPurity(item.purityName, item.purityPercentBp)}
-                    </td>
-                    <td className='inventory-detail-cell'>
-                      {item.diamondDetails ?? '—'}
-                    </td>
-                    <td className='inventory-detail-cell'>
-                      {item.stoneDetails ?? '—'}
-                    </td>
-                    <td>{item.igiCertificateNumber ?? '—'}</td>
-                    <td>
-                      <span
-                        className={`inventory-badge ${
-                          item.isArchived === 1
-                            ? 'inventory-badge--warning'
-                            : 'inventory-badge--success'
+                      <td>{item.categoryName}</td>
+                      <td className='inventory-weight-cell'>
+                        {formatWeight(item.grossWeightMilli)}
+                      </td>
+                      <td
+                        className={`inventory-weight-cell ${
+                          item.netWeightMilli === null
+                            ? 'inventory-empty-cell'
+                            : ''
                         }`}
                       >
-                        {item.isArchived === 1 ? 'Archived' : 'Active'}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                        {formatWeight(item.netWeightMilli)}
+                      </td>
+
+                      {item.diamondDetails ? (
+                        <td className='inventory-detail-cell inventory-diamonds-cell'>
+                          {item.diamondDetails}
+                        </td>
+                      ) : (
+                        <td className='inventory-empty-cell'>{'—'}</td>
+                      )}
+                      {item.stoneDetails ? (
+                        <td className='inventory-detail-cell'>
+                          {item.stoneDetails}
+                        </td>
+                      ) : (
+                        <td className='inventory-empty-cell'>{'—'}</td>
+                      )}
+
+                      <td>
+                        <div className='inventory-purity-cell'>
+                          <strong>{purity.name}</strong>
+                          {purity.percentage && (
+                            <span>{purity.percentage}</span>
+                          )}
+                        </div>
+                      </td>
+
+                      <td>
+                        <span
+                          className={`inventory-check ${
+                            item.igiCertificateNumber
+                              ? 'inventory-check--yes'
+                              : 'inventory-check--no'
+                          }`}
+                          aria-label={
+                            item.igiCertificateNumber
+                              ? 'IGI certificate present'
+                              : 'IGI certificate missing'
+                          }
+                        >
+                          {item.igiCertificateNumber ? '✓' : '×'}
+                        </span>
+                      </td>
+
+                      <td>
+                        <span
+                          className={`inventory-check ${
+                            item.huid
+                              ? 'inventory-check--yes'
+                              : 'inventory-check--no'
+                          }`}
+                          aria-label={
+                            item.huid ? 'HUID present' : 'HUID missing'
+                          }
+                        >
+                          {item.huid ? '✓' : '×'}
+                        </span>
+                      </td>
+
+                      <td>
+                        <span
+                          className={`inventory-badge ${
+                            item.isArchived === 1
+                              ? 'inventory-badge--warning'
+                              : 'inventory-badge--success'
+                          }`}
+                        >
+                          {item.isArchived === 1 ? 'Archived' : 'Active'}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
       </section>
+
+      <span className='inventory-visually-hidden'>
+        {activeItemsCount} active inventory items
+      </span>
     </div>
   );
 }

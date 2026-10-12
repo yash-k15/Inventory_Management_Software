@@ -346,7 +346,7 @@ pub fn create_item(
                 "INSERT INTO item (
                     item_number, category_id, name, image_path, gross_weight_milli,
                     purity_id, gold_type_id, igi_certificate_number, huid, notes, net_weight_milli
-                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
                 params![
                     item_number,
                     category_id,

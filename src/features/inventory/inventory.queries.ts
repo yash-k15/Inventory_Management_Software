@@ -57,6 +57,7 @@ export async function getInventoryItems(
       i.name,
       i.image_path AS imagePath,
       i.gross_weight_milli AS grossWeightMilli,
+      i.net_weight_milli AS netWeightMilli,
       p.name AS purityName,
       p.percent_bp AS purityPercentBp,
       i.igi_certificate_number AS igiCertificateNumber,
@@ -67,21 +68,13 @@ export async function getInventoryItems(
 
       (
         SELECT GROUP_CONCAT(
-          ds.name || ': ' ||
+          ds.code || ': ' ||
           printf('%.3f', d.weight_milli / 1000.0) || ' ct' ||
-          ' (' || d.pieces || ' pcs)' ||
-          CASE
-            WHEN dc.quality IS NOT NULL
-            THEN ' - ' || dc.quality
-            ELSE ''
-          END,
-          '; '
+          ' (' || COALESCE(d.pieces, 0) || ' pcs)',
+          char(10)
         )
         FROM item_diamond d
         JOIN diamond_shape ds ON ds.id = d.shape_id
-        LEFT JOIN diamond_combination dc
-          ON dc.id = d.combination_id
-         AND dc.shape_id = d.shape_id
         WHERE d.item_id = i.id
       ) AS diamondDetails,
 
@@ -91,7 +84,7 @@ export async function getInventoryItems(
           printf('%.3f', s.weight_milli / 1000.0) || ' ' ||
           st.weight_unit ||
           ' (' || s.pieces || ' pcs)',
-          '; '
+          char(10)
         )
         FROM item_stone s
         JOIN stone_type st ON st.id = s.stone_type_id

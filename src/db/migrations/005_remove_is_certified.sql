@@ -1,0 +1,1 @@
+ALTER TABLE item DROP COLUMN is_certified;

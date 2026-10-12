@@ -1,8 +1,19 @@
+import { useState } from 'react';
 import InventoryScreen from './features/inventory/InventoryScreen';
-
+import AddItemScreen from './features/inventory/AddItemScreen';
 import './App.css';
 
+type View = 'inventory' | 'add-item';
+
 function App() {
+  const [view, setView] = useState<View>('inventory');
+  const [notice, setNotice] = useState<string | null>(null);
+
+  function handleCreated(itemNumber: string) {
+    setNotice(`Jewelry item ${itemNumber} was saved successfully.`);
+    setView('inventory');
+  }
+
   return (
     <div className='app-shell'>
       <aside className='app-sidebar'>
@@ -14,14 +25,26 @@ function App() {
         </div>
 
         <nav className='app-nav' aria-label='Main navigation'>
-          <a
-            className='app-nav-link app-nav-link--active'
-            href='#inventory'
-            aria-current='page'
+          <button
+            type='button'
+            className={`app-nav-link ${view === 'inventory' ? 'app-nav-link--active' : ''}`}
+            onClick={() => setView('inventory')}
           >
             <span aria-hidden='true'>▦</span>
             <span>Inventory</span>
-          </a>
+          </button>
+
+          <button
+            type='button'
+            className={`app-nav-link ${view === 'add-item' ? 'app-nav-link--active' : ''}`}
+            onClick={() => {
+              setNotice(null);
+              setView('add-item');
+            }}
+          >
+            <span aria-hidden='true'>＋</span>
+            <span>Add Jewelry Item</span>
+          </button>
         </nav>
       </aside>
 
@@ -33,10 +56,36 @@ function App() {
               Jewelry catalog and item details
             </p>
           </div>
+
+          {view === 'inventory' && (
+            <button
+              type='button'
+              className='app-button app-button--primary'
+              onClick={() => {
+                setNotice(null);
+                setView('add-item');
+              }}
+            >
+              + Add Jewelry Item
+            </button>
+          )}
         </header>
 
         <main className='app-content' id='inventory'>
-          <InventoryScreen />
+          {notice && view === 'inventory' && (
+            <p role='status' className='app-success-message'>
+              {notice}
+            </p>
+          )}
+
+          {view === 'inventory' ? (
+            <InventoryScreen onAddItem={() => setView('add-item')} />
+          ) : (
+            <AddItemScreen
+              onCancel={() => setView('inventory')}
+              onCreated={handleCreated}
+            />
+          )}
         </main>
       </div>
     </div>

@@ -36,11 +36,11 @@ function formatPurity(
   return purityName ?? '—';
 }
 
-function formatCertification(item: InventoryItem): string {
-  return item.isCertified === 1 ? 'Certified' : 'Not certified';
-}
+type Props = {
+  onAddItem: () => void;
+};
 
-function InventoryScreen() {
+function InventoryScreen({ onAddItem }: Props) {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [categories, setCategories] = useState<InventoryCategoryOption[]>([]);
   const [filters, setFilters] = useState<InventoryFilters>(INITIAL_FILTERS);
@@ -143,6 +143,13 @@ function InventoryScreen() {
           <div className='inventory-heading-actions'>
             {import.meta.env.DEV && (
               <>
+                <button
+                  type='button'
+                  className='app-button app-button--primary'
+                  onClick={onAddItem}
+                >
+                  + Add item
+                </button>
                 <button
                   type='button'
                   className='app-button app-button--secondary'
@@ -398,17 +405,7 @@ function InventoryScreen() {
                     <td className='inventory-detail-cell'>
                       {item.stoneDetails ?? '—'}
                     </td>
-                    <td>
-                      <span
-                        className={`inventory-badge ${
-                          item.isCertified === 1
-                            ? 'inventory-badge--success'
-                            : 'inventory-badge--muted'
-                        }`}
-                      >
-                        {formatCertification(item)}
-                      </span>
-                    </td>
+                    <td>{item.igiCertificateNumber ?? '—'}</td>
                     <td>
                       <span
                         className={`inventory-badge ${

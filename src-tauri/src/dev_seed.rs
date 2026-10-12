@@ -39,6 +39,62 @@ fn get_id(
         .map_err(|error| format!("Could not find '{value}': {error}"))
 }
 
+
+fn allocate_item_number(
+    connection: &Connection,
+    category_id: i64,
+) -> Result<String, String> {
+    let (series_id, prefix, mut next_number, number_width, range_end): (
+        i64,
+        String,
+        i64,
+        i64,
+        Option<i64>,
+    ) = connection
+        .query_row(
+            "SELECT s.id, s.prefix, s.next_number, s.number_width, s.range_end
+             FROM item_series s
+             JOIN category c ON c.series_id = s.id
+             WHERE c.id = ?1",
+            [category_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?)),
+        )
+        .map_err(|error| format!("Could not resolve item-number series: {error}"))?;
+
+    loop {
+        if range_end.is_some_and(|end| next_number > end) {
+            return Err(format!("Item-number series '{prefix}' has no numbers remaining."));
+        }
+
+        let suffix = if number_width > 0 {
+            format!("{:0width$}", next_number, width = number_width as usize)
+        } else {
+            next_number.to_string()
+        };
+        let item_number = format!("{prefix}{suffix}");
+
+        let exists: bool = connection
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM item WHERE item_number = ?1)",
+                [&item_number],
+                |row| row.get(0),
+            )
+            .map_err(|error| format!("Could not check item number {item_number}: {error}"))?;
+
+        connection
+            .execute(
+                "UPDATE item_series SET next_number = ?1 WHERE id = ?2",
+                params![next_number + 1, series_id],
+            )
+            .map_err(|error| format!("Could not advance item-number series: {error}"))?;
+
+        next_number += 1;
+        if !exists {
+            return Ok(item_number);
+        }
+    }
+}
+
 #[tauri::command]
 pub fn seed_dev_inventory(app: AppHandle) -> Result<usize, String> {
     let mut connection = open_dev_database(&app)?;
@@ -48,207 +104,340 @@ pub fn seed_dev_inventory(app: AppHandle) -> Result<usize, String> {
         .map_err(|error| format!("Could not start seed transaction: {error}"))?;
 
     let result = (|| -> Result<usize, String> {
-        // Add test-only categories and purities without overwriting existing data.
-        let categories = [
-            ("TEST - Necklace", 1),
-            ("TEST - Ring", 2),
-            ("TEST - Jhumka", 3),
-            ("TEST - Bracelet", 4),
-            ("TEST - Pendant", 5),
-            ("TEST - Bangle", 6),
-        ];
-
-        for (name, sort_order) in categories {
-            transaction
-                .execute(
-                    "INSERT OR IGNORE INTO category (name, sort_order)
-                     VALUES (?1, ?2)",
-                    params![name, sort_order],
-                )
-                .map_err(|error| format!("Could not create test category: {error}"))?;
-        }
-
-        let purities = [("TEST 18K", 7500), ("TEST 22K", 9160)];
-
-        for (name, percent_bp) in purities {
-            transaction
-                .execute(
-                    "INSERT OR IGNORE INTO purity (name, percent_bp)
-                     VALUES (?1, ?2)",
-                    params![name, percent_bp],
-                )
-                .map_err(|error| format!("Could not create test purity: {error}"))?;
-        }
-
+        // Use the actual reference data created by the database migrations.
         let necklace = get_id(
             &transaction,
-            "SELECT id FROM category WHERE name = ?1",
-            "TEST - Necklace",
+            "SELECT id FROM category WHERE name = ?1 AND is_archived = 0",
+            "Necklace",
         )?;
         let ring = get_id(
             &transaction,
-            "SELECT id FROM category WHERE name = ?1",
-            "TEST - Ring",
+            "SELECT id FROM category WHERE name = ?1 AND is_archived = 0",
+            "Ring",
         )?;
         let jhumka = get_id(
             &transaction,
-            "SELECT id FROM category WHERE name = ?1",
-            "TEST - Jhumka",
+            "SELECT id FROM category WHERE name = ?1 AND is_archived = 0",
+            "Jhumka",
         )?;
         let bracelet = get_id(
             &transaction,
-            "SELECT id FROM category WHERE name = ?1",
-            "TEST - Bracelet",
+            "SELECT id FROM category WHERE name = ?1 AND is_archived = 0",
+            "Bracelet",
         )?;
         let pendant = get_id(
             &transaction,
-            "SELECT id FROM category WHERE name = ?1",
-            "TEST - Pendant",
+            "SELECT id FROM category WHERE name = ?1 AND is_archived = 0",
+            "Pendant",
         )?;
         let bangle = get_id(
             &transaction,
-            "SELECT id FROM category WHERE name = ?1",
-            "TEST - Bangle",
+            "SELECT id FROM category WHERE name = ?1 AND is_archived = 0",
+            "Bangle",
         )?;
 
         let purity_18k = get_id(
             &transaction,
-            "SELECT id FROM purity WHERE name = ?1",
-            "TEST 18K",
+            "SELECT id FROM purity WHERE name = ?1 AND is_archived = 0",
+            "18K",
         )?;
         let purity_22k = get_id(
             &transaction,
-            "SELECT id FROM purity WHERE name = ?1",
-            "TEST 22K",
+            "SELECT id FROM purity WHERE name = ?1 AND is_archived = 0",
+            "22K",
         )?;
 
-        // Existing shape codes are seeded by the initial migration.
+        let rose_gold = get_id(
+            &transaction,
+            "SELECT id FROM gold_type WHERE name = ?1 AND is_archived = 0",
+            "Rose Gold",
+        )?;
+
         let round = get_id(
             &transaction,
-            "SELECT id FROM diamond_shape WHERE code = ?1",
+            "SELECT id FROM diamond_shape WHERE code = ?1 AND is_archived = 0",
             "RD",
         )?;
         let pm = get_id(
             &transaction,
-            "SELECT id FROM diamond_shape WHERE code = ?1",
+            "SELECT id FROM diamond_shape WHERE code = ?1 AND is_archived = 0",
             "P/M",
         )?;
         let tb = get_id(
             &transaction,
-            "SELECT id FROM diamond_shape WHERE code = ?1",
+            "SELECT id FROM diamond_shape WHERE code = ?1 AND is_archived = 0",
             "T/B",
         )?;
 
-        // These are deliberately fictional catalog records.
-        // We never update a pre-existing item with the same test item number.
+        // Resolve the default EF-VVS combination for each diamond shape.
+        let round_quality = transaction
+            .query_row(
+                "SELECT id FROM diamond_combination
+                 WHERE shape_id = ?1 AND quality = 'EF-VVS' AND is_archived = 0",
+                [round],
+                |row| row.get::<_, i64>(0),
+            )
+            .map_err(|error| format!("Could not find Round EF-VVS quality: {error}"))?;
+
+        let pm_quality = transaction
+            .query_row(
+                "SELECT id FROM diamond_combination
+                 WHERE shape_id = ?1 AND quality = 'EF-VVS' AND is_archived = 0",
+                [pm],
+                |row| row.get::<_, i64>(0),
+            )
+            .map_err(|error| format!("Could not find P/M EF-VVS quality: {error}"))?;
+
+        let tb_quality = transaction
+            .query_row(
+                "SELECT id FROM diamond_combination
+                 WHERE shape_id = ?1 AND quality = 'EF-VVS' AND is_archived = 0",
+                [tb],
+                |row| row.get::<_, i64>(0),
+            )
+            .map_err(|error| format!("Could not find T/B EF-VVS quality: {error}"))?;
+
+        let red_stone = get_id(
+            &transaction,
+            "SELECT id FROM stone_type WHERE name = ?1 AND is_archived = 0",
+            "Red Stone",
+        )?;
+        let green_stone = get_id(
+            &transaction,
+            "SELECT id FROM stone_type WHERE name = ?1 AND is_archived = 0",
+            "Green Stone",
+        )?;
+        let pearl = get_id(
+            &transaction,
+            "SELECT id FROM stone_type WHERE name = ?1 AND is_archived = 0",
+            "Pearl",
+        )?;
+
+        // Fictional catalog designs. Gold weights are stored in milligrams.
+        // Re-running the seed command does not overwrite existing records.
         let items = [
-            ("TEST-NK-001", necklace, "Diamond Necklace", 12850, purity_22k, 1, 0),
-            ("TEST-NK-002", necklace, "Stone Necklace", 24500, purity_18k, 0, 0),
-            ("TEST-RG-001", ring, "Round Diamond Ring", 4250, purity_18k, 1, 0),
-            ("TEST-RG-002", ring, "P/M Diamond Ring", 5100, purity_22k, 0, 0),
-            ("TEST-EA-001", jhumka, "Pearl Jhumkas", 8750, purity_22k, 1, 0),
-            ("TEST-EA-002", jhumka, "Diamond Jhumkas", 7350, purity_18k, 0, 0),
-            ("TEST-BR-001", bracelet, "Diamond Bracelet", 14200, purity_22k, 1, 0),
-            ("TEST-BR-002", bracelet, "Green Stone Bracelet", 11600, purity_18k, 0, 0),
-            ("TEST-PD-001", pendant, "Diamond Pendant", 3200, purity_22k, 1, 0),
-            ("TEST-BG-001", bangle, "Archived Bangle", 21200, purity_22k, 0, 1),
+            (
+                "TEST-N001",
+                necklace,
+                "TEST-N001",
+                12850_i64,
+                purity_22k,
+                Some("IGI-DEMO-1001"),
+                Some("A1B2C3"),
+                0_i64,
+            ),
+            (
+                "TEST-N002",
+                necklace,
+                "TEST-N002",
+                24500,
+                purity_18k,
+                None,
+                None,
+                0,
+            ),
+            (
+                "TEST-R001",
+                ring,
+                "TEST-R001",
+                4250,
+                purity_18k,
+                Some("IGI-DEMO-1002"),
+                Some("D4E5F6"),
+                0,
+            ),
+            (
+                "TEST-R002",
+                ring,
+                "TEST-R002",
+                5100,
+                purity_22k,
+                None,
+                None,
+                0,
+            ),
+            (
+                "TEST-J001",
+                jhumka,
+                "TEST-J001",
+                8750,
+                purity_22k,
+                None,
+                Some("G7H8J9"),
+                0,
+            ),
+            (
+                "TEST-J002",
+                jhumka,
+                "TEST-J002",
+                7350,
+                purity_18k,
+                Some("IGI-DEMO-1003"),
+                None,
+                0,
+            ),
+            (
+                "TEST-BR001",
+                bracelet,
+                "TEST-BR001",
+                14200,
+                purity_22k,
+                Some("IGI-DEMO-1004"),
+                Some("K2L3M4"),
+                0,
+            ),
+            (
+                "TEST-BR002",
+                bracelet,
+                "TEST-BR002",
+                11600,
+                purity_18k,
+                None,
+                None,
+                0,
+            ),
+            (
+                "TEST-P001",
+                pendant,
+                "TEST-P001",
+                3200,
+                purity_22k,
+                Some("IGI-DEMO-1005"),
+                Some("N5P6Q7"),
+                0,
+            ),
+            (
+                "TEST-B001",
+                bangle,
+                "TEST-B001",
+                21200,
+                purity_22k,
+                None,
+                None,
+                1,
+            ),
         ];
 
-        for (item_number, category_id, name, weight, purity_id, certified, archived) in items {
+        for (
+            test_name,
+            category_id,
+            name,
+            weight,
+            purity_id,
+            igi_certificate_number,
+            huid,
+            archived,
+        ) in items
+        {
+            // Do not duplicate a sample item when the seed button is used repeatedly.
+            let already_exists: bool = transaction
+                .query_row(
+                    "SELECT EXISTS(SELECT 1 FROM item WHERE name = ?1)",
+                    [test_name],
+                    |row| row.get(0),
+                )
+                .map_err(|error| format!("Could not check sample item {test_name}: {error}"))?;
+
+            if already_exists {
+                continue;
+            }
+
+            let item_number = allocate_item_number(&transaction, category_id)?;
+
             transaction
                 .execute(
-                    "INSERT OR IGNORE INTO item (
-                        item_number, category_id, name, gross_weight_milli,
-                        purity_id, is_certified, is_archived, archived_at
-                     ) VALUES (
-                        ?1, ?2, ?3, ?4, ?5, ?6, ?7,
-                        CASE WHEN ?7 = 1 THEN datetime('now','localtime') ELSE NULL END
-                     )",
+                    "INSERT INTO item (
+                        item_number,
+                        category_id,
+                        name,
+                        gross_weight_milli,
+                        purity_id,
+                        gold_type_id,
+                        igi_certificate_number,
+                        huid,
+                        is_archived,
+                        archived_at
+                    ) VALUES (
+                        ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9,
+                        CASE WHEN ?9 = 1
+                            THEN datetime('now', 'localtime')
+                            ELSE NULL
+                        END
+                    )",
                     params![
                         item_number,
                         category_id,
                         name,
                         weight,
                         purity_id,
-                        certified,
-                        archived
+                        rose_gold,
+                        igi_certificate_number,
+                        huid,
+                        archived,
                     ],
                 )
-                .map_err(|error| format!("Could not create {item_number}: {error}"))?;
+                .map_err(|error| format!("Could not create sample item {test_name}: {error}"))?;
         }
 
-        // Add diamond details only to the test items that need them.
+        // Diamond weights are stored in thousandths of a carat.
         let diamonds = [
-            ("TEST-NK-001", round, 24, 1500),
-            ("TEST-NK-002", pm, 18, 2200),
-            ("TEST-RG-001", round, 1, 600),
-            ("TEST-RG-002", tb, 12, 850),
-            ("TEST-EA-001", round, 20, 1200),
-            ("TEST-EA-002", pm, 16, 900),
-            ("TEST-BR-001", round, 32, 1800),
-            ("TEST-PD-001", round, 1, 450),
+            ("TEST-N001", round, round_quality, 24_i64, 1500_i64),
+            ("TEST-N002", pm, pm_quality, 18, 2200),
+            ("TEST-R001", round, round_quality, 1, 600),
+            ("TEST-R002", tb, tb_quality, 12, 850),
+            ("TEST-J002", pm, pm_quality, 16, 900),
+            ("TEST-BR001", round, round_quality, 32, 1800),
+            ("TEST-P001", round, round_quality, 1, 450),
         ];
 
-        for (item_number, shape_id, pieces, weight_milli) in diamonds {
+        for (item_number, shape_id, combination_id, pieces, weight_milli) in diamonds {
             let item_id = get_id(
                 &transaction,
-                "SELECT id FROM item WHERE item_number = ?1",
+                "SELECT id FROM item WHERE name = ?1",
                 item_number,
             )?;
 
             transaction
                 .execute(
-                    "INSERT OR IGNORE INTO item_diamond
-                        (item_id, shape_id, pieces, weight_milli)
-                     VALUES (?1, ?2, ?3, ?4)",
-                    params![item_id, shape_id, pieces, weight_milli],
+                    "INSERT OR IGNORE INTO item_diamond (
+                        item_id, shape_id, combination_id, pieces, weight_milli
+                    ) VALUES (?1, ?2, ?3, ?4, ?5)",
+                    params![item_id, shape_id, combination_id, pieces, weight_milli],
                 )
-                .map_err(|error| format!("Could not add diamond details: {error}"))?;
+                .map_err(|error| {
+                    format!("Could not add diamond details to {item_number}: {error}")
+                })?;
         }
 
-        // Use the stone types already provided by the initial migration.
-        let red_stone = get_id(
-            &transaction,
-            "SELECT id FROM stone_type WHERE name = ?1",
-            "Red Stone",
-        )?;
-        let green_stone = get_id(
-            &transaction,
-            "SELECT id FROM stone_type WHERE name = ?1",
-            "Green Stone",
-        )?;
-        let pearl = get_id(
-            &transaction,
-            "SELECT id FROM stone_type WHERE name = ?1",
-            "Pearl",
-        )?;
-
+        // Stone weights use the units defined by each stone type.
         let stones = [
-            ("TEST-NK-002", red_stone, 10, 3000),
-            ("TEST-EA-001", pearl, 24, 1800),
-            ("TEST-BR-002", green_stone, 14, 2400),
+            ("TEST-N002", red_stone, 10_i64, 3000_i64),
+            ("TEST-J001", pearl, 24, 1800),
+            ("TEST-BR002", green_stone, 14, 2400),
         ];
 
         for (item_number, stone_type_id, pieces, weight_milli) in stones {
             let item_id = get_id(
                 &transaction,
-                "SELECT id FROM item WHERE item_number = ?1",
+                "SELECT id FROM item WHERE name = ?1",
                 item_number,
             )?;
 
             transaction
                 .execute(
-                    "INSERT OR IGNORE INTO item_stone
-                        (item_id, stone_type_id, pieces, weight_milli)
-                     VALUES (?1, ?2, ?3, ?4)",
+                    "INSERT OR IGNORE INTO item_stone (
+                        item_id, stone_type_id, pieces, weight_milli
+                    ) VALUES (?1, ?2, ?3, ?4)",
                     params![item_id, stone_type_id, pieces, weight_milli],
                 )
-                .map_err(|error| format!("Could not add stone details: {error}"))?;
+                .map_err(|error| {
+                    format!("Could not add stone details to {item_number}: {error}")
+                })?;
         }
 
         let count: usize = transaction
             .query_row(
-                "SELECT COUNT(*) FROM item WHERE item_number LIKE 'TEST-%'",
+                "SELECT COUNT(*) FROM item WHERE name LIKE 'TEST-%'",
                 [],
                 |row| row.get(0),
             )
@@ -280,21 +469,26 @@ pub fn clean_dev_inventory(app: AppHandle) -> Result<usize, String> {
         .map_err(|error| format!("Could not start cleanup transaction: {error}"))?;
 
     let result = (|| -> Result<usize, String> {
-        // The schema only permits permanent deletion of archived items.
-        // Archive and delete only records using our reserved TEST- prefix.
+        // Sample records are identified by the TEST- prefix in item.name.
+        // Preserve the production rule: archive before permanent deletion.
         transaction
             .execute(
                 "UPDATE item
                  SET is_archived = 1,
-                     archived_at = COALESCE(archived_at, datetime('now','localtime'))
-                 WHERE item_number LIKE 'TEST-%' AND is_archived = 0",
+                     archived_at = COALESCE(archived_at, datetime('now', 'localtime'))
+                 WHERE (name LIKE 'TEST-%' OR item_number LIKE 'TEST-%')
+                   AND is_archived = 0",
                 [],
             )
-            .map_err(|error| format!("Could not archive test items: {error}"))?;
+            .map_err(|error| format!("Could not archive sample items: {error}"))?;
 
         let deleted = transaction
-            .execute("DELETE FROM item WHERE item_number LIKE 'TEST-%'", [])
-            .map_err(|error| format!("Could not delete test items: {error}"))?;
+            .execute(
+                "DELETE FROM item
+                 WHERE name LIKE 'TEST-%' OR item_number LIKE 'TEST-%'",
+                [],
+            )
+            .map_err(|error| format!("Could not delete sample items: {error}"))?;
 
         transaction
             .execute(

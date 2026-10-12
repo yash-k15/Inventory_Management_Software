@@ -24,7 +24,7 @@ export interface InventoryItem {
   grossWeightMilli: number | null;
   purityName: string | null;
   purityPercentBp: number | null;
-  isCertified: number;
+  igiCertificateNumber: string | null;
   huid: string | null;
   notes: string | null;
   customValues: string;

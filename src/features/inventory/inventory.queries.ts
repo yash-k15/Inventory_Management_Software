@@ -29,9 +29,13 @@ export async function getInventoryItems(
   }
 
   if (filters.certification === 'certified') {
-    conditions.push('i.is_certified = 1');
+  conditions.push(
+    "i.igi_certificate_number IS NOT NULL AND TRIM(i.igi_certificate_number) <> ''",
+  );
   } else if (filters.certification === 'uncertified') {
-    conditions.push('i.is_certified = 0');
+    conditions.push(
+      "(i.igi_certificate_number IS NULL OR TRIM(i.igi_certificate_number) = '')",
+    );
   }
 
   if (filters.archiveStatus === 'active') {
@@ -55,7 +59,7 @@ export async function getInventoryItems(
       i.gross_weight_milli AS grossWeightMilli,
       p.name AS purityName,
       p.percent_bp AS purityPercentBp,
-      i.is_certified AS isCertified,
+      i.igi_certificate_number AS igiCertificateNumber,
       i.huid,
       i.notes,
       i.custom_values AS customValues,

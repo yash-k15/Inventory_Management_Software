@@ -629,6 +629,34 @@ function AddItemScreen({ onCancel, onCreated }: Props) {
     try {
       const grossWeightMilli = toMilliUnits(weight, 'Gross gold weight');
 
+      const diamondWeightMilli = diamonds.reduce(
+        (sum, diamond) =>
+          sum + toMilliUnits(diamond.weight, `${diamond.name} carat weight`),
+        0,
+      );
+
+      const stoneWeightMilli = stones.reduce((sum, stone) => {
+        const weightMilli = toMilliUnits(stone.weight, `${stone.name} weight`);
+
+        return (
+          sum +
+          (stone.weightUnit.toLowerCase() === 'ct'
+            ? Math.round(weightMilli / 5)
+            : weightMilli)
+        );
+      }, 0);
+
+      const netWeightMilli =
+        grossWeightMilli -
+        Math.round(diamondWeightMilli / 5) -
+        stoneWeightMilli;
+
+      if (netWeightMilli < 0) {
+        throw new Error(
+          'Diamond and other-stone weights cannot exceed the gross weight.',
+        );
+      }
+
       const diamondPayload = diamonds.flatMap((diamond) => {
         const pieces = toOptionalPieces(
           diamond.pieces,
@@ -704,6 +732,26 @@ function AddItemScreen({ onCancel, onCreated }: Props) {
     (sum, row) => sum + (Number(row.weight) || 0),
     0,
   );
+
+  const totalDiamondWeightGrams = totalDiamondWeight * 0.2;
+
+  const totalStoneWeightGrams = completeStones.reduce(
+    (sum, stone) =>
+      sum +
+      (Number(stone.weight) || 0) *
+        (stone.weightUnit.toLowerCase() === 'ct' ? 0.2 : 1),
+    0,
+  );
+
+  const grossWeight = weight.trim() ? Number(weight) : null;
+
+  const calculatedNetWeight =
+    grossWeight !== null && Number.isFinite(grossWeight)
+      ? Math.round(
+          (grossWeight - totalDiamondWeightGrams - totalStoneWeightGrams) *
+            1000,
+        ) / 1000
+      : null;
 
   return (
     <section className='add-item-screen'>
@@ -1271,10 +1319,26 @@ function AddItemScreen({ onCancel, onCreated }: Props) {
                     ct
                   </strong>
                 </div>
+                {stones.length > 0 && (
+                  <div>
+                    <span>Other stones</span>
+                    <strong>
+                      {totalStonePieces} pcs · {totalStoneWeight.toFixed(3)} ct
+                    </strong>
+                  </div>
+                )}
                 <div>
-                  <span>Other stones</span>
-                  <strong>
-                    {totalStonePieces} pcs · {totalStoneWeight.toFixed(3)} total
+                  <span>Net weight</span>
+                  <strong
+                    className={
+                      calculatedNetWeight !== null && calculatedNetWeight < 0
+                        ? 'summary-missing'
+                        : ''
+                    }
+                  >
+                    {calculatedNetWeight === null || calculatedNetWeight < 0
+                      ? '—'
+                      : `${calculatedNetWeight.toFixed(3)} g`}
                   </strong>
                 </div>
                 <div>

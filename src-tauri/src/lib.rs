@@ -34,6 +34,7 @@ pub fn run() {
     let jewelry_reference_data = include_str!("../../src/db/migrations/003_jewelry_reference_data.sql");
     let igi_certificate_number = include_str!("../../src/db/migrations/004_igi_certificate_number.sql");
     let remove_is_certified = include_str!("../../src/db/migrations/005_remove_is_certified.sql");
+    let net_weight = include_str!("../../src/db/migrations/007_net_weight.sql");
 
     let migrations = || {
         vec![
@@ -71,6 +72,12 @@ pub fn run() {
                 version: 6,
                 description: "add gold types to inventory items",
                 sql: include_str!("../../src/db/migrations/006_gold_type.sql"),
+                kind: MigrationKind::Up,
+            },
+            Migration {
+                version: 7,
+                description: "add net weight to inventory items",
+                sql: net_weight,
                 kind: MigrationKind::Up,
             },
         ]

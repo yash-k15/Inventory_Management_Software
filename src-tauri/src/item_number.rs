@@ -277,6 +277,66 @@ pub fn create_item(
             return Err("The item-number series changed unexpectedly. Please retry.".to_string());
         }
 
+        let gross_weight_milli = gross_weight_milli
+            .ok_or_else(|| "Gross weight is required to calculate net weight.".to_string())?;
+
+        let total_diamond_weight_milli_ct = diamonds.iter().try_fold(
+            0_i64,
+            |total, diamond| {
+                total
+                    .checked_add(diamond.weight_milli)
+                    .ok_or_else(|| "Total diamond weight exceeds the supported range.".to_string())
+            },
+        )?;
+
+        let diamond_weight_milli_g = total_diamond_weight_milli_ct
+            .checked_add(2)
+            .ok_or_else(|| "Total diamond weight exceeds the supported range.".to_string())?
+            / 5;
+
+        let mut total_stone_weight_milli_g = 0_i64;
+
+        for stone in &stones {
+            let weight_unit: String = transaction
+                .query_row(
+                    "SELECT weight_unit FROM stone_type WHERE id = ?1 AND is_archived = 0",
+                    [stone.stone_type_id],
+                    |row| row.get(0),
+                )
+                .map_err(|_| {
+                    "A selected stone type is unavailable or archived.".to_string()
+                })?;
+
+            let weight_milli_g = match weight_unit.to_lowercase().as_str() {
+                "ct" => stone
+                    .weight_milli
+                    .checked_add(2)
+                    .ok_or_else(|| "Total stone weight exceeds the supported range.".to_string())?
+                    / 5,
+                "g" => stone.weight_milli,
+                _ => {
+                    return Err(format!(
+                        "Unsupported weight unit '{weight_unit}' for a stone type."
+                    ));
+                }
+            };
+
+            total_stone_weight_milli_g = total_stone_weight_milli_g
+                .checked_add(weight_milli_g)
+                .ok_or_else(|| "Total stone weight exceeds the supported range.".to_string())?;
+        }
+
+        let net_weight_milli = gross_weight_milli
+            .checked_sub(diamond_weight_milli_g)
+            .and_then(|weight| weight.checked_sub(total_stone_weight_milli_g))
+            .ok_or_else(|| "Diamond and other-stone weights cannot exceed gross weight.".to_string())?;
+
+        if net_weight_milli < 0 {
+            return Err(
+                "Diamond and other-stone weights cannot exceed gross weight.".to_string(),
+            );
+        }
+
         let (image_path, copied_path) =
             copy_item_photo(&app, image_source.as_deref(), &item_number)?;
         copied_photo = copied_path;
@@ -285,7 +345,7 @@ pub fn create_item(
             .execute(
                 "INSERT INTO item (
                     item_number, category_id, name, image_path, gross_weight_milli,
-                    purity_id, gold_type_id, igi_certificate_number, huid, notes
+                    purity_id, gold_type_id, igi_certificate_number, huid, notes, net_weight_milli
                  ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
                 params![
                     item_number,
@@ -297,7 +357,8 @@ pub fn create_item(
                     gold_type_id,
                     igi_certificate_number,
                     huid,
-                    notes
+                    notes,
+                    net_weight_milli
                 ],
             )
             .map_err(|error| format!("Could not save item: {error}"))?;

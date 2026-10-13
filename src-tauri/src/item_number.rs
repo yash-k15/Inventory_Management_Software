@@ -1,4 +1,3 @@
-
 use rusqlite::{params, Connection, TransactionBehavior};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -33,6 +32,23 @@ pub struct StoneInput {
     pub weight_milli: i64,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateItemInput {
+    pub item_id: i64,
+    pub name: Option<String>,
+    pub gross_weight_milli: Option<i64>,
+    pub purity_id: Option<i64>,
+    pub gold_type_id: i64,
+    pub igi_certificate_number: Option<String>,
+    pub huid: Option<String>,
+    pub notes: Option<String>,
+    pub image_source: Option<String>,
+    pub remove_image: bool,
+    pub diamonds: Vec<DiamondInput>,
+    pub stones: Vec<StoneInput>,
+}
+
 fn open_database(app: &AppHandle) -> Result<Connection, String> {
     let database_dir = app
         .path()
@@ -64,23 +80,17 @@ fn open_database(app: &AppHandle) -> Result<Connection, String> {
     Ok(connection)
 }
 
-fn get_next_number(
-    connection: &Connection,
-    category_id: i64,
-) -> Result<(String, i64), String> {
-    let (series_id, prefix, next_number, number_width): (i64, String, i64, i64) =
-        connection
-            .query_row(
-                "SELECT s.id, s.prefix, s.next_number, s.number_width
+fn get_next_number(connection: &Connection, category_id: i64) -> Result<(String, i64), String> {
+    let (series_id, prefix, next_number, number_width): (i64, String, i64, i64) = connection
+        .query_row(
+            "SELECT s.id, s.prefix, s.next_number, s.number_width
                  FROM category c
                  JOIN item_series s ON s.id = c.series_id
                  WHERE c.id = ?1 AND c.is_archived = 0",
-                [category_id],
-                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
-            )
-            .map_err(|_| {
-                "Selected category is unavailable or has no numbering series.".to_string()
-            })?;
+            [category_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+        )
+        .map_err(|_| "Selected category is unavailable or has no numbering series.".to_string())?;
 
     let range_end: Option<i64> = connection
         .query_row(
@@ -123,10 +133,7 @@ fn get_next_number(
 }
 
 #[tauri::command]
-pub fn preview_item_number(
-    app: AppHandle,
-    category_id: i64,
-) -> Result<ItemNumberPreview, String> {
+pub fn preview_item_number(app: AppHandle, category_id: i64) -> Result<ItemNumberPreview, String> {
     let connection = open_database(&app)?;
     let (item_number, _) = get_next_number(&connection, category_id)?;
 
@@ -179,10 +186,57 @@ fn copy_item_photo(
     std::fs::copy(&source_path, &destination)
         .map_err(|error| format!("Could not copy item photo: {error}"))?;
 
-    Ok((
-        Some(format!("item-images/{filename}")),
-        Some(destination),
-    ))
+    Ok((Some(format!("item-images/{filename}")), Some(destination)))
+}
+
+fn copy_item_photo_for_update(
+    app: &AppHandle,
+    source: &str,
+    item_number: &str,
+) -> Result<(String, PathBuf), String> {
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    let source_path = PathBuf::from(source);
+
+    if !source_path.is_file() {
+        return Err("The selected photo could not be found. Please select it again.".to_string());
+    }
+
+    let extension = source_path
+        .extension()
+        .and_then(|value| value.to_str())
+        .map(str::to_ascii_lowercase)
+        .filter(|value| {
+            matches!(
+                value.as_str(),
+                "jpg" | "jpeg" | "png" | "webp" | "heic" | "heif"
+            )
+        })
+        .ok_or_else(|| {
+            "Unsupported photo format. Choose a JPG, PNG, WebP, HEIC, or HEIF image.".to_string()
+        })?;
+
+    let image_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("Could not resolve application data directory: {error}"))?
+        .join("item-images");
+
+    std::fs::create_dir_all(&image_dir)
+        .map_err(|error| format!("Could not create item photo directory: {error}"))?;
+
+    let unique_id = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|error| format!("Could not generate photo filename: {error}"))?
+        .as_nanos();
+
+    let filename = format!("{item_number}-edit-{unique_id}.{extension}");
+    let destination = image_dir.join(&filename);
+
+    std::fs::copy(&source_path, &destination)
+        .map_err(|error| format!("Could not copy replacement photo: {error}"))?;
+
+    Ok((format!("item-images/{filename}"), destination))
 }
 
 #[tauri::command]
@@ -217,26 +271,26 @@ pub fn create_item(
     }
 
     let igi_certificate_number = igi_certificate_number
-    .map(|value| value.trim().to_string())
-    .filter(|value| !value.is_empty());
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
 
     let huid = huid
-    .map(|value| value.trim().to_uppercase())
-    .filter(|value| !value.is_empty());
+        .map(|value| value.trim().to_uppercase())
+        .filter(|value| !value.is_empty());
 
     let mut connection = open_database(&app)?;
 
     let gold_type_is_valid: bool = connection
-    .query_row(
-        "SELECT EXISTS(
+        .query_row(
+            "SELECT EXISTS(
             SELECT 1
             FROM gold_type
             WHERE id = ?1 AND is_archived = 0
         )",
-        [gold_type_id],
-        |row| row.get(0),
-    )
-    .map_err(|error| format!("Could not validate gold type: {error}"))?;
+            [gold_type_id],
+            |row| row.get(0),
+        )
+        .map_err(|error| format!("Could not validate gold type: {error}"))?;
 
     if !gold_type_is_valid {
         return Err("Please select a valid, active gold type.".to_string());
@@ -249,8 +303,7 @@ pub fn create_item(
     let mut copied_photo: Option<PathBuf> = None;
 
     let result = (|| -> Result<CreatedItem, String> {
-        let (item_number, allocated_number) =
-            get_next_number(&transaction, category_id)?;
+        let (item_number, allocated_number) = get_next_number(&transaction, category_id)?;
 
         let series_id: i64 = transaction
             .query_row(
@@ -280,14 +333,11 @@ pub fn create_item(
         let gross_weight_milli = gross_weight_milli
             .ok_or_else(|| "Gross weight is required to calculate net weight.".to_string())?;
 
-        let total_diamond_weight_milli_ct = diamonds.iter().try_fold(
-            0_i64,
-            |total, diamond| {
-                total
-                    .checked_add(diamond.weight_milli)
-                    .ok_or_else(|| "Total diamond weight exceeds the supported range.".to_string())
-            },
-        )?;
+        let total_diamond_weight_milli_ct = diamonds.iter().try_fold(0_i64, |total, diamond| {
+            total
+                .checked_add(diamond.weight_milli)
+                .ok_or_else(|| "Total diamond weight exceeds the supported range.".to_string())
+        })?;
 
         let diamond_weight_milli_g = total_diamond_weight_milli_ct
             .checked_add(2)
@@ -303,16 +353,14 @@ pub fn create_item(
                     [stone.stone_type_id],
                     |row| row.get(0),
                 )
-                .map_err(|_| {
-                    "A selected stone type is unavailable or archived.".to_string()
-                })?;
+                .map_err(|_| "A selected stone type is unavailable or archived.".to_string())?;
 
             let weight_milli_g = match weight_unit.to_lowercase().as_str() {
-                "ct" => stone
-                    .weight_milli
-                    .checked_add(2)
-                    .ok_or_else(|| "Total stone weight exceeds the supported range.".to_string())?
-                    / 5,
+                "ct" => {
+                    stone.weight_milli.checked_add(2).ok_or_else(|| {
+                        "Total stone weight exceeds the supported range.".to_string()
+                    })? / 5
+                }
                 "g" => stone.weight_milli,
                 _ => {
                     return Err(format!(
@@ -329,12 +377,12 @@ pub fn create_item(
         let net_weight_milli = gross_weight_milli
             .checked_sub(diamond_weight_milli_g)
             .and_then(|weight| weight.checked_sub(total_stone_weight_milli_g))
-            .ok_or_else(|| "Diamond and other-stone weights cannot exceed gross weight.".to_string())?;
+            .ok_or_else(|| {
+                "Diamond and other-stone weights cannot exceed gross weight.".to_string()
+            })?;
 
         if net_weight_milli < 0 {
-            return Err(
-                "Diamond and other-stone weights cannot exceed gross weight.".to_string(),
-            );
+            return Err("Diamond and other-stone weights cannot exceed gross weight.".to_string());
         }
 
         let (image_path, copied_path) =
@@ -430,6 +478,293 @@ pub fn create_item(
             if let Some(path) = copied_photo {
                 let _ = std::fs::remove_file(path);
             }
+            Err(error)
+        }
+    }
+}
+
+#[tauri::command]
+pub fn update_item(app: AppHandle, input: UpdateItemInput) -> Result<CreatedItem, String> {
+    let UpdateItemInput {
+        item_id,
+        name,
+        gross_weight_milli,
+        purity_id,
+        gold_type_id,
+        igi_certificate_number,
+        huid,
+        notes,
+        image_source,
+        remove_image,
+        diamonds,
+        stones,
+    } = input;
+
+    if item_id <= 0 {
+        return Err("Invalid jewelry item.".to_string());
+    }
+
+    if gross_weight_milli.is_some_and(|weight| weight < 0) {
+        return Err("Gold weight cannot be negative.".to_string());
+    }
+
+    for diamond in &diamonds {
+        if diamond.weight_milli < 0 || diamond.pieces.is_some_and(|value| value < 0) {
+            return Err("Diamond pieces and weight cannot be negative.".to_string());
+        }
+    }
+
+    for stone in &stones {
+        if stone.weight_milli < 0 || stone.pieces.is_some_and(|value| value < 0) {
+            return Err("Stone pieces and weight cannot be negative.".to_string());
+        }
+    }
+
+    let name = name
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+
+    let igi_certificate_number = igi_certificate_number
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+
+    let huid = huid
+        .map(|value| value.trim().to_uppercase())
+        .filter(|value| !value.is_empty());
+
+    let image_source = image_source
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+
+    if remove_image && image_source.is_some() {
+        return Err("Choose either a replacement photo or photo removal, not both.".to_string());
+    }
+
+    let gross_weight_milli = gross_weight_milli
+        .ok_or_else(|| "Gross weight is required to calculate net weight.".to_string())?;
+
+    let mut connection = open_database(&app)?;
+
+    let transaction = connection
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|error| format!("Could not start item transaction: {error}"))?;
+
+    let mut copied_photo: Option<PathBuf> = None;
+
+    let result = (|| -> Result<CreatedItem, String> {
+        let (item_number, existing_image_path): (String, Option<String>) = transaction
+            .query_row(
+                "SELECT item_number, image_path
+                 FROM item
+                 WHERE id = ?1",
+                [item_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .map_err(|error| match error {
+                rusqlite::Error::QueryReturnedNoRows => {
+                    "The jewelry item could not be found.".to_string()
+                }
+                _ => format!("Could not load jewelry item: {error}"),
+            })?;
+
+        let gold_type_is_valid: bool = transaction
+            .query_row(
+                "SELECT EXISTS(
+                    SELECT 1
+                    FROM gold_type
+                    WHERE id = ?1 AND is_archived = 0
+                )",
+                [gold_type_id],
+                |row| row.get(0),
+            )
+            .map_err(|error| format!("Could not validate gold type: {error}"))?;
+
+        if !gold_type_is_valid {
+            return Err("Please select a valid, active gold type.".to_string());
+        }
+
+        let total_diamond_weight_milli_ct = diamonds.iter().try_fold(0_i64, |total, diamond| {
+            total
+                .checked_add(diamond.weight_milli)
+                .ok_or_else(|| "Total diamond weight exceeds the supported range.".to_string())
+        })?;
+
+        // Convert diamond carats to grams:
+        // 1 carat = 0.2 grams. All weights are stored in thousandths.
+        let diamond_weight_milli_g = total_diamond_weight_milli_ct
+            .checked_add(2)
+            .ok_or_else(|| "Total diamond weight exceeds the supported range.".to_string())?
+            / 5;
+
+        let mut total_stone_weight_milli_g = 0_i64;
+
+        for stone in &stones {
+            let weight_unit: String = transaction
+                .query_row(
+                    "SELECT weight_unit
+                     FROM stone_type
+                     WHERE id = ?1 AND is_archived = 0",
+                    [stone.stone_type_id],
+                    |row| row.get(0),
+                )
+                .map_err(|_| "A selected stone type is unavailable or archived.".to_string())?;
+
+            let weight_milli_g = match weight_unit.to_lowercase().as_str() {
+                "ct" => {
+                    stone.weight_milli.checked_add(2).ok_or_else(|| {
+                        "Total stone weight exceeds the supported range.".to_string()
+                    })? / 5
+                }
+                "g" => stone.weight_milli,
+                _ => {
+                    return Err(format!(
+                        "Unsupported weight unit '{weight_unit}' for a stone type."
+                    ));
+                }
+            };
+
+            total_stone_weight_milli_g = total_stone_weight_milli_g
+                .checked_add(weight_milli_g)
+                .ok_or_else(|| "Total stone weight exceeds the supported range.".to_string())?;
+        }
+
+        let net_weight_milli = gross_weight_milli
+            .checked_sub(diamond_weight_milli_g)
+            .and_then(|weight| weight.checked_sub(total_stone_weight_milli_g))
+            .ok_or_else(|| {
+                "Diamond and other-stone weights cannot exceed gross weight.".to_string()
+            })?;
+
+        if net_weight_milli < 0 {
+            return Err("Diamond and other-stone weights cannot exceed gross weight.".to_string());
+        }
+
+        // Keep the current photo unless the user explicitly replaces or removes it.
+        let image_path = if let Some(source) = image_source.as_deref() {
+            let (new_image_path, copied_path) =
+                copy_item_photo_for_update(&app, source, &item_number)?;
+
+            copied_photo = Some(copied_path);
+            Some(new_image_path)
+        } else if remove_image {
+            None
+        } else {
+            existing_image_path
+        };
+
+        let updated_rows = transaction
+            .execute(
+                "UPDATE item
+                 SET name = ?1,
+                     image_path = ?2,
+                     gross_weight_milli = ?3,
+                     purity_id = ?4,
+                     gold_type_id = ?5,
+                     igi_certificate_number = ?6,
+                     huid = ?7,
+                     notes = ?8,
+                     net_weight_milli = ?9,
+                     updated_at = datetime('now', 'localtime')
+                 WHERE id = ?10",
+                params![
+                    name,
+                    image_path,
+                    gross_weight_milli,
+                    purity_id,
+                    gold_type_id,
+                    igi_certificate_number,
+                    huid,
+                    notes,
+                    net_weight_milli,
+                    item_id
+                ],
+            )
+            .map_err(|error| format!("Could not update jewelry item: {error}"))?;
+
+        if updated_rows != 1 {
+            return Err("The jewelry item could not be updated.".to_string());
+        }
+
+        // Replace the editable inventory details inside the same transaction.
+        transaction
+            .execute("DELETE FROM item_diamond WHERE item_id = ?1", [item_id])
+            .map_err(|error| format!("Could not update diamond details: {error}"))?;
+
+        transaction
+            .execute("DELETE FROM item_stone WHERE item_id = ?1", [item_id])
+            .map_err(|error| format!("Could not update other-stone details: {error}"))?;
+
+        for diamond in &diamonds {
+            if diamond.weight_milli == 0
+                && diamond.pieces.unwrap_or(0) == 0
+                && diamond.combination_id.is_none()
+            {
+                continue;
+            }
+
+            transaction
+                .execute(
+                    "INSERT INTO item_diamond
+                        (item_id, shape_id, combination_id, pieces, weight_milli)
+                     VALUES (?1, ?2, ?3, ?4, ?5)",
+                    params![
+                        item_id,
+                        diamond.shape_id,
+                        diamond.combination_id,
+                        diamond.pieces,
+                        diamond.weight_milli
+                    ],
+                )
+                .map_err(|error| format!("Could not save diamond details: {error}"))?;
+        }
+
+        for stone in &stones {
+            if stone.weight_milli == 0 && stone.pieces.unwrap_or(0) == 0 {
+                continue;
+            }
+
+            transaction
+                .execute(
+                    "INSERT INTO item_stone
+                        (item_id, stone_type_id, pieces, weight_milli)
+                     VALUES (?1, ?2, ?3, ?4)",
+                    params![
+                        item_id,
+                        stone.stone_type_id,
+                        stone.pieces,
+                        stone.weight_milli
+                    ],
+                )
+                .map_err(|error| format!("Could not save other-stone details: {error}"))?;
+        }
+
+        Ok(CreatedItem {
+            id: item_id,
+            item_number,
+        })
+    })();
+
+    match result {
+        Ok(updated_item) => {
+            if let Err(error) = transaction.commit() {
+                if let Some(path) = copied_photo {
+                    let _ = std::fs::remove_file(path);
+                }
+
+                return Err(format!("Could not commit item changes: {error}"));
+            }
+
+            // Do not delete the old photo here. Keeping it avoids breaking any
+            // existing references and is safer than deleting before commit.
+            Ok(updated_item)
+        }
+        Err(error) => {
+            drop(transaction);
+
+            if let Some(path) = copied_photo {
+                let _ = std::fs::remove_file(path);
+            }
+
             Err(error)
         }
     }

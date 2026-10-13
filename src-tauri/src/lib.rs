@@ -3,7 +3,10 @@ use tauri_plugin_sql::{Migration, MigrationKind};
 
 #[tauri::command]
 fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from the Rust backend!", name)
+    format!(
+        "Hello, {}! You've been greeted from the Rust backend!",
+        name
+    )
 }
 
 #[cfg(debug_assertions)]
@@ -31,8 +34,10 @@ fn allow_image_preview(app: tauri::AppHandle, path: String) -> Result<(), String
 pub fn run() {
     let initial_schema = include_str!("../../src/db/migrations/001_initial_schema.sql");
     let initial_categories = include_str!("../../src/db/migrations/002_initial_categories.sql");
-    let jewelry_reference_data = include_str!("../../src/db/migrations/003_jewelry_reference_data.sql");
-    let igi_certificate_number = include_str!("../../src/db/migrations/004_igi_certificate_number.sql");
+    let jewelry_reference_data =
+        include_str!("../../src/db/migrations/003_jewelry_reference_data.sql");
+    let igi_certificate_number =
+        include_str!("../../src/db/migrations/004_igi_certificate_number.sql");
     let remove_is_certified = include_str!("../../src/db/migrations/005_remove_is_certified.sql");
     let net_weight = include_str!("../../src/db/migrations/007_net_weight.sql");
 
@@ -83,7 +88,6 @@ pub fn run() {
         ]
     };
 
-
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
@@ -100,6 +104,7 @@ pub fn run() {
         allow_image_preview,
         item_number::preview_item_number,
         item_number::create_item,
+        item_number::update_item,
         dev_seed::seed_dev_inventory,
         dev_seed::clean_dev_inventory
     ]);
@@ -108,6 +113,7 @@ pub fn run() {
     let builder = builder.invoke_handler(tauri::generate_handler![
         greet,
         allow_image_preview,
+        item_number::update_item,
         item_number::preview_item_number,
         item_number::create_item
     ]);

@@ -9,11 +9,13 @@ import {
   type ItemDiamondDetail,
   type ItemStoneDetail,
 } from './itemDetails.queries';
+import { getDatabase } from '../../db';
 import './ItemDetailsScreen.css';
 
 type Props = {
   itemId: number;
   onBack: () => void;
+  onEdit: () => void;
 };
 
 type LoadedItem = {
@@ -67,11 +69,23 @@ function formatCustomValues(value: string): string | null {
   }
 }
 
-function ItemDetailsScreen({ itemId, onBack }: Props) {
+function ItemDetailsScreen({ itemId, onBack, onEdit }: Props) {
   const [data, setData] = useState<LoadedItem | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [showArchiveDialog, setShowArchiveDialog] = useState(false);
+  const [showCertificationDialog, setShowCertificationDialog] = useState(false);
+  const [archiveBusy, setArchiveBusy] = useState(false);
+  const [certificationBusy, setCertificationBusy] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [certificationSuccess, setCertificationSuccess] = useState(false);
+  const [igiNumber, setIgiNumber] = useState('');
+  const [huidValue, setHuidValue] = useState('');
+
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -136,6 +150,127 @@ function ItemDetailsScreen({ itemId, onBack }: Props) {
     );
   }
 
+  async function handleArchiveToggle() {
+    if (!data || archiveBusy) return;
+
+    setArchiveBusy(true);
+    setActionError(null);
+
+    const shouldArchive = data.item.isArchived === 0;
+
+    try {
+      const db = await getDatabase();
+
+      await db.execute(
+        `UPDATE item
+       SET is_archived = ?,
+           archived_at = CASE
+             WHEN ? = 1 THEN datetime('now', 'localtime')
+             ELSE NULL
+           END,
+           updated_at = datetime('now', 'localtime')
+       WHERE id = ?`,
+        [shouldArchive ? 1 : 0, shouldArchive ? 1 : 0, itemId],
+      );
+
+      setData((current) =>
+        current
+          ? {
+              ...current,
+              item: {
+                ...current.item,
+                isArchived: shouldArchive ? 1 : 0,
+              },
+            }
+          : current,
+      );
+
+      setShowArchiveDialog(false);
+    } catch (error) {
+      console.error('Unable to change archive status:', error);
+      setActionError(
+        shouldArchive
+          ? 'Unable to archive this item. It may belong to a current or upcoming exhibition.'
+          : 'Unable to restore this item. Please try again.',
+      );
+    } finally {
+      setArchiveBusy(false);
+    }
+  }
+
+  async function handleSaveCertification(
+    event: React.FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+
+    if (!data || certificationBusy) return;
+
+    setCertificationBusy(true);
+    setActionError(null);
+
+    const normalizedIgi = igiNumber.trim() || null;
+    const normalizedHuid = huidValue.trim().toUpperCase() || null;
+
+    try {
+      const db = await getDatabase();
+
+      await db.execute(
+        `UPDATE item
+       SET igi_certificate_number = ?,
+           huid = ?,
+           updated_at = datetime('now', 'localtime')
+       WHERE id = ?`,
+        [normalizedIgi, normalizedHuid, itemId],
+      );
+
+      setData((current) =>
+        current
+          ? {
+              ...current,
+              item: {
+                ...current.item,
+                igiCertificateNumber: normalizedIgi,
+                huid: normalizedHuid,
+              },
+            }
+          : current,
+      );
+
+      setShowCertificationDialog(false);
+      setCertificationSuccess(true);
+    } catch (error) {
+      console.error('Unable to save certification details:', error);
+      setActionError('Unable to save certification details. Please try again.');
+    } finally {
+      setCertificationBusy(false);
+    }
+  }
+
+  async function handleDeleteItem() {
+    if (!data || data.item.isArchived !== 1 || deleteBusy) return;
+
+    setDeleteBusy(true);
+    setActionError(null);
+
+    try {
+      const db = await getDatabase();
+
+      await db.execute('DELETE FROM item WHERE id = ? AND is_archived = 1', [
+        itemId,
+      ]);
+
+      setShowDeleteDialog(false);
+      onBack();
+    } catch (error) {
+      console.error('Unable to delete jewelry item:', error);
+      setActionError(
+        'Unable to delete this item. It may still be referenced by existing records.',
+      );
+    } finally {
+      setDeleteBusy(false);
+    }
+  }
+
   if (error || !data) {
     return (
       <section className='item-details-screen'>
@@ -193,6 +328,41 @@ function ItemDetailsScreen({ itemId, onBack }: Props) {
               ? ` · Added ${formatDate(item.createdAt).split(',')[0]}`
               : ''}
           </p>
+        </div>
+
+        <div className='item-details-actions'>
+          <button
+            type='button'
+            className='app-button app-button--primary'
+            onClick={onEdit}
+          >
+            Edit Item
+          </button>
+
+          <button
+            type='button'
+            className='app-button app-button--secondary'
+            onClick={() => {
+              setActionError(null);
+              setShowArchiveDialog(true);
+            }}
+            disabled={archiveBusy}
+          >
+            {item.isArchived ? 'Unarchive Item' : 'Archive Item'}
+          </button>
+
+          {item.isArchived === 1 && (
+            <button
+              type='button'
+              className='app-button app-button--danger'
+              onClick={() => {
+                setActionError(null);
+                setShowDeleteDialog(true);
+              }}
+            >
+              Delete Item
+            </button>
+          )}
         </div>
       </header>
 
@@ -373,6 +543,25 @@ function ItemDetailsScreen({ itemId, onBack }: Props) {
               value={item.huid || 'Missing'}
               alert={!item.huid}
             />
+            <button
+              type='button'
+              className='app-button app-button--secondary item-details-certification-button'
+              onClick={() => {
+                setIgiNumber(item.igiCertificateNumber ?? '');
+                setHuidValue(item.huid ?? '');
+                setActionError(null);
+                setCertificationSuccess(false);
+                setShowCertificationDialog(true);
+              }}
+            >
+              Edit Certification
+            </button>
+
+            {certificationSuccess && (
+              <p role='status' className='item-details-success'>
+                Certification details saved.
+              </p>
+            )}
           </section>
 
           <section className='item-details-card'>
@@ -387,6 +576,164 @@ function ItemDetailsScreen({ itemId, onBack }: Props) {
           </section>
         </aside>
       </div>
+      {showArchiveDialog && (
+        <div className='item-details-modal-backdrop'>
+          <section
+            className='item-details-modal'
+            role='dialog'
+            aria-modal='true'
+            aria-labelledby='archive-dialog-title'
+          >
+            <h2 id='archive-dialog-title'>
+              {item.isArchived
+                ? 'Unarchive jewelry item?'
+                : 'Archive jewelry item?'}
+            </h2>
+
+            <p>
+              {item.isArchived
+                ? 'This item will become active in your inventory again.'
+                : 'This item will be hidden from active inventory. You can restore it later.'}
+            </p>
+
+            {actionError && (
+              <p role='alert' className='item-details-error'>
+                {actionError}
+              </p>
+            )}
+
+            <div className='item-details-modal-actions'>
+              <button
+                type='button'
+                className='app-button app-button--secondary'
+                onClick={() => setShowArchiveDialog(false)}
+                disabled={archiveBusy}
+              >
+                Cancel
+              </button>
+
+              <button
+                type='button'
+                className='app-button app-button--primary'
+                onClick={() => void handleArchiveToggle()}
+                disabled={archiveBusy}
+              >
+                {archiveBusy
+                  ? 'Saving…'
+                  : item.isArchived
+                    ? 'Unarchive Item'
+                    : 'Archive Item'}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {showCertificationDialog && (
+        <div className='item-details-modal-backdrop'>
+          <section
+            className='item-details-modal'
+            role='dialog'
+            aria-modal='true'
+            aria-labelledby='certification-dialog-title'
+          >
+            <h2 id='certification-dialog-title'>Edit Certification</h2>
+            <p>Item {item.itemNumber}</p>
+
+            <form onSubmit={handleSaveCertification}>
+              <label className='item-details-modal-field'>
+                IGI report number
+                <input
+                  type='text'
+                  value={igiNumber}
+                  onChange={(event) => setIgiNumber(event.target.value)}
+                  placeholder='Enter IGI report number'
+                  autoComplete='off'
+                />
+              </label>
+
+              <label className='item-details-modal-field'>
+                HUID
+                <input
+                  type='text'
+                  value={huidValue}
+                  onChange={(event) => setHuidValue(event.target.value)}
+                  placeholder='Enter HUID'
+                  autoComplete='off'
+                />
+              </label>
+
+              {actionError && (
+                <p role='alert' className='item-details-error'>
+                  {actionError}
+                </p>
+              )}
+
+              <div className='item-details-modal-actions'>
+                <button
+                  type='button'
+                  className='app-button app-button--secondary'
+                  onClick={() => setShowCertificationDialog(false)}
+                  disabled={certificationBusy}
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type='submit'
+                  className='app-button app-button--primary'
+                  disabled={certificationBusy}
+                >
+                  {certificationBusy ? 'Saving…' : 'Save Certification'}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
+      {showDeleteDialog && item.isArchived === 1 && (
+        <div className='item-details-modal-backdrop'>
+          <section
+            className='item-details-modal'
+            role='dialog'
+            aria-modal='true'
+            aria-labelledby='delete-dialog-title'
+          >
+            <h2 id='delete-dialog-title'>Permanently delete item?</h2>
+
+            <p>
+              This will permanently delete jewelry item {item.itemNumber}. This
+              action cannot be undone.
+            </p>
+
+            {actionError && (
+              <p role='alert' className='item-details-error'>
+                {actionError}
+              </p>
+            )}
+
+            <div className='item-details-modal-actions'>
+              <button
+                type='button'
+                className='app-button app-button--secondary'
+                onClick={() => setShowDeleteDialog(false)}
+                disabled={deleteBusy}
+              >
+                Cancel
+              </button>
+
+              <button
+                type='button'
+                className='app-button app-button--danger'
+                onClick={() => void handleDeleteItem()}
+                disabled={deleteBusy}
+              >
+                {deleteBusy ? 'Deleting…' : 'Permanently Delete'}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </section>
   );
 }

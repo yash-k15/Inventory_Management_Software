@@ -5,6 +5,9 @@ export type ItemDetails = {
   id: number;
   itemNumber: string;
   categoryName: string;
+  categoryId: number;
+  purityId: number | null;
+  goldTypeId: number;
   name: string | null;
   imagePath: string | null;
   grossWeightMilli: number | null;
@@ -23,6 +26,8 @@ export type ItemDetails = {
 
 export type ItemDiamondDetail = {
   id: number;
+  shapeId: number;
+  combinationId: number | null;
   shapeName: string;
   shapeCode: string;
   combinationQuality: string | null;
@@ -32,6 +37,7 @@ export type ItemDiamondDetail = {
 
 export type ItemStoneDetail = {
   id: number;
+  stoneTypeId: number;
   stoneName: string;
   tagLabel: string;
   weightUnit: string;
@@ -49,12 +55,15 @@ export async function getItemDetails(
       i.id,
       i.item_number AS itemNumber,
       c.name AS categoryName,
+      i.category_id AS categoryId,
       i.name,
       i.image_path AS imagePath,
       i.gross_weight_milli AS grossWeightMilli,
       i.net_weight_milli AS netWeightMilli,
+      i.purity_id AS purityId,
       p.name AS purityName,
       p.percent_bp AS purityPercentBp,
+      i.gold_type_id AS goldTypeId,
       gt.name AS goldTypeName,
       i.igi_certificate_number AS igiCertificateNumber,
       i.huid,
@@ -81,12 +90,14 @@ export async function getItemDiamondDetails(
 
   return db.select<ItemDiamondDetail[]>(
     `SELECT
-      d.id,
-      ds.name AS shapeName,
-      ds.code AS shapeCode,
-      dc.quality AS combinationQuality,
-      d.pieces,
-      d.weight_milli AS weightMilli
+        d.id,
+        d.shape_id AS shapeId,
+        d.combination_id AS combinationId,
+        ds.name AS shapeName,
+        ds.code AS shapeCode,
+        dc.quality AS combinationQuality,
+        d.pieces,
+        d.weight_milli AS weightMilli
     FROM item_diamond d
     JOIN diamond_shape ds ON ds.id = d.shape_id
     LEFT JOIN diamond_combination dc
@@ -105,12 +116,13 @@ export async function getItemStoneDetails(
 
   return db.select<ItemStoneDetail[]>(
     `SELECT
-      s.id,
-      st.name AS stoneName,
-      st.tag_label AS tagLabel,
-      st.weight_unit AS weightUnit,
-      s.pieces,
-      s.weight_milli AS weightMilli
+        s.id,
+        s.stone_type_id AS stoneTypeId,
+        st.name AS stoneName,
+        st.tag_label AS tagLabel,
+        st.weight_unit AS weightUnit,
+        s.pieces,
+        s.weight_milli AS weightMilli
     FROM item_stone s
     JOIN stone_type st ON st.id = s.stone_type_id
     WHERE s.item_id = ?

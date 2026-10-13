@@ -1,7 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
+import { appDataDir, join } from '@tauri-apps/api/path';
 import { open } from '@tauri-apps/plugin-dialog';
 import { getDatabase } from '../../db';
+import {
+  getItemDetails,
+  getItemDiamondDetails,
+  getItemStoneDetails,
+} from './itemDetails.queries';
 import './AddItemScreen.css';
 
 type Option = {
@@ -67,6 +73,8 @@ type CreatedItem = {
 type Props = {
   onCancel: () => void;
   onCreated: (itemNumber: string) => void;
+  itemId?: number;
+  onUpdated?: (itemNumber: string) => void;
 };
 
 function toMilliUnits(value: string, label: string): number {
@@ -315,7 +323,8 @@ function StyledSelect({
   );
 }
 
-function AddItemScreen({ onCancel, onCreated }: Props) {
+function AddItemScreen({ onCancel, onCreated, itemId, onUpdated }: Props) {
+  const isEditMode = itemId !== undefined;
   const [categories, setCategories] = useState<CategoryOption[]>([]);
   const [purities, setPurities] = useState<PurityOption[]>([]);
   const [goldTypes, setGoldTypes] = useState<Option[]>([]);
@@ -337,6 +346,8 @@ function AddItemScreen({ onCancel, onCreated }: Props) {
   const [notes, setNotes] = useState('');
   const [imageSource, setImageSource] = useState('');
   const [imageFileName, setImageFileName] = useState('');
+  const [existingImageUrl, setExistingImageUrl] = useState<string | null>(null);
+  const [removeExistingImage, setRemoveExistingImage] = useState(false);
 
   const [loadingOptions, setLoadingOptions] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -401,25 +412,110 @@ function AddItemScreen({ onCancel, onCreated }: Props) {
         setPurities(purityOptions);
         setCombinations(combinationOptions);
 
-        if (categoryOptions.length > 0) {
-          setCategoryId(String(categoryOptions[0].id));
-        }
-
-        const defaultPurity = purityOptions.find(
-          (purity) => purity.name.toUpperCase() === '18K',
-        );
-
-        if (defaultPurity) {
-          setPurityId(String(defaultPurity.id));
-        }
-
         setDiamondShapes(shapeOptions);
         setStoneTypes(stoneOptions);
 
         setGoldTypes(goldTypeOptions);
-        setGoldTypeId(
-          goldTypeOptions.length > 0 ? String(goldTypeOptions[0].id) : '',
-        );
+
+        if (itemId === undefined) {
+          if (categoryOptions.length > 0) {
+            setCategoryId(String(categoryOptions[0].id));
+          }
+
+          const defaultPurity = purityOptions.find(
+            (purity) => purity.name.toUpperCase() === '18K',
+          );
+
+          if (defaultPurity) {
+            setPurityId(String(defaultPurity.id));
+          }
+
+          setGoldTypeId(
+            goldTypeOptions.length > 0 ? String(goldTypeOptions[0].id) : '',
+          );
+        } else {
+          const item = await getItemDetails(itemId);
+
+          if (!item) {
+            throw new Error('This jewelry item could not be found.');
+          }
+
+          const [diamondDetails, stoneDetails] = await Promise.all([
+            getItemDiamondDetails(itemId),
+            getItemStoneDetails(itemId),
+          ]);
+
+          if (cancelled) return;
+
+          setCategoryId(String(item.categoryId));
+          setPreview(item.itemNumber);
+          setWeight(
+            item.grossWeightMilli == null
+              ? ''
+              : (item.grossWeightMilli / 1000).toFixed(3),
+          );
+          setPurityId(item.purityId == null ? '' : String(item.purityId));
+          setGoldTypeId(String(item.goldTypeId));
+          setIgiCertificateNumber(item.igiCertificateNumber ?? '');
+          setHuid(item.huid ?? '');
+          setNotes(item.notes ?? '');
+
+          setDiamonds(
+            diamondDetails.map((diamond) => {
+              const shape = shapeOptions.find(
+                (option) => option.id === diamond.shapeId,
+              );
+
+              return {
+                shapeId: diamond.shapeId,
+                code: shape?.code ?? diamond.shapeCode,
+                name: shape?.name ?? diamond.shapeName,
+                combinationId:
+                  diamond.combinationId == null
+                    ? ''
+                    : String(diamond.combinationId),
+                pieces: diamond.pieces == null ? '' : String(diamond.pieces),
+                weight: (diamond.weightMilli / 1000).toFixed(3),
+              };
+            }),
+          );
+
+          setStones(
+            stoneDetails.map((stone) => {
+              const stoneType = stoneOptions.find(
+                (option) => option.id === stone.stoneTypeId,
+              );
+
+              return {
+                stoneTypeId: stone.stoneTypeId,
+                name: stoneType?.name ?? stone.stoneName,
+                tagLabel: stoneType?.tag_label ?? stone.tagLabel,
+                weightUnit: stoneType?.weight_unit ?? stone.weightUnit,
+                pieces: stone.pieces == null ? '' : String(stone.pieces),
+                weight: (stone.weightMilli / 1000).toFixed(3),
+              };
+            }),
+          );
+
+          if (item.imagePath) {
+            try {
+              const directory = await appDataDir();
+              const path = await join(directory, item.imagePath);
+
+              await invoke('allow_image_preview', { path });
+
+              if (!cancelled) {
+                setExistingImageUrl(convertFileSrc(path));
+                setImageFileName(item.imagePath.split(/[\\/]/).pop() ?? '');
+              }
+            } catch (imageError) {
+              console.error(
+                'Unable to load existing jewelry image:',
+                imageError,
+              );
+            }
+          }
+        }
       } catch (err) {
         if (!cancelled) {
           setError(`Could not load jewelry options: ${String(err)}`);
@@ -434,12 +530,14 @@ function AddItemScreen({ onCancel, onCreated }: Props) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [itemId]);
 
   useEffect(() => {
     let cancelled = false;
 
     async function loadPreview() {
+      if (isEditMode) return;
+
       setPreview('');
 
       if (!categoryId) return;
@@ -465,7 +563,7 @@ function AddItemScreen({ onCancel, onCreated }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [categoryId]);
+  }, [categoryId, isEditMode]);
 
   function updateDiamond(
     shapeId: number,
@@ -559,6 +657,8 @@ function AddItemScreen({ onCancel, onCreated }: Props) {
 
         setImageSource(selected);
         setImageFileName(selected.split(/[\\/]/).pop() || selected);
+        setExistingImageUrl(null);
+        setRemoveExistingImage(false);
       }
     } catch (err) {
       setError(`Could not select image: ${String(err)}`);
@@ -579,12 +679,12 @@ function AddItemScreen({ onCancel, onCreated }: Props) {
       return;
     }
 
-    if (!imageSource) {
+    if (!isEditMode && !imageSource) {
       setError('Please choose a design image before saving.');
       return;
     }
 
-    if (!preview) {
+    if (!isEditMode && !preview) {
       setError('Wait for the item number preview before saving.');
       return;
     }
@@ -684,21 +784,42 @@ function AddItemScreen({ onCancel, onCreated }: Props) {
         weightMilli: toMilliUnits(stone.weight, `${stone.name} weight`),
       }));
 
-      const result = await invoke<CreatedItem>('create_item', {
-        categoryId: Number(categoryId),
-        name: null,
-        grossWeightMilli,
-        purityId: purityId ? Number(purityId) : null,
-        goldTypeId: Number(goldTypeId),
-        igiCertificateNumber: igiCertificateNumber.trim() || null,
-        huid: normalizedHuid || null,
-        notes: notes.trim() || null,
-        imageSource: imageSource || null,
-        diamonds: diamondPayload,
-        stones: stonePayload,
-      });
+      if (isEditMode) {
+        await invoke('update_item', {
+          input: {
+            itemId,
+            name: null,
+            grossWeightMilli,
+            purityId: purityId ? Number(purityId) : null,
+            goldTypeId: Number(goldTypeId),
+            igiCertificateNumber: igiCertificateNumber.trim() || null,
+            huid: normalizedHuid || null,
+            notes: notes.trim() || null,
+            imageSource: imageSource || null,
+            removeImage: removeExistingImage && !imageSource,
+            diamonds: diamondPayload,
+            stones: stonePayload,
+          },
+        });
 
-      onCreated(result.item_number);
+        onUpdated?.(preview);
+      } else {
+        const result = await invoke<CreatedItem>('create_item', {
+          categoryId: Number(categoryId),
+          name: null,
+          grossWeightMilli,
+          purityId: purityId ? Number(purityId) : null,
+          goldTypeId: Number(goldTypeId),
+          igiCertificateNumber: igiCertificateNumber.trim() || null,
+          huid: normalizedHuid || null,
+          notes: notes.trim() || null,
+          imageSource: imageSource || null,
+          diamonds: diamondPayload,
+          stones: stonePayload,
+        });
+
+        onCreated(result.item_number);
+      }
     } catch (err) {
       setError(`Could not save item: ${String(err)}`);
     } finally {
@@ -765,10 +886,13 @@ function AddItemScreen({ onCancel, onCreated }: Props) {
           >
             ← Inventory
           </button>
-          <h2 className='app-page-title'>Add jewelry item</h2>
+          <h2 className='app-page-title'>
+            {isEditMode ? 'Edit jewelry item' : 'Add jewelry item'}
+          </h2>
           <p className='app-page-description'>
-            Register a new design. The item number is generated from the
-            category.
+            {isEditMode
+              ? 'Update this design. The item number and category cannot be changed.'
+              : 'Register a new design. The item number is generated from the category.'}
           </p>
         </div>
         <button
@@ -814,7 +938,7 @@ function AddItemScreen({ onCancel, onCreated }: Props) {
                       }))}
                       onChange={setCategoryId}
                       required
-                      disabled={saving}
+                      disabled={saving || isEditMode}
                       ariaLabel='Category'
                     />
                   </div>
@@ -1218,24 +1342,26 @@ function AddItemScreen({ onCancel, onCreated }: Props) {
 
             <aside className='add-item-sidebar'>
               <div className='add-item-number'>
-                <span>NEXT ITEM NUMBER</span>
+                <span>{isEditMode ? 'ITEM NUMBER' : 'NEXT ITEM NUMBER'}</span>
                 <strong>{preview || 'Loading...'}</strong>
-                <small>
-                  Reserved when you save. Changes if you switch category.
-                </small>
+                <small>Reserved when you save.</small>
               </div>
               <div className='add-item-card add-item-image-card'>
                 <label className='add-item-image-label'>
                   Design image <span aria-hidden='true'>*</span>
                 </label>
                 <div
-                  className={`add-item-image-dropzone${imageSource ? ' has-image' : ''}`}
+                  className={`add-item-image-dropzone${imageSource || existingImageUrl ? ' has-image' : ''}`}
                 >
-                  {imageSource ? (
+                  {imageSource || existingImageUrl ? (
                     <>
                       <div className='add-item-image-preview'>
                         <img
-                          src={convertFileSrc(imageSource.replace(/\\/g, '/'))}
+                          src={
+                            imageSource
+                              ? convertFileSrc(imageSource.replace(/\\/g, '/'))
+                              : (existingImageUrl ?? '')
+                          }
                           alt={imageFileName || 'Jewelry design preview'}
                           className='add-item-image-preview__img'
                           onError={(event) => {
@@ -1277,6 +1403,8 @@ function AddItemScreen({ onCancel, onCreated }: Props) {
                           onClick={() => {
                             setImageSource('');
                             setImageFileName('');
+                            setExistingImageUrl(null);
+                            setRemoveExistingImage(true);
                           }}
                           disabled={saving}
                         >
@@ -1367,7 +1495,13 @@ function AddItemScreen({ onCancel, onCreated }: Props) {
                 className='app-button app-button--primary add-item-save-button'
                 disabled={saving || !preview}
               >
-                {saving ? 'Saving jewelry item...' : 'Save jewelry item'}
+                {saving
+                  ? isEditMode
+                    ? 'Updating jewelry item...'
+                    : 'Saving jewelry item...'
+                  : isEditMode
+                    ? 'Save changes'
+                    : 'Save jewelry item'}
               </button>
               <button
                 type='button'

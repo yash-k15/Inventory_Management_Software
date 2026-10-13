@@ -1,4 +1,3 @@
-
 #![cfg(debug_assertions)]
 
 use rusqlite::{params, Connection, TransactionBehavior};
@@ -29,21 +28,13 @@ fn open_dev_database(app: &AppHandle) -> Result<Connection, String> {
     Ok(connection)
 }
 
-fn get_id(
-    connection: &Connection,
-    sql: &str,
-    value: &str,
-) -> Result<i64, String> {
+fn get_id(connection: &Connection, sql: &str, value: &str) -> Result<i64, String> {
     connection
         .query_row(sql, [value], |row| row.get(0))
         .map_err(|error| format!("Could not find '{value}': {error}"))
 }
 
-
-fn allocate_item_number(
-    connection: &Connection,
-    category_id: i64,
-) -> Result<String, String> {
+fn allocate_item_number(connection: &Connection, category_id: i64) -> Result<String, String> {
     let (series_id, prefix, mut next_number, number_width, range_end): (
         i64,
         String,
@@ -57,13 +48,23 @@ fn allocate_item_number(
              JOIN category c ON c.series_id = s.id
              WHERE c.id = ?1",
             [category_id],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?)),
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                ))
+            },
         )
         .map_err(|error| format!("Could not resolve item-number series: {error}"))?;
 
     loop {
         if range_end.is_some_and(|end| next_number > end) {
-            return Err(format!("Item-number series '{prefix}' has no numbers remaining."));
+            return Err(format!(
+                "Item-number series '{prefix}' has no numbers remaining."
+            ));
         }
 
         let suffix = if number_width > 0 {

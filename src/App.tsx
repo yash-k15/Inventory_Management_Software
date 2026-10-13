@@ -4,18 +4,13 @@ import AddItemScreen from './features/inventory/AddItemScreen';
 import ItemDetailsScreen from './features/inventory/ItemDetailsScreen';
 import './App.css';
 
-type View = 'inventory' | 'add-item' | 'item-details';
+type View = 'inventory' | 'add-item' | 'item-details' | 'edit-item';
 
 function App() {
   const [view, setView] = useState<View>('inventory');
   const [notice, setNotice] = useState<string | null>(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
-
-  function handleCreated(itemNumber: string) {
-    setNotice(`Jewelry item ${itemNumber} was saved successfully.`);
-    setView('inventory');
-  }
 
   function openAddItem() {
     setNotice(null);
@@ -27,6 +22,18 @@ function App() {
     setSelectedItemId(itemId);
     setView('item-details');
   }
+
+  const openEditItem = () => {
+    if (selectedItemId === null) return;
+
+    setNotice(null);
+    setView('edit-item');
+  };
+
+  const handleUpdated = (itemNumber: string) => {
+    setNotice(`Jewelry item ${itemNumber} was updated successfully.`);
+    setView('item-details');
+  };
 
   return (
     <div
@@ -137,7 +144,21 @@ function App() {
           {view === 'add-item' && (
             <AddItemScreen
               onCancel={() => setView('inventory')}
-              onCreated={handleCreated}
+              onCreated={(itemNumber) => {
+                setNotice(
+                  `Jewelry item ${itemNumber} was created successfully.`,
+                );
+                setView('inventory');
+              }}
+            />
+          )}
+
+          {view === 'edit-item' && selectedItemId !== null && (
+            <AddItemScreen
+              itemId={selectedItemId}
+              onCancel={() => setView('item-details')}
+              onUpdated={handleUpdated}
+              onCreated={() => {}}
             />
           )}
 
@@ -145,6 +166,7 @@ function App() {
             <ItemDetailsScreen
               itemId={selectedItemId}
               onBack={() => setView('inventory')}
+              onEdit={openEditItem}
             />
           )}
         </main>

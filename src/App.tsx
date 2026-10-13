@@ -1,14 +1,16 @@
 import { useState } from 'react';
 import InventoryScreen from './features/inventory/InventoryScreen';
 import AddItemScreen from './features/inventory/AddItemScreen';
+import ItemDetailsScreen from './features/inventory/ItemDetailsScreen';
 import './App.css';
 
-type View = 'inventory' | 'add-item';
+type View = 'inventory' | 'add-item' | 'item-details';
 
 function App() {
   const [view, setView] = useState<View>('inventory');
   const [notice, setNotice] = useState<string | null>(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
 
   function handleCreated(itemNumber: string) {
     setNotice(`Jewelry item ${itemNumber} was saved successfully.`);
@@ -18,6 +20,12 @@ function App() {
   function openAddItem() {
     setNotice(null);
     setView('add-item');
+  }
+
+  function openItemDetails(itemId: number) {
+    setNotice(null);
+    setSelectedItemId(itemId);
+    setView('item-details');
   }
 
   return (
@@ -119,12 +127,24 @@ function App() {
             </p>
           )}
 
-          {view === 'inventory' ? (
-            <InventoryScreen onAddItem={openAddItem} />
-          ) : (
+          {view === 'inventory' && (
+            <InventoryScreen
+              onAddItem={openAddItem}
+              onViewItem={openItemDetails}
+            />
+          )}
+
+          {view === 'add-item' && (
             <AddItemScreen
               onCancel={() => setView('inventory')}
               onCreated={handleCreated}
+            />
+          )}
+
+          {view === 'item-details' && selectedItemId !== null && (
+            <ItemDetailsScreen
+              itemId={selectedItemId}
+              onBack={() => setView('inventory')}
             />
           )}
         </main>

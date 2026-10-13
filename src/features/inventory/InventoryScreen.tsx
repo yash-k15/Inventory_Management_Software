@@ -40,9 +40,10 @@ function formatPurity(
 
 type Props = {
   onAddItem: () => void;
+  onViewItem: (itemId: number) => void;
 };
 
-function InventoryScreen({ onAddItem }: Props) {
+function InventoryScreen({ onAddItem, onViewItem }: Props) {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [imageUrls, setImageUrls] = useState<Record<number, string>>({});
   const [categories, setCategories] = useState<InventoryCategoryOption[]>([]);
@@ -499,7 +500,11 @@ function InventoryScreen({ onAddItem }: Props) {
                   );
 
                   return (
-                    <tr key={item.id}>
+                    <tr
+                      key={item.id}
+                      className='inventory-table-row'
+                      onClick={() => onViewItem(item.id)}
+                    >
                       <td className='inventory-item-column'>
                         <div className='inventory-item-cell'>
                           {imageUrls[item.id] ? (

@@ -48,7 +48,7 @@ function displayStatus(status: Exhibition['status']) {
 
 function formatDateForInput(date: string) {
   if (!date) return '';
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  const match = /^(\\d{4})-(\\d{2})-(\\d{2})$/.exec(date);
   return match ? `${match[3]}/${match[2]}/${match[1]}` : date;
 }
 
@@ -315,7 +315,11 @@ function ExhibitionModal({
   );
 }
 
-export default function ExhibitionsScreen() {
+export default function ExhibitionsScreen({
+  onOpenExhibition,
+}: {
+  onOpenExhibition: (exhibitionId: number) => void;
+}) {
   const [exhibitions, setExhibitions] = useState<Exhibition[]>([]);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<ExhibitionFilter>('all');
@@ -561,7 +565,21 @@ export default function ExhibitionsScreen() {
                 ).toFixed(1)
               : '—';
             return (
-              <article className='exhibition-row' key={exhibition.id}>
+              <article
+                className='exhibition-row exhibition-row--clickable'
+                key={exhibition.id}
+                role='link'
+                tabIndex={0}
+                aria-label={`Open ${exhibition.name}`}
+                onClick={() => onOpenExhibition(exhibition.id)}
+                onKeyDown={(event) => {
+                  if (event.target !== event.currentTarget) return;
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    onOpenExhibition(exhibition.id);
+                  }
+                }}
+              >
                 <section className='exhibition-row-info'>
                   <div className='exhibition-row-meta'>
                     <span className='exhibition-month'>
@@ -589,7 +607,8 @@ export default function ExhibitionsScreen() {
                     <button
                       type='button'
                       className='exhibitions-card-action'
-                      onClick={() => {
+                      onClick={(event) => {
+                        event.stopPropagation();
                         setNotice(null);
                         setModal({ mode: 'edit', exhibition });
                       }}
@@ -599,7 +618,8 @@ export default function ExhibitionsScreen() {
                     <button
                       type='button'
                       className='exhibitions-card-action exhibitions-card-action--danger'
-                      onClick={() => {
+                      onClick={(event) => {
+                        event.stopPropagation();
                         setNotice(null);
                         setDeleteTarget(exhibition);
                       }}

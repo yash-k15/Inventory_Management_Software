@@ -4,12 +4,14 @@ import AddItemScreen from './features/inventory/AddItemScreen';
 import ItemDetailsScreen from './features/inventory/ItemDetailsScreen';
 import CustomersScreen from './features/customers/CustomersScreen';
 import ExhibitionsScreen from './features/exhibitions/ExhibitionsScreen';
+import ExhibitionWorkspace from './features/exhibitions/ExhibitionWorkspace';
 import './App.css';
 
 type View =
   | 'inventory'
   | 'customers'
   | 'exhibitions'
+  | 'exhibition-workspace'
   | 'add-item'
   | 'item-details'
   | 'edit-item';
@@ -19,6 +21,7 @@ function App() {
   const [notice, setNotice] = useState<string | null>(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
+  const [selectedExhibitionId, setSelectedExhibitionId] = useState<number | null>(null);
 
   function openAddItem() {
     setNotice(null);
@@ -29,6 +32,17 @@ function App() {
     setNotice(null);
     setSelectedItemId(itemId);
     setView('item-details');
+  }
+
+  function openExhibitionWorkspace(exhibitionId: number) {
+    setNotice(null);
+    setSelectedExhibitionId(exhibitionId);
+    setView('exhibition-workspace');
+  }
+
+  function openExhibitions() {
+    setNotice(null);
+    setView('exhibitions');
   }
 
   const openEditItem = () => {
@@ -107,9 +121,9 @@ function App() {
 
           <button
             type='button'
-            className={`app-nav-link ${view === 'exhibitions' ? 'app-nav-link--active' : ''}`}
-            aria-current={view === 'exhibitions' ? 'page' : undefined}
-            onClick={() => { setNotice(null); setView('exhibitions'); }}
+            className={`app-nav-link ${view === 'exhibitions' || view === 'exhibition-workspace' ? 'app-nav-link--active' : ''}`}
+            aria-current={view === 'exhibitions' || view === 'exhibition-workspace' ? 'page' : undefined}
+            onClick={openExhibitions}
             title={isSidebarCollapsed ? 'Exhibitions' : undefined}
           >
             <svg className='app-nav-icon' viewBox='0 0 24 24' fill='none' aria-hidden='true'>
@@ -148,7 +162,15 @@ function App() {
             <InventoryScreen onAddItem={openAddItem} onViewItem={openItemDetails} />
           )}
           {view === 'customers' && <CustomersScreen />}
-          {view === 'exhibitions' && <ExhibitionsScreen />}
+          {view === 'exhibitions' && (
+            <ExhibitionsScreen onOpenExhibition={openExhibitionWorkspace} />
+          )}
+          {view === 'exhibition-workspace' && selectedExhibitionId !== null && (
+            <ExhibitionWorkspace
+              exhibitionId={selectedExhibitionId}
+              onBack={openExhibitions}
+            />
+          )}
           {view === 'add-item' && (
             <AddItemScreen
               onCancel={() => setView('inventory')}

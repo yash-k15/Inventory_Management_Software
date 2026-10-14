@@ -1,0 +1,248 @@
+.exhibition-workspace {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  color: #302823;
+}
+
+.exhibition-workspace-back {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 6px;
+  margin: 0 0 12px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #766d65;
+  font-size: 13px;
+  line-height: 1.5;
+  text-decoration: none;
+}
+
+.exhibition-workspace-back:hover {
+  color: #302823;
+}
+
+.exhibition-workspace-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 18px;
+}
+
+.exhibition-workspace-heading {
+  min-width: 0;
+}
+
+.exhibition-workspace-title-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.exhibition-workspace-title-line h1 {
+  margin: 0;
+  color: #302823;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: clamp(30px, 3vw, 42px);
+  font-weight: 500;
+  letter-spacing: -1.1px;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.exhibition-workspace-status {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  min-height: 24px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.exhibition-workspace-status--planned {
+  background: #f8edda;
+  color: #936323;
+}
+
+.exhibition-workspace-status--active {
+  background: #e4f3e8;
+  color: #258149;
+}
+
+.exhibition-workspace-status--closed {
+  background: #efebe6;
+  color: #75675a;
+}
+
+.exhibition-workspace-subtitle {
+  margin: 6px 0 3px;
+  color: #51483f;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.exhibition-workspace-summary {
+  margin: 0;
+  color: #766d65;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.exhibition-workspace-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 26px;
+  min-width: 0;
+  margin: 0 0 18px;
+  overflow-x: auto;
+  border-bottom: 1px solid #ded4c8;
+}
+
+.exhibition-workspace-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  min-height: 43px;
+  padding: 0 2px 11px;
+  border: 0;
+  background: transparent;
+  color: #766d65;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.exhibition-workspace-tab:hover {
+  color: #302823;
+}
+
+.exhibition-workspace-tab.is-active {
+  color: #302823;
+}
+
+.exhibition-workspace-tab.is-active::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  background: #98713f;
+  content: '';
+}
+
+.exhibition-workspace-tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 21px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: #eee4d5;
+  color: #604a31;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.exhibition-workspace-content {
+  min-width: 0;
+}
+
+.exhibition-workspace-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 290px;
+  padding: 36px 24px;
+  border: 1px solid #e6ddd3;
+  border-radius: 14px;
+  background: #fff;
+  text-align: center;
+}
+
+.exhibition-workspace-placeholder-mark {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 10px;
+  border-radius: 12px;
+  background: #f4ecdf;
+  color: #98713f;
+  font-size: 25px;
+}
+
+.exhibition-workspace-placeholder h2 {
+  margin: 0 0 8px;
+  color: #302823;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.exhibition-workspace-placeholder p {
+  max-width: 440px;
+  margin: 0;
+  color: #766d65;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.exhibition-workspace-state {
+  color: #51483f;
+  font-size: 14px;
+}
+
+.exhibition-workspace-state h1 {
+  margin: 12px 0 8px;
+  color: #302823;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 32px;
+  font-weight: 500;
+}
+
+.exhibition-workspace-state p {
+  line-height: 1.55;
+}
+
+.exhibition-workspace-secondary {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid #ded2c4;
+  border-radius: 9px;
+  background: #fff;
+  color: #302823;
+  font-size: 13px;
+}
+
+.exhibition-workspace-secondary:hover {
+  background: #faf7f2;
+}
+
+@media (max-width: 768px) {
+  .exhibition-workspace-title-line {
+    gap: 9px;
+  }
+
+  .exhibition-workspace-title-line h1 {
+    font-size: 32px;
+  }
+
+  .exhibition-workspace-tabs {
+    gap: 20px;
+  }
+
+  .exhibition-workspace-placeholder {
+    min-height: 240px;
+  }
+}

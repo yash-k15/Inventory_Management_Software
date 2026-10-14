@@ -49,7 +49,8 @@ export async function getExhibitions(
         COALESCE(s.customers_attended, 0) AS customersAttended,
         COALESCE(s.customers_with_selections, 0) AS customersWithSelections,
         COALESCE(s.total_selections, 0) AS totalSelections,
-        COALESCE(s.distinct_items, 0) AS distinctItems
+        COALESCE(s.distinct_items, 0) AS distinctItems,
+        (SELECT COUNT(*) FROM exhibition_item ei WHERE ei.exhibition_id = e.id) AS registeredItems
       FROM v_exhibition e
       LEFT JOIN v_exhibition_summary s ON s.exhibition_id = e.id
       ${whereClause}

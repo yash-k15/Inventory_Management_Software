@@ -3,11 +3,13 @@ import InventoryScreen from './features/inventory/InventoryScreen';
 import AddItemScreen from './features/inventory/AddItemScreen';
 import ItemDetailsScreen from './features/inventory/ItemDetailsScreen';
 import CustomersScreen from './features/customers/CustomersScreen';
+import ExhibitionsScreen from './features/exhibitions/ExhibitionsScreen';
 import './App.css';
 
 type View =
   | 'inventory'
   | 'customers'
+  | 'exhibitions'
   | 'add-item'
   | 'item-details'
   | 'edit-item';
@@ -131,6 +133,21 @@ function App() {
           <button
             type='button'
             className={`app-nav-link ${
+              view === 'exhibitions' ? 'app-nav-link--active' : ''
+            }`}
+            aria-current={view === 'exhibitions' ? 'page' : undefined}
+            onClick={() => setView('exhibitions')}
+            title={isSidebarCollapsed ? 'Exhibitions' : undefined}
+          >
+            <svg className='app-nav-icon' viewBox='0 0 24 24' fill='none' aria-hidden='true'>
+              <path d='M4 20h16M6 20V9l6-5 6 5v11M9 20v-6h6v6M9 10h.01M15 10h.01' />
+            </svg>
+            <span className='app-nav-label'>Exhibitions</span>
+          </button>
+
+          <button
+            type='button'
+            className={`app-nav-link ${
               view === 'add-item' ? 'app-nav-link--active' : ''
             }`}
             aria-current={view === 'add-item' ? 'page' : undefined}
@@ -171,6 +188,8 @@ function App() {
           )}
 
           {view === 'customers' && <CustomersScreen />}
+
+          {view === 'exhibitions' && <ExhibitionsScreen />}
 
           {view === 'add-item' && (
             <AddItemScreen

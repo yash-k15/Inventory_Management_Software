@@ -21,6 +21,7 @@ export interface Exhibition {
   customersWithSelections: number;
   totalSelections: number;
   distinctItems: number;
+  registeredItems: number;
 }
 
 export interface ExhibitionCategoryCount {

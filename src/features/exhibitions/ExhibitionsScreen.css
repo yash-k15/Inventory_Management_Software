@@ -129,7 +129,7 @@
 .exhibition-inventory-total { display: flex; align-items: baseline; gap: 9px; margin-bottom: 10px; }
 .exhibition-inventory-total strong { font-size: 29px; font-weight: 650; letter-spacing: -1px; line-height: 1; }
 .exhibition-inventory-total span { color: var(--exhibition-muted); font-size: 11px; }
-.exhibition-category-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
+.exhibition-category-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 7px; }
 .exhibition-category-tile { display: flex; flex-direction: column; justify-content: center; min-width: 0; min-height: 53px; padding: 6px 8px; border: 1px solid #e9dfd5; border-radius: 9px; }
 .exhibition-category-tile strong { font-size: 15px; font-weight: 650; line-height: 1.25; }
 .exhibition-category-tile span { overflow: hidden; color: var(--exhibition-muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
@@ -188,6 +188,7 @@
   .exhibitions-search { flex-basis: 240px; }
   .exhibitions-add-button { margin-left: 0; }
   .exhibition-card { grid-template-columns: minmax(175px, 205px) minmax(220px, 1fr); }
+  .exhibition-category-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .exhibition-card-summary { grid-column: 1 / -1; border-top: 1px solid #eee5dc; border-left: 0; }
   .exhibition-card-summary > p { margin-top: 8px; }
   .exhibition-summary-stats { max-width: 360px; }

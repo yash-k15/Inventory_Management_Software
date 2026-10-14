@@ -3,11 +3,13 @@ import InventoryScreen from './features/inventory/InventoryScreen';
 import AddItemScreen from './features/inventory/AddItemScreen';
 import ItemDetailsScreen from './features/inventory/ItemDetailsScreen';
 import CustomersScreen from './features/customers/CustomersScreen';
+import ExhibitionsScreen from './features/exhibitions/ExhibitionsScreen';
 import './App.css';
 
 type View =
   | 'inventory'
   | 'customers'
+  | 'exhibitions'
   | 'add-item'
   | 'item-details'
   | 'edit-item';
@@ -31,7 +33,6 @@ function App() {
 
   const openEditItem = () => {
     if (selectedItemId === null) return;
-
     setNotice(null);
     setView('edit-item');
   };
@@ -42,19 +43,13 @@ function App() {
   };
 
   return (
-    <div
-      className={`app-shell ${
-        isSidebarCollapsed ? 'app-shell--sidebar-collapsed' : ''
-      }`}
-    >
+    <div className={`app-shell ${isSidebarCollapsed ? 'app-shell--sidebar-collapsed' : ''}`}>
       <aside className='app-sidebar'>
         <div className='app-brand'>
           <button
             type='button'
             className='app-sidebar-toggle'
-            aria-label={
-              isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'
-            }
+            aria-label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             aria-expanded={!isSidebarCollapsed}
             onClick={() => setIsSidebarCollapsed((collapsed) => !collapsed)}
             title={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
@@ -70,11 +65,7 @@ function App() {
               )}
             </svg>
           </button>
-
-          <div className='app-brand-mark' aria-label='Anmol Diamonds'>
-            AD
-          </div>
-
+          <div className='app-brand-mark' aria-label='Anmol Diamonds'>AD</div>
           <div className='app-brand-text'>
             <span className='app-brand-name'>Anmol</span>
             <span className='app-brand-name'>Diamonds</span>
@@ -84,19 +75,12 @@ function App() {
         <nav className='app-nav' aria-label='Main navigation'>
           <button
             type='button'
-            className={`app-nav-link ${
-              view === 'inventory' ? 'app-nav-link--active' : ''
-            }`}
+            className={`app-nav-link ${view === 'inventory' ? 'app-nav-link--active' : ''}`}
             aria-current={view === 'inventory' ? 'page' : undefined}
             onClick={() => setView('inventory')}
             title={isSidebarCollapsed ? 'Inventory' : undefined}
           >
-            <svg
-              className='app-nav-icon'
-              viewBox='0 0 24 24'
-              fill='none'
-              aria-hidden='true'
-            >
+            <svg className='app-nav-icon' viewBox='0 0 24 24' fill='none' aria-hidden='true'>
               <rect x='3.5' y='3.5' width='6' height='6' rx='1' />
               <rect x='14.5' y='3.5' width='6' height='6' rx='1' />
               <rect x='3.5' y='14.5' width='6' height='6' rx='1' />
@@ -107,19 +91,12 @@ function App() {
 
           <button
             type='button'
-            className={`app-nav-link ${
-              view === 'customers' ? 'app-nav-link--active' : ''
-            }`}
+            className={`app-nav-link ${view === 'customers' ? 'app-nav-link--active' : ''}`}
             aria-current={view === 'customers' ? 'page' : undefined}
             onClick={() => setView('customers')}
             title={isSidebarCollapsed ? 'Customers' : undefined}
           >
-            <svg
-              className='app-nav-icon'
-              viewBox='0 0 24 24'
-              fill='none'
-              aria-hidden='true'
-            >
+            <svg className='app-nav-icon' viewBox='0 0 24 24' fill='none' aria-hidden='true'>
               <circle cx='9' cy='8' r='3.5' />
               <path d='M2.5 20v-1.5a6.5 6.5 0 0 1 13 0V20' />
               <path d='M16 4.8a3.5 3.5 0 0 1 0 6.4' />
@@ -130,19 +107,26 @@ function App() {
 
           <button
             type='button'
-            className={`app-nav-link ${
-              view === 'add-item' ? 'app-nav-link--active' : ''
-            }`}
+            className={`app-nav-link ${view === 'exhibitions' ? 'app-nav-link--active' : ''}`}
+            aria-current={view === 'exhibitions' ? 'page' : undefined}
+            onClick={() => { setNotice(null); setView('exhibitions'); }}
+            title={isSidebarCollapsed ? 'Exhibitions' : undefined}
+          >
+            <svg className='app-nav-icon' viewBox='0 0 24 24' fill='none' aria-hidden='true'>
+              <rect x='3.5' y='5' width='17' height='15.5' rx='2' />
+              <path d='M7.5 3v4M16.5 3v4M3.5 9.5h17M7.5 13h3M7.5 16.5h6' />
+            </svg>
+            <span className='app-nav-label'>Exhibitions</span>
+          </button>
+
+          <button
+            type='button'
+            className={`app-nav-link ${view === 'add-item' ? 'app-nav-link--active' : ''}`}
             aria-current={view === 'add-item' ? 'page' : undefined}
             onClick={openAddItem}
             title={isSidebarCollapsed ? 'Add jewelry item' : undefined}
           >
-            <svg
-              className='app-nav-icon'
-              viewBox='0 0 24 24'
-              fill='none'
-              aria-hidden='true'
-            >
+            <svg className='app-nav-icon' viewBox='0 0 24 24' fill='none' aria-hidden='true'>
               <path d='M12 5v14M5 12h14' />
             </svg>
             <span className='app-nav-label'>Add jewelry item</span>
@@ -158,32 +142,22 @@ function App() {
       <div className='app-main'>
         <main className='app-content' id='inventory'>
           {notice && view === 'inventory' && (
-            <p role='status' className='app-success-message'>
-              {notice}
-            </p>
+            <p role='status' className='app-success-message'>{notice}</p>
           )}
-
           {view === 'inventory' && (
-            <InventoryScreen
-              onAddItem={openAddItem}
-              onViewItem={openItemDetails}
-            />
+            <InventoryScreen onAddItem={openAddItem} onViewItem={openItemDetails} />
           )}
-
           {view === 'customers' && <CustomersScreen />}
-
+          {view === 'exhibitions' && <ExhibitionsScreen />}
           {view === 'add-item' && (
             <AddItemScreen
               onCancel={() => setView('inventory')}
               onCreated={(itemNumber) => {
-                setNotice(
-                  `Jewelry item ${itemNumber} was created successfully.`,
-                );
+                setNotice(`Jewelry item ${itemNumber} was created successfully.`);
                 setView('inventory');
               }}
             />
           )}
-
           {view === 'edit-item' && selectedItemId !== null && (
             <AddItemScreen
               itemId={selectedItemId}
@@ -192,13 +166,8 @@ function App() {
               onCreated={() => {}}
             />
           )}
-
           {view === 'item-details' && selectedItemId !== null && (
-            <ItemDetailsScreen
-              itemId={selectedItemId}
-              onBack={() => setView('inventory')}
-              onEdit={openEditItem}
-            />
+            <ItemDetailsScreen itemId={selectedItemId} onBack={() => setView('inventory')} onEdit={openEditItem} />
           )}
         </main>
       </div>

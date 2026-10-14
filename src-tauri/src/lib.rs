@@ -12,6 +12,7 @@ fn greet(name: &str) -> String {
 #[cfg(debug_assertions)]
 mod dev_seed;
 mod item_number;
+mod customer;
 
 #[tauri::command]
 fn allow_image_preview(app: tauri::AppHandle, path: String) -> Result<(), String> {
@@ -111,7 +112,12 @@ pub fn run() {
         item_number::create_item,
         item_number::update_item,
         dev_seed::seed_dev_inventory,
-        dev_seed::clean_dev_inventory
+        dev_seed::clean_dev_inventory,
+        customer::create_customer,
+        customer::update_customer,
+        customer::set_customer_archived,
+        customer::delete_archived_customer,
+        customer::merge_customers,
     ]);
 
     #[cfg(not(debug_assertions))]
@@ -120,7 +126,12 @@ pub fn run() {
         allow_image_preview,
         item_number::update_item,
         item_number::preview_item_number,
-        item_number::create_item
+        item_number::create_item,
+        customer::create_customer,
+        customer::update_customer,
+        customer::set_customer_archived,
+        customer::delete_archived_customer,
+        customer::merge_customers,
     ]);
 
     builder

@@ -2,9 +2,15 @@ import { useState } from 'react';
 import InventoryScreen from './features/inventory/InventoryScreen';
 import AddItemScreen from './features/inventory/AddItemScreen';
 import ItemDetailsScreen from './features/inventory/ItemDetailsScreen';
+import CustomersScreen from './features/customers/CustomersScreen';
 import './App.css';
 
-type View = 'inventory' | 'add-item' | 'item-details' | 'edit-item';
+type View =
+  | 'inventory'
+  | 'customers'
+  | 'add-item'
+  | 'item-details'
+  | 'edit-item';
 
 function App() {
   const [view, setView] = useState<View>('inventory');
@@ -102,6 +108,29 @@ function App() {
           <button
             type='button'
             className={`app-nav-link ${
+              view === 'customers' ? 'app-nav-link--active' : ''
+            }`}
+            aria-current={view === 'customers' ? 'page' : undefined}
+            onClick={() => setView('customers')}
+            title={isSidebarCollapsed ? 'Customers' : undefined}
+          >
+            <svg
+              className='app-nav-icon'
+              viewBox='0 0 24 24'
+              fill='none'
+              aria-hidden='true'
+            >
+              <circle cx='9' cy='8' r='3.5' />
+              <path d='M2.5 20v-1.5a6.5 6.5 0 0 1 13 0V20' />
+              <path d='M16 4.8a3.5 3.5 0 0 1 0 6.4' />
+              <path d='M18 14a5.5 5.5 0 0 1 3.5 5.1V20' />
+            </svg>
+            <span className='app-nav-label'>Customers</span>
+          </button>
+
+          <button
+            type='button'
+            className={`app-nav-link ${
               view === 'add-item' ? 'app-nav-link--active' : ''
             }`}
             aria-current={view === 'add-item' ? 'page' : undefined}
@@ -140,6 +169,8 @@ function App() {
               onViewItem={openItemDetails}
             />
           )}
+
+          {view === 'customers' && <CustomersScreen />}
 
           {view === 'add-item' && (
             <AddItemScreen

@@ -13,6 +13,7 @@ fn greet(name: &str) -> String {
 mod dev_seed;
 mod item_number;
 mod customer;
+mod exhibition;
 
 #[tauri::command]
 fn allow_image_preview(app: tauri::AppHandle, path: String) -> Result<(), String> {
@@ -118,6 +119,9 @@ pub fn run() {
         customer::set_customer_archived,
         customer::delete_archived_customer,
         customer::merge_customers,
+        exhibition::create_exhibition,
+        exhibition::update_exhibition,
+        exhibition::delete_exhibition,
     ]);
 
     #[cfg(not(debug_assertions))]

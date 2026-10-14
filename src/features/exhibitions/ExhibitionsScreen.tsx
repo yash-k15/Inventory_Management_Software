@@ -182,6 +182,7 @@ function ExhibitionFormModal({
 
 export default function ExhibitionsScreen() {
   const [exhibitions, setExhibitions] = useState<Exhibition[]>([]);
+  const [matchingExhibitions, setMatchingExhibitions] = useState<Exhibition[]>([]);
   const [categoryCounts, setCategoryCounts] = useState<ExhibitionCategoryCount[]>([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<ExhibitionStatusFilter>('all');
@@ -196,8 +197,12 @@ export default function ExhibitionsScreen() {
     setLoading(true);
     setError(null);
     try {
-      const result = await getExhibitions({ search, status: statusFilter });
+      const [result, matching] = await Promise.all([
+        getExhibitions({ search, status: statusFilter }),
+        getExhibitions({ search, status: 'all' }),
+      ]);
       setExhibitions(result);
+      setMatchingExhibitions(matching);
       const counts = await getExhibitionCategoryCounts(result.map((item) => item.id));
       setCategoryCounts(counts);
     } catch (err) {
@@ -219,11 +224,11 @@ export default function ExhibitionsScreen() {
   }, [categoryCounts]);
 
   const filterCounts = useMemo(() => ({
-    all: exhibitions.length,
-    upcoming: exhibitions.filter((item) => item.status === 'Planned').length,
-    active: exhibitions.filter((item) => item.status === 'Active').length,
-    past: exhibitions.filter((item) => item.status === 'Closed').length,
-  }), [exhibitions]);
+    all: matchingExhibitions.length,
+    upcoming: matchingExhibitions.filter((item) => item.status === 'Planned').length,
+    active: matchingExhibitions.filter((item) => item.status === 'Active').length,
+    past: matchingExhibitions.filter((item) => item.status === 'Closed').length,
+  }), [matchingExhibitions]);
 
   const saveExhibition = async (input: ExhibitionInput, exhibitionId?: number) => {
     const payload = {
@@ -311,7 +316,9 @@ export default function ExhibitionsScreen() {
         </div> : <div className="exhibitions-list">
           {exhibitions.map((exhibition) => {
             const categories = countsByExhibition[exhibition.id] ?? [];
-            const canDelete = exhibition.startDate > new Date().toLocaleDateString('en-CA');
+            const today = new Date();
+            const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+            const canDelete = exhibition.startDate > todayIso;
             return (
               <article className="exhibition-card" key={exhibition.id}>
                 <div className="exhibition-card-intro">
@@ -331,7 +338,7 @@ export default function ExhibitionsScreen() {
                   </div>
                 </div>
                 <div className="exhibition-card-inventory">
-                  <div className="exhibition-inventory-total"><strong>{exhibition.distinctItems}</strong><span>registered items</span></div>
+                  <div className="exhibition-inventory-total"><strong>{exhibition.registeredItems}</strong><span>registered items</span></div>
                   <div className="exhibition-category-grid">
                     {categories.slice(0, 6).map((category) => (
                       <div className="exhibition-category-tile" key={category.categoryId}>

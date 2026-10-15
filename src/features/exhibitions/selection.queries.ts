@@ -1,0 +1,93 @@
+import { getDatabase } from '../../db';
+
+export interface SelectionCustomer {
+  id: number; businessName: string; contactName: string | null; phone: string | null;
+  selectionId: number | null; activeItemCount: number;
+}
+export interface SelectionRow {
+  id: number; inventoryItemId: number | null; itemNumber: string; categoryName: string;
+  name: string | null; imagePath: string | null; grossWeightMilli: number | null;
+  purityName: string | null; status: 'active' | 'removed'; addedAt: string; locked: number;
+}
+export interface SelectionCandidate {
+  id: number; itemNumber: string; categoryName: string; name: string | null;
+  imagePath: string | null; grossWeightMilli: number | null; purityName: string | null;
+}
+
+export async function getSelectionCustomers(exhibitionId: number, search: string) {
+  const db = await getDatabase(), pattern = `%${search.trim()}%`;
+  return db.select<SelectionCustomer[]>(
+    `SELECT c.id,c.business_name AS businessName,
+      (SELECT cc.name FROM customer_contact cc WHERE cc.customer_id=c.id AND cc.is_primary=1 ORDER BY cc.id LIMIT 1) AS contactName,
+      (SELECT cc.phone_1 FROM customer_contact cc WHERE cc.customer_id=c.id AND cc.is_primary=1 ORDER BY cc.id LIMIT 1) AS phone,
+      s.id AS selectionId,
+      (SELECT COUNT(*) FROM selection_item si WHERE si.selection_id=s.id AND si.status='active') AS activeItemCount
+     FROM customer c LEFT JOIN selection s ON s.customer_id=c.id AND s.exhibition_id=?
+     WHERE c.is_archived=0 AND (?='%%' OR c.business_name LIKE ?
+       OR COALESCE((SELECT cc.name FROM customer_contact cc WHERE cc.customer_id=c.id AND cc.is_primary=1 LIMIT 1),'') LIKE ?
+       OR COALESCE((SELECT cc.phone_1 FROM customer_contact cc WHERE cc.customer_id=c.id AND cc.is_primary=1 LIMIT 1),'') LIKE ?)
+     ORDER BY c.business_name COLLATE NOCASE`,
+    [exhibitionId, pattern, pattern, pattern, pattern],
+  );
+}
+export async function getSelectionItems(selectionId: number) {
+  const db = await getDatabase();
+  return db.select<SelectionRow[]>(
+    `SELECT si.id,si.inventory_item_id AS inventoryItemId,
+      COALESCE(json_extract(si.snapshot_data,'$.item_number'),'Deleted item') AS itemNumber,
+      COALESCE(json_extract(si.snapshot_data,'$.category'),'—') AS categoryName,
+      json_extract(si.snapshot_data,'$.name') AS name,
+      json_extract(si.snapshot_data,'$.image_path') AS imagePath,
+      json_extract(si.snapshot_data,'$.gross_weight_milli') AS grossWeightMilli,
+      json_extract(si.snapshot_data,'$.purity') AS purityName,si.status,si.added_at AS addedAt,
+      CASE WHEN EXISTS(SELECT 1 FROM customer_order co WHERE co.selection_item_id=si.id AND co.status<>'Cancelled') THEN 1 ELSE 0 END AS locked
+     FROM selection_item si WHERE si.selection_id=?
+     ORDER BY CASE si.status WHEN 'active' THEN 0 ELSE 1 END,si.added_at DESC,si.id DESC`,
+    [selectionId],
+  );
+}
+export async function searchSelectionInventory(exhibitionId: number, search: string) {
+  const db = await getDatabase(), term = search.trim(), pattern = `%${term}%`;
+  return db.select<SelectionCandidate[]>(
+    `SELECT i.id,i.item_number AS itemNumber,c.name AS categoryName,i.name,i.image_path AS imagePath,
+      i.gross_weight_milli AS grossWeightMilli,p.name AS purityName
+     FROM exhibition_item ei JOIN item i ON i.id=ei.item_id JOIN category c ON c.id=i.category_id
+     LEFT JOIN purity p ON p.id=i.purity_id
+     WHERE ei.exhibition_id=? AND (?='' OR i.item_number LIKE ? OR COALESCE(i.name,'') LIKE ? OR c.name LIKE ? OR COALESCE(i.notes,'') LIKE ?)
+     ORDER BY i.item_number COLLATE NOCASE LIMIT 100`,
+    [exhibitionId, term, pattern, pattern, pattern, pattern],
+  );
+}
+export async function addSelectionItem(exhibitionId: number, customerId: number, itemId: number): Promise<boolean> {
+  const db = await getDatabase();
+  const rows = await db.select<any[]>(
+    `SELECT i.id,i.item_number AS itemNumber,c.name AS categoryName,i.name,i.image_path AS imagePath,
+      i.gross_weight_milli AS grossWeightMilli,p.name AS purityName,i.igi_certificate_number AS igiCertificateNumber,i.huid,i.custom_values AS customValues
+     FROM exhibition_item ei JOIN item i ON i.id=ei.item_id JOIN category c ON c.id=i.category_id
+     LEFT JOIN purity p ON p.id=i.purity_id WHERE ei.exhibition_id=? AND i.id=?`,
+    [exhibitionId,itemId],
+  );
+  const item=rows[0];
+  if(!item) throw new Error('This item is not registered to this exhibition. Register it in the Inventory tab first.');
+  await db.execute(`INSERT OR IGNORE INTO selection(customer_id,exhibition_id) VALUES(?,?)`,[customerId,exhibitionId]);
+  const sels=await db.select<{id:number}[]>(`SELECT id FROM selection WHERE customer_id=? AND exhibition_id=?`,[customerId,exhibitionId]);
+  const selectionId=sels[0]?.id;
+  if(!selectionId) throw new Error('Unable to open this customer selection.');
+  const duplicate=await db.select<{id:number}[]>(`SELECT id FROM selection_item WHERE selection_id=? AND inventory_item_id=? AND status='active'`,[selectionId,itemId]);
+  if(duplicate.length) return false;
+  const diamonds=await db.select<any[]>(`SELECT ds.name AS shape,d.combination_id AS combination_id,d.pieces,d.weight_milli AS weight_milli FROM item_diamond d JOIN diamond_shape ds ON ds.id=d.shape_id WHERE d.item_id=? ORDER BY ds.sort_order,ds.name`,[itemId]);
+  const stones=await db.select<any[]>(`SELECT st.name AS stone,s.pieces,s.weight_milli AS weight_milli FROM item_stone s JOIN stone_type st ON st.id=s.stone_type_id WHERE s.item_id=? ORDER BY st.sort_order,st.name`,[itemId]);
+  let customValues={}; try{customValues=JSON.parse(item.customValues||'{}');}catch{}
+  const snapshot={item_number:item.itemNumber,category:item.categoryName,name:item.name,gross_weight_milli:item.grossWeightMilli,purity:item.purityName,diamonds,stones,is_certified:Boolean(item.igiCertificateNumber && String(item.igiCertificateNumber).trim()),igi_certificate_number:item.igiCertificateNumber,huid:item.huid,image_path:item.imagePath,custom_values:customValues};
+  await db.execute(`INSERT INTO selection_item(selection_id,inventory_item_id,snapshot_data,overrides) VALUES(?,?,?,'{}')`,[selectionId,itemId,JSON.stringify(snapshot)]);
+  return true;
+}
+export async function removeSelectionItem(selectionItemId: number) {
+  const db=await getDatabase();
+  const rows=await db.select<{status:string;locked:number}[]>(`SELECT si.status,CASE WHEN EXISTS(SELECT 1 FROM customer_order co WHERE co.selection_item_id=si.id AND co.status<>'Cancelled') THEN 1 ELSE 0 END AS locked FROM selection_item si WHERE si.id=?`,[selectionItemId]);
+  const row=rows[0];
+  if(!row) throw new Error('This selection item no longer exists.');
+  if(row.status!=='active') throw new Error('Only active selection items can be removed.');
+  if(row.locked) throw new Error('This item already has an order and is locked.');
+  await db.execute(`UPDATE selection_item SET status='removed',removed_at=datetime('now','localtime'),updated_at=datetime('now','localtime') WHERE id=? AND status='active'`,[selectionItemId]);
+}

@@ -127,3 +127,205 @@ export async function deleteExhibition(exhibitionId: number): Promise<void> {
   const database = await getDatabase();
   await database.execute('DELETE FROM exhibition WHERE id = ?', [exhibitionId]);
 }
+
+
+export interface ExhibitionInventoryRow {
+  id: number;
+  itemNumber: string;
+  categoryId: number;
+  categoryName: string;
+  name: string | null;
+  imagePath: string | null;
+  grossWeightMilli: number | null;
+  netWeightMilli: number | null;
+  diamondDetails: string | null;
+  stoneDetails: string | null;
+  igiCertificateNumber: string | null;
+  huid: string | null;
+  isArchived: number;
+  isRegistered: number;
+  selectionCount: number;
+}
+
+export interface ExhibitionInventoryFilters {
+  search: string;
+  categoryId: number | null;
+  registeredOnly: boolean;
+}
+
+export async function getExhibitionInventory(
+  exhibitionId: number,
+  filters: ExhibitionInventoryFilters,
+): Promise<ExhibitionInventoryRow[]> {
+  const database = await getDatabase();
+  const conditions: string[] = [];
+  const params: (string | number)[] = [exhibitionId];
+
+  if (filters.registeredOnly) {
+    conditions.push('ei.item_id IS NOT NULL');
+  }
+  if (filters.categoryId !== null) {
+    conditions.push('i.category_id = ?');
+    params.push(filters.categoryId);
+  }
+  const search = filters.search.trim();
+  if (search) {
+    const pattern = `%${search}%`;
+    conditions.push(`(
+      i.item_number LIKE ?
+      OR COALESCE(i.name, '') LIKE ?
+      OR COALESCE(i.igi_certificate_number, '') LIKE ?
+      OR COALESCE(i.huid, '') LIKE ?
+      OR EXISTS (
+        SELECT 1 FROM item_diamond d
+        JOIN diamond_shape ds ON ds.id = d.shape_id
+        WHERE d.item_id = i.id AND ds.name LIKE ?
+      )
+      OR EXISTS (
+        SELECT 1 FROM item_stone s
+        JOIN stone_type st ON st.id = s.stone_type_id
+        WHERE s.item_id = i.id AND st.name LIKE ?
+      )
+    )`);
+    params.push(pattern, pattern, pattern, pattern, pattern, pattern);
+  }
+
+  const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  return database.select<ExhibitionInventoryRow[]>(
+    `
+      SELECT
+        i.id,
+        i.item_number AS itemNumber,
+        i.category_id AS categoryId,
+        c.name AS categoryName,
+        i.name,
+        i.image_path AS imagePath,
+        i.gross_weight_milli AS grossWeightMilli,
+        i.net_weight_milli AS netWeightMilli,
+        i.igi_certificate_number AS igiCertificateNumber,
+        i.huid,
+        i.is_archived AS isArchived,
+        CASE WHEN ei.item_id IS NULL THEN 0 ELSE 1 END AS isRegistered,
+        (
+          SELECT GROUP_CONCAT(
+            ds.name || ' · ' || printf('%.3f', d.weight_milli / 1000.0) || ' ct' ||
+            char(10) || COALESCE(d.pieces, 0) || ' pcs',
+            char(10)
+          )
+          FROM item_diamond d
+          JOIN diamond_shape ds ON ds.id = d.shape_id
+          WHERE d.item_id = i.id
+        ) AS diamondDetails,
+        (
+          SELECT GROUP_CONCAT(
+            st.name || ' · ' || printf('%.3f', s.weight_milli / 1000.0) || ' ' || st.weight_unit,
+            char(10)
+          )
+          FROM item_stone s
+          JOIN stone_type st ON st.id = s.stone_type_id
+          WHERE s.item_id = i.id
+        ) AS stoneDetails,
+        (
+          SELECT COUNT(*)
+          FROM selection_item si
+          JOIN selection s ON s.id = si.selection_id
+          WHERE s.exhibition_id = ? AND si.inventory_item_id = i.id AND si.status = 'active'
+        ) AS selectionCount
+      FROM item i
+      JOIN category c ON c.id = i.category_id
+      LEFT JOIN exhibition_item ei ON ei.item_id = i.id AND ei.exhibition_id = ?
+      ${whereClause}
+      ORDER BY i.item_number COLLATE NOCASE ASC
+    `,
+    [exhibitionId, exhibitionId, ...params.slice(1)],
+  );
+}
+
+export async function registerExhibitionItems(
+  exhibitionId: number,
+  itemIds: number[],
+): Promise<number> {
+  if (itemIds.length === 0) return 0;
+  const database = await getDatabase();
+  const rows = await database.select<{ endDate: string }[]>(
+    'SELECT end_date AS endDate FROM exhibition WHERE id = ?',
+    [exhibitionId],
+  );
+  if (!rows.length) throw new Error('This exhibition could not be found.');
+  const todayRows = await database.select<{ today: string }[]>(
+    "SELECT date('now','localtime') AS today",
+  );
+  if (rows[0].endDate < todayRows[0].today) {
+    throw new Error('Inventory registration is closed because this exhibition has ended.');
+  }
+
+  let added = 0;
+  for (const itemId of [...new Set(itemIds)]) {
+    const result = await database.execute(
+      'INSERT OR IGNORE INTO exhibition_item (exhibition_id, item_id) VALUES (?, ?)',
+      [exhibitionId, itemId],
+    );
+    if (result.rowsAffected > 0) added += 1;
+  }
+  return added;
+}
+
+export async function registerExhibitionItemByBarcode(
+  exhibitionId: number,
+  barcode: string,
+): Promise<'registered' | 'already-registered' | 'not-found'> {
+  const normalized = barcode.trim();
+  if (!normalized) return 'not-found';
+  const database = await getDatabase();
+  const items = await database.select<{ id: number }[]>(
+    'SELECT id FROM item WHERE item_number = ? COLLATE NOCASE LIMIT 1',
+    [normalized],
+  );
+  if (!items.length) return 'not-found';
+  const already = await database.select<{ found: number }[]>(
+    'SELECT 1 AS found FROM exhibition_item WHERE exhibition_id = ? AND item_id = ? LIMIT 1',
+    [exhibitionId, items[0].id],
+  );
+  if (already.length) return 'already-registered';
+  const added = await registerExhibitionItems(exhibitionId, [items[0].id]);
+  return added ? 'registered' : 'already-registered';
+}
+
+
+export async function unregisterExhibitionItem(
+  exhibitionId: number,
+  itemId: number,
+): Promise<void> {
+  const database = await getDatabase();
+
+  const exhibitions = await database.select<{ endDate: string }[]>(
+    'SELECT end_date AS endDate FROM exhibition WHERE id = ?',
+    [exhibitionId],
+  );
+  if (!exhibitions.length) throw new Error('This exhibition could not be found.');
+
+  const todayRows = await database.select<{ today: string }[]>(
+    "SELECT date('now','localtime') AS today",
+  );
+  if (exhibitions[0].endDate < todayRows[0].today) {
+    throw new Error('Inventory cannot be removed because this exhibition has ended.');
+  }
+
+  const activeSelections = await database.select<{ count: number }[]>(
+    `SELECT COUNT(*) AS count
+     FROM selection_item si
+     JOIN selection s ON s.id = si.selection_id
+     WHERE s.exhibition_id = ?
+       AND si.inventory_item_id = ?
+       AND si.status = 'active'`,
+    [exhibitionId, itemId],
+  );
+  if ((activeSelections[0]?.count ?? 0) > 0) {
+    throw new Error('This item has active customer selections. Remove those selections before unregistering the item.');
+  }
+
+  await database.execute(
+    'DELETE FROM exhibition_item WHERE exhibition_id = ? AND item_id = ?',
+    [exhibitionId, itemId],
+  );
+}

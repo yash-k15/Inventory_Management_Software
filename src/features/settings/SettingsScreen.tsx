@@ -249,18 +249,15 @@ function SettingsScreen() {
     }
     setBusy(true);
     try {
-      const db = await getDatabase();
-      if (draft.id) {
-        const current = categories.find((item) => item.id === draft.id);
-        if (!current?.seriesId) throw new Error('This category has no numbering series and needs manual repair.');
-        await db.execute('UPDATE item_series SET prefix = ?, next_number = ?, number_width = ?, range_end = ? WHERE id = ?', [draft.prefix.trim(), next, width, end, current.seriesId]);
-        await db.execute('UPDATE category SET name = ?, sort_order = ? WHERE id = ?', [name, order, draft.id]);
-      } else {
-        await db.execute('INSERT INTO item_series (name, prefix, next_number, number_width, range_end) VALUES (?, ?, ?, ?, ?)', [name, draft.prefix.trim(), next, width, end]);
-        const series = await db.select<{ id: number }[]>('SELECT id FROM item_series WHERE name = ? ORDER BY id DESC LIMIT 1', [name]);
-        if (!series[0]) throw new Error('Could not create the category numbering series.');
-        await db.execute('INSERT INTO category (name, series_id, sort_order) VALUES (?, ?, ?)', [name, series[0].id, order]);
-      }
+      await invoke('save_category_settings', {
+        categoryId: draft.id ?? null,
+        name,
+        prefix: draft.prefix.trim(),
+        nextNumber: next,
+        numberWidth: width,
+        rangeEnd: end,
+        sortOrder: order,
+      });
       setCategoryDraft(null);
       setNotice({ kind: 'success', text: 'Category numbering saved.' });
       await load();

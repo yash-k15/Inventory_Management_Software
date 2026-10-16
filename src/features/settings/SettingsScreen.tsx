@@ -272,6 +272,23 @@ function SettingsScreen() {
     setBusy(true);
     try {
       const db = await getDatabase();
+      if (!archived) {
+        const dependencyQuery: Partial<Record<typeof table, string>> = {
+          purity: 'SELECT COUNT(*) AS count FROM item WHERE purity_id = ?',
+          diamond_shape: 'SELECT (SELECT COUNT(*) FROM item_diamond WHERE shape_id = ?) + (SELECT COUNT(*) FROM diamond_combination WHERE shape_id = ? AND is_archived = 0) AS count',
+          diamond_combination: 'SELECT COUNT(*) AS count FROM item_diamond WHERE combination_id = ?',
+          stone_type: 'SELECT COUNT(*) AS count FROM item_stone WHERE stone_type_id = ?',
+          gold_type: 'SELECT COUNT(*) AS count FROM item WHERE gold_type_id = ?',
+        };
+        const query = dependencyQuery[table];
+        if (query) {
+          const params = table === 'diamond_shape' ? [id, id] : [id];
+          const rows = await db.select<{ count: number }[]>(query, params);
+          if ((rows[0]?.count ?? 0) > 0) {
+            throw new Error('This record is used by inventory items or active combinations. Reassign or archive dependent records first so existing items remain editable.');
+          }
+        }
+      }
       await db.execute(`UPDATE ${table} SET is_archived = ? WHERE id = ?`, [archived ? 0 : 1, id]);
       setNotice({ kind: 'success', text: `${label} ${action === 'archive' ? 'archived' : 'restored'}.` });
       await load();

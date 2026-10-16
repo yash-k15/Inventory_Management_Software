@@ -162,7 +162,7 @@ function SettingsScreen() {
     } finally { setBusy(false); }
   }
 
-  function openReference(kind: ReferenceKind, row?: Purity | Combination | StoneType | GoldType) {
+  function openReference(kind: ReferenceKind, row?: Purity | Shape | Combination | StoneType | GoldType) {
     if (kind === 'purity') {
       const item = row as Purity | undefined;
       setReferenceDraft({ kind, id: item?.id, name: item?.name ?? '', percent: item ? String(item.percentBp / 100) : '', shapeId: '', quality: '', rate: '', tagLabel: '', weightUnit: 'ct' });

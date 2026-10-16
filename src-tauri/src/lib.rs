@@ -40,6 +40,7 @@ pub fn run() {
     let remove_is_certified = include_str!("../../src/db/migrations/005_remove_is_certified.sql");
     let net_weight = include_str!("../../src/db/migrations/007_net_weight.sql");
     let customer_contact_details = include_str!("../../src/db/migrations/008_customer_contact_details.sql");
+    let settings_defaults = include_str!("../../src/db/migrations/009_settings_defaults.sql");
 
     let migrations = || {
         vec![
@@ -89,6 +90,12 @@ pub fn run() {
                 version: 8,
                 description: "add optional customer contact details",
                 sql: customer_contact_details,
+                kind: MigrationKind::Up,
+            },
+            Migration {
+                version: 9,
+                description: "initialize pricing settings defaults",
+                sql: settings_defaults,
                 kind: MigrationKind::Up,
             },
         ]

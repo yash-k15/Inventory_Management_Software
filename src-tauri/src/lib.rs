@@ -128,6 +128,7 @@ pub fn run() {
         customer::merge_customers,
         settings::save_wastage_settings,
         settings::save_gst_settings,
+        settings::save_category_settings,
     ]);
 
     #[cfg(not(debug_assertions))]
@@ -144,6 +145,7 @@ pub fn run() {
         customer::merge_customers,
         settings::save_wastage_settings,
         settings::save_gst_settings,
+        settings::save_category_settings,
     ]);
 
     builder

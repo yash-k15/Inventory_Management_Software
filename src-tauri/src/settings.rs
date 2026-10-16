@@ -75,3 +75,61 @@ pub fn save_gst_settings(app: AppHandle, gst_rate_bp: i64, business_state: Strin
     transaction.commit().map_err(|error| format!("Could not commit GST settings: {error}"))?;
     Ok(())
 }
+
+#[tauri::command]
+pub fn save_category_settings(
+    app: AppHandle,
+    category_id: Option<i64>,
+    name: String,
+    prefix: String,
+    next_number: i64,
+    number_width: i64,
+    range_end: Option<i64>,
+    sort_order: i64,
+) -> Result<(), String> {
+    let name = name.trim();
+    let prefix = prefix.trim();
+    if name.is_empty() {
+        return Err("Category name is required.".to_string());
+    }
+    if next_number < 1 || number_width < 0 || range_end.is_some_and(|end| end < 1) {
+        return Err("Category numbering values are invalid.".to_string());
+    }
+
+    let mut connection = open_database(&app)?;
+    let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|error| format!("Could not start category transaction: {error}"))?;
+
+    if let Some(category_id) = category_id {
+        let (series_id, current_next): (i64, i64) = transaction.query_row(
+            "SELECT series_id, next_number FROM category JOIN item_series ON item_series.id = category.series_id WHERE category.id = ?",
+            [category_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        ).map_err(|error| format!("Could not load category numbering: {error}"))?;
+
+        if next_number < current_next {
+            return Err("Next number cannot move backwards. Item numbers are never reused.".to_string());
+        }
+        transaction.execute(
+            "UPDATE item_series SET name = ?, prefix = ?, next_number = ?, number_width = ?, range_end = ? WHERE id = ?",
+            params![name, prefix, next_number, number_width, range_end, series_id],
+        ).map_err(|error| format!("Could not save numbering series: {error}"))?;
+        transaction.execute(
+            "UPDATE category SET name = ?, sort_order = ? WHERE id = ?",
+            params![name, sort_order, category_id],
+        ).map_err(|error| format!("Could not save category: {error}"))?;
+    } else {
+        transaction.execute(
+            "INSERT INTO item_series (name, prefix, next_number, number_width, range_end) VALUES (?, ?, ?, ?, ?)",
+            params![name, prefix, next_number, number_width, range_end],
+        ).map_err(|error| format!("Could not create numbering series: {error}"))?;
+        let series_id = transaction.last_insert_rowid();
+        transaction.execute(
+            "INSERT INTO category (name, series_id, sort_order) VALUES (?, ?, ?)",
+            params![name, series_id, sort_order],
+        ).map_err(|error| format!("Could not create category: {error}"))?;
+    }
+
+    transaction.commit().map_err(|error| format!("Could not commit category settings: {error}"))?;
+    Ok(())
+}

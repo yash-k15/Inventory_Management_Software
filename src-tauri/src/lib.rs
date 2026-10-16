@@ -142,6 +142,8 @@ pub fn run() {
         customer::set_customer_archived,
         customer::delete_archived_customer,
         customer::merge_customers,
+        settings::save_wastage_settings,
+        settings::save_gst_settings,
     ]);
 
     builder

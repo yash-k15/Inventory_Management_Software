@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { getDatabase } from '../../db';
 import './SettingsScreen.css';
 
@@ -128,12 +129,10 @@ function SettingsScreen() {
     }
     setBusy(true);
     try {
-      const db = await getDatabase();
-      await db.execute('UPDATE global_rate SET value = ?, updated_at = datetime(\'now\',\'localtime\') WHERE rate_key = ?', [
-        Math.round(numeric * (wastageMode === 'percent' ? 100 : 100)),
-        wastageMode === 'percent' ? 'wastage_percent_bp' : 'wastage_per_g_paise',
-      ]);
-      await db.execute('INSERT INTO app_setting (key, value) VALUES (\'wastage_mode\', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime(\'now\',\'localtime\')', [wastageMode]);
+      await invoke('save_wastage_settings', {
+        mode: wastageMode,
+        value: Math.round(numeric * 100),
+      });
       setEditingRate(null);
       setNotice({ kind: 'success', text: 'Wastage settings saved.' });
       await load();
@@ -151,9 +150,10 @@ function SettingsScreen() {
     }
     setBusy(true);
     try {
-      const db = await getDatabase();
-      await db.execute('INSERT INTO app_setting (key, value) VALUES (\'gst_rate_bp\', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime(\'now\',\'localtime\')', [String(Math.round(numeric * 100))]);
-      await db.execute('INSERT INTO app_setting (key, value) VALUES (\'business_state\', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime(\'now\',\'localtime\')', [businessState.trim()]);
+      await invoke('save_gst_settings', {
+        gstRateBp: Math.round(numeric * 100),
+        businessState: businessState.trim(),
+      });
       setGstEditing(false);
       setNotice({ kind: 'success', text: 'GST settings saved.' });
       await load();

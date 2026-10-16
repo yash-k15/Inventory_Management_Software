@@ -5,6 +5,7 @@ import ItemDetailsScreen from './features/inventory/ItemDetailsScreen';
 import CustomersScreen from './features/customers/CustomersScreen';
 import ExhibitionsScreen from './features/exhibitions/ExhibitionsScreen';
 import ExhibitionWorkspace from './features/exhibitions/ExhibitionWorkspace';
+import SettingsScreen from './features/settings/SettingsScreen';
 import './App.css';
 
 type View =
@@ -14,7 +15,8 @@ type View =
   | 'exhibition-workspace'
   | 'add-item'
   | 'item-details'
-  | 'edit-item';
+  | 'edit-item'
+  | 'settings';
 
 function App() {
   const [view, setView] = useState<View>('inventory');
@@ -135,6 +137,20 @@ function App() {
 
           <button
             type='button'
+            className={`app-nav-link ${view === 'settings' ? 'app-nav-link--active' : ''}`}
+            aria-current={view === 'settings' ? 'page' : undefined}
+            onClick={() => setView('settings')}
+            title={isSidebarCollapsed ? 'Settings' : undefined}
+          >
+            <svg className='app-nav-icon' viewBox='0 0 24 24' fill='none' aria-hidden='true'>
+              <circle cx='12' cy='12' r='3' />
+              <path d='m19.4 15 .1.1 1.4 1.1-1.4 2.4-1.7-.7a8 8 0 0 1-1.8 1l-.3 1.8h-2.8l-.3-1.8a8 8 0 0 1-1.8-1l-1.7.7-1.4-2.4 1.4-1.1a7 7 0 0 1 0-2l-1.4-1.1 1.4-2.4 1.7.7a8 8 0 0 1 1.8-1l.3-1.8h2.8l.3 1.8a8 8 0 0 1 1.8 1l1.7-.7 1.4 2.4-1.4 1.1a7 7 0 0 1 0 2Z' />
+            </svg>
+            <span className='app-nav-label'>Settings</span>
+          </button>
+
+          <button
+            type='button'
             className={`app-nav-link ${view === 'add-item' ? 'app-nav-link--active' : ''}`}
             aria-current={view === 'add-item' ? 'page' : undefined}
             onClick={openAddItem}
@@ -162,6 +178,7 @@ function App() {
             <InventoryScreen onAddItem={openAddItem} onViewItem={openItemDetails} />
           )}
           {view === 'customers' && <CustomersScreen />}
+          {view === 'settings' && <SettingsScreen />}
           {view === 'exhibitions' && (
             <ExhibitionsScreen onOpenExhibition={openExhibitionWorkspace} />
           )}

@@ -22,10 +22,19 @@ function App() {
   const [view, setView] = useState<View>('inventory');
   const [notice, setNotice] = useState<string | null>(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [settingsDirty, setSettingsDirty] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
   const [selectedExhibitionId, setSelectedExhibitionId] = useState<number | null>(null);
 
+  function canLeaveSettings() {
+    if (view !== 'settings' || !settingsDirty) return true;
+    const shouldLeave = window.confirm('You have an unfinished Settings edit. Leave this screen and discard it?');
+    if (shouldLeave) setSettingsDirty(false);
+    return shouldLeave;
+  }
+
   function openAddItem() {
+    if (!canLeaveSettings()) return;
     setNotice(null);
     setView('add-item');
   }
@@ -43,6 +52,7 @@ function App() {
   }
 
   function openExhibitions() {
+    if (!canLeaveSettings()) return;
     setNotice(null);
     setView('exhibitions');
   }
@@ -93,7 +103,7 @@ function App() {
             type='button'
             className={`app-nav-link ${view === 'inventory' ? 'app-nav-link--active' : ''}`}
             aria-current={view === 'inventory' ? 'page' : undefined}
-            onClick={() => setView('inventory')}
+            onClick={() => { if (canLeaveSettings()) setView('inventory'); }}
             title={isSidebarCollapsed ? 'Inventory' : undefined}
           >
             <svg className='app-nav-icon' viewBox='0 0 24 24' fill='none' aria-hidden='true'>
@@ -109,7 +119,7 @@ function App() {
             type='button'
             className={`app-nav-link ${view === 'customers' ? 'app-nav-link--active' : ''}`}
             aria-current={view === 'customers' ? 'page' : undefined}
-            onClick={() => setView('customers')}
+            onClick={() => { if (canLeaveSettings()) setView('customers'); }}
             title={isSidebarCollapsed ? 'Customers' : undefined}
           >
             <svg className='app-nav-icon' viewBox='0 0 24 24' fill='none' aria-hidden='true'>
@@ -178,7 +188,7 @@ function App() {
             <InventoryScreen onAddItem={openAddItem} onViewItem={openItemDetails} />
           )}
           {view === 'customers' && <CustomersScreen />}
-          {view === 'settings' && <SettingsScreen />}
+          {view === 'settings' && <SettingsScreen onDirtyChange={setSettingsDirty} />}
           {view === 'exhibitions' && (
             <ExhibitionsScreen onOpenExhibition={openExhibitionWorkspace} />
           )}

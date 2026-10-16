@@ -35,12 +35,14 @@ type CategoryDraft = {
   sortOrder: string;
 };
 
+type Props = { onDirtyChange: (dirty: boolean) => void };
+
 const moneyInput = (paise: number) => (paise / 100).toFixed(2);
 const formatMoney = (paise: number) => new Intl.NumberFormat('en-IN', {
   style: 'currency', currency: 'INR', maximumFractionDigits: 2,
 }).format(paise / 100);
 
-function SettingsScreen() {
+function SettingsScreen({ onDirtyChange }: Props) {
   const [section, setSection] = useState<Section>('pricing');
   const [notice, setNotice] = useState<Notice | null>(null);
   const [loading, setLoading] = useState(true);
@@ -101,6 +103,10 @@ function SettingsScreen() {
   }, []);
 
   useEffect(() => { void load(); }, [load]);
+
+  useEffect(() => {
+    onDirtyChange(Boolean(editingRate || gstEditing || referenceDraft || categoryDraft));
+  }, [editingRate, gstEditing, referenceDraft, categoryDraft, onDirtyChange]);
 
   async function saveRate(key: RateKey, value: string) {
     const numeric = Number(value);

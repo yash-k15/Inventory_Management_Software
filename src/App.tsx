@@ -7,6 +7,7 @@ import ExhibitionsScreen from './features/exhibitions/ExhibitionsScreen';
 import ExhibitionWorkspace from './features/exhibitions/ExhibitionWorkspace';
 import SettingsScreen from './features/settings/SettingsScreen';
 import OrdersScreen from './features/orders/OrdersScreen';
+import PaymentsScreen from './features/payments/PaymentsScreen';
 import './App.css';
 
 type View =
@@ -15,6 +16,7 @@ type View =
   | 'exhibitions'
   | 'exhibition-workspace'
   | 'orders'
+  | 'payments'
   | 'add-item'
   | 'item-details'
   | 'edit-item'
@@ -206,6 +208,30 @@ function App() {
 
           <button
             type='button'
+            className={`app-nav-link ${view === 'payments' ? 'app-nav-link--active' : ''}`}
+            aria-current={view === 'payments' ? 'page' : undefined}
+            onClick={() => {
+              if (canLeaveSettings()) {
+                setNotice(null);
+                setView('payments');
+              }
+            }}
+            title={isSidebarCollapsed ? 'Payments' : undefined}
+          >
+            <svg
+              className='app-nav-icon'
+              viewBox='0 0 24 24'
+              fill='none'
+              aria-hidden='true'
+            >
+              <rect x='2.5' y='5' width='19' height='14' rx='2' />
+              <path d='M2.5 10h19M6.5 15h4' />
+            </svg>
+            <span className='app-nav-label'>Payments</span>
+          </button>
+
+          <button
+            type='button'
             className={`app-nav-link ${view === 'settings' ? 'app-nav-link--active' : ''}`}
             aria-current={view === 'settings' ? 'page' : undefined}
             onClick={() => setView('settings')}
@@ -273,6 +299,13 @@ function App() {
             <ExhibitionWorkspace
               exhibitionId={selectedExhibitionId}
               onBack={openExhibitions}
+            />
+          )}
+          {view === 'payments' && (
+            <PaymentsScreen
+              onAddPayment={() => {
+                // Modal wiring will be added in the next step.
+              }}
             />
           )}
           {view === 'add-item' && (

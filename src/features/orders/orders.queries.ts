@@ -1,6 +1,7 @@
 import { getDatabase } from '../../db';
 import type {
   OrderRow,
+  OrderStatus,
   OrderStatusFilter,
   OrdersSummary,
 } from './orders.types';
@@ -202,4 +203,89 @@ export async function getOrderFilterOptions(): Promise<OrderFilterOptions> {
   ]);
 
   return { customers, exhibitions };
+}
+
+
+export interface OrderDetailItem {
+  id: number;
+  itemNumber: string;
+  category: string;
+  grossWeightMilli: number | null;
+  details: string;
+  agreedPricePaise: number;
+}
+
+export interface OrderDetails {
+  id: number;
+  customerName: string;
+  customerId: number | null;
+  contactName: string | null;
+  phone: string | null;
+  city: string | null;
+  exhibitionId: number | null;
+  exhibitionName: string | null;
+  exhibitionStartDate: string | null;
+  exhibitionEndDate: string | null;
+  status: OrderStatus;
+  createdAt: string;
+  confirmedAt: string | null;
+  notes: string | null;
+  items: OrderDetailItem[];
+  totalValuePaise: number;
+}
+
+export async function getOrderDetails(orderId: number): Promise<OrderDetails | null> {
+  const db = await getDatabase();
+  const headers = await db.select<{
+    id: number; customerName: string; customerId: number | null;
+    contactName: string | null; phone: string | null; city: string | null;
+    exhibitionId: number | null; exhibitionName: string | null;
+    exhibitionStartDate: string | null; exhibitionEndDate: string | null;
+    status: OrderStatus; createdAt: string; confirmedAt: string | null; notes: string | null;
+  }[]>(`
+    SELECT
+      co.id,
+      co.customer_name_snapshot AS customerName,
+      co.customer_id AS customerId,
+      (SELECT cc.name FROM customer_contact cc WHERE cc.customer_id = co.customer_id AND cc.is_primary = 1 ORDER BY cc.id LIMIT 1) AS contactName,
+      (SELECT cc.phone_1 FROM customer_contact cc WHERE cc.customer_id = co.customer_id AND cc.is_primary = 1 ORDER BY cc.id LIMIT 1) AS phone,
+      c.city AS city,
+      co.exhibition_id AS exhibitionId,
+      e.name AS exhibitionName,
+      e.start_date AS exhibitionStartDate,
+      e.end_date AS exhibitionEndDate,
+      co.status,
+      co.created_at AS createdAt,
+      (SELECT osh.changed_at FROM order_status_history osh WHERE osh.order_id = co.id AND osh.status = 'Confirmed' ORDER BY osh.changed_at LIMIT 1) AS confirmedAt,
+      (SELECT osh.notes FROM order_status_history osh WHERE osh.order_id = co.id AND osh.notes IS NOT NULL AND trim(osh.notes) <> '' ORDER BY osh.changed_at DESC, osh.id DESC LIMIT 1) AS notes
+    FROM customer_order co
+    LEFT JOIN customer c ON c.id = co.customer_id
+    LEFT JOIN exhibition e ON e.id = co.exhibition_id
+    WHERE co.id = ?
+  `, [orderId]);
+  if (!headers.length) return null;
+  const header = headers[0];
+  const rows = await db.select<{ id: number; itemSnapshot: string; agreedPricePaise: number }[]>(`
+    SELECT id, item_snapshot AS itemSnapshot, agreed_price_paise AS agreedPricePaise
+    FROM customer_order_item WHERE order_id = ? ORDER BY id
+  `, [orderId]);
+  const items: OrderDetailItem[] = rows.map((row) => {
+    let snapshot: Record<string, any> = {};
+    try { snapshot = JSON.parse(row.itemSnapshot || '{}'); } catch { snapshot = {}; }
+    const diamonds = Array.isArray(snapshot.diamonds) ? snapshot.diamonds : [];
+    const stones = Array.isArray(snapshot.stones) ? snapshot.stones : [];
+    const detailParts = [
+      ...diamonds.map((d: any) => `${d.shape || 'Diamond'} · ${((Number(d.weightMilli) || 0) / 1000).toFixed(3)} ct`),
+      ...stones.map((s: any) => `${s.stone || 'Stone'} · ${((Number(s.weightMilli) || 0) / 1000).toFixed(3)} ct`),
+    ];
+    return {
+      id: row.id,
+      itemNumber: String(snapshot.item_number || '—'),
+      category: String(snapshot.category || '—'),
+      grossWeightMilli: snapshot.gross_weight_milli == null ? null : Number(snapshot.gross_weight_milli),
+      details: detailParts.join(', ') || '—',
+      agreedPricePaise: row.agreedPricePaise,
+    };
+  });
+  return { ...header, items, totalValuePaise: items.reduce((sum, item) => sum + item.agreedPricePaise, 0) };
 }

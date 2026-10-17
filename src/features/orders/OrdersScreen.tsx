@@ -9,6 +9,7 @@ import {
 import type { OrderRow, OrderStatus, OrdersSummary } from './orders.types';
 import './OrdersScreen.css';
 import CreateOrderModal from './CreateOrderModal';
+import OrderDetailsScreen from './OrderDetailsScreen';
 
 const initialFilters: OrdersFilters = {
   search: '',
@@ -254,6 +255,7 @@ function OrdersScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [createOrderOpen, setCreateOrderOpen] = useState(false);
+  const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null);
 
   const loadOrders = useCallback(async () => {
     setLoading(true);
@@ -335,6 +337,15 @@ function OrdersScreen() {
     { value: 'value-high', label: 'Highest value' },
     { value: 'value-low', label: 'Lowest value' },
   ];
+
+  if (selectedOrderId !== null) {
+    return (
+      <OrderDetailsScreen
+        orderId={selectedOrderId}
+        onBack={() => { setSelectedOrderId(null); void loadOrders(); }}
+      />
+    );
+  }
 
   return (
     <section className='orders-screen'>
@@ -556,10 +567,8 @@ function OrdersScreen() {
                         type='button'
                         className='orders-row-open'
                         aria-label={`Open order ${formatOrderNumber(order.id)}`}
-                        title='Order details will be added next'
-                        onClick={() => {
-                          // Connected in the Order Details implementation step.
-                        }}
+                        title={`Open ${formatOrderNumber(order.id)}`}
+                        onClick={() => setSelectedOrderId(order.id)}
                       >
                         ›
                       </button>

@@ -6,6 +6,7 @@ import CustomersScreen from './features/customers/CustomersScreen';
 import ExhibitionsScreen from './features/exhibitions/ExhibitionsScreen';
 import ExhibitionWorkspace from './features/exhibitions/ExhibitionWorkspace';
 import SettingsScreen from './features/settings/SettingsScreen';
+import OrdersScreen from './features/orders/OrdersScreen';
 import './App.css';
 
 type View =
@@ -13,6 +14,7 @@ type View =
   | 'customers'
   | 'exhibitions'
   | 'exhibition-workspace'
+  | 'orders'
   | 'add-item'
   | 'item-details'
   | 'edit-item'
@@ -180,6 +182,30 @@ function App() {
 
           <button
             type='button'
+            className={`app-nav-link ${view === 'orders' ? 'app-nav-link--active' : ''}`}
+            aria-current={view === 'orders' ? 'page' : undefined}
+            onClick={() => {
+              if (canLeaveSettings()) {
+                setNotice(null);
+                setView('orders');
+              }
+            }}
+            title={isSidebarCollapsed ? 'Orders' : undefined}
+          >
+            <svg
+              className='app-nav-icon'
+              viewBox='0 0 24 24'
+              fill='none'
+              aria-hidden='true'
+            >
+              <path d='M6 3.5h12v17l-3-2-3 2-3-2-3 2v-17Z' />
+              <path d='M9 8h6M9 12h6M9 16h3' />
+            </svg>
+            <span className='app-nav-label'>Orders</span>
+          </button>
+
+          <button
+            type='button'
             className={`app-nav-link ${view === 'settings' ? 'app-nav-link--active' : ''}`}
             aria-current={view === 'settings' ? 'page' : undefined}
             onClick={() => setView('settings')}
@@ -235,6 +261,7 @@ function App() {
               onViewItem={openItemDetails}
             />
           )}
+          {view === 'orders' && <OrdersScreen />}
           {view === 'customers' && <CustomersScreen />}
           {view === 'settings' && (
             <SettingsScreen onDirtyChange={setSettingsDirty} />

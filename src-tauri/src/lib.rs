@@ -14,6 +14,7 @@ mod dev_seed;
 mod item_number;
 mod customer;
 mod settings;
+mod order;
 
 #[tauri::command]
 fn allow_image_preview(app: tauri::AppHandle, path: String) -> Result<(), String> {
@@ -143,6 +144,7 @@ pub fn run() {
         settings::save_wastage_settings,
         settings::save_gst_settings,
         settings::save_category_settings,
+        order::create_confirmed_order,
     ]);
 
     #[cfg(not(debug_assertions))]
@@ -160,6 +162,7 @@ pub fn run() {
         settings::save_wastage_settings,
         settings::save_gst_settings,
         settings::save_category_settings,
+        order::create_confirmed_order,
     ]);
 
     builder

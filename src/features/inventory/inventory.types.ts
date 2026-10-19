@@ -10,6 +10,7 @@ export type InventorySortDirection = 'asc' | 'desc';
 
 export type InventorySortField =
   | 'itemNumber'
+  | 'purity'
   | 'recentlyAdded'
   | 'category'
   | 'grossWeight'

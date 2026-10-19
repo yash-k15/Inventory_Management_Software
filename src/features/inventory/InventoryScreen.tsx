@@ -15,6 +15,8 @@ import type {
   InventoryFilterOptions,
   InventoryFilters as InventoryFilterValues,
   InventoryItem,
+  InventorySort,
+  InventorySortField,
 } from './inventory.types';
 
 function formatWeight(weightMilli: number | null): string {
@@ -59,8 +61,14 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
   const [seedMessage, setSeedMessage] = useState<string | null>(null);
   const [showCleanConfirmation, setShowCleanConfirmation] = useState(false);
   const [showDevMenu, setShowDevMenu] = useState(false);
+  const [showSortMenu, setShowSortMenu] = useState(false);
+  const [sort, setSort] = useState<InventorySort>({
+    field: 'itemNumber',
+    direction: 'asc',
+  });
 
   const devMenuRef = useRef<HTMLDivElement>(null);
+  const sortMenuRef = useRef<HTMLDivElement>(null);
 
   const loadInventory = useCallback(async () => {
     setIsLoading(true);
@@ -68,7 +76,7 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
 
     try {
       const [inventoryItems, options] = await Promise.all([
-        getInventoryItems(filters),
+        getInventoryItems(filters, sort),
         getInventoryFilterOptions(),
       ]);
 
@@ -82,7 +90,7 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
     } finally {
       setIsLoading(false);
     }
-  }, [filters]);
+  }, [filters, sort]);
 
   useEffect(() => {
     let cancelled = false;
@@ -151,6 +159,72 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
       document.removeEventListener('keydown', handleEscape);
     };
   }, [showDevMenu]);
+
+  useEffect(() => {
+    if (!showSortMenu) return;
+
+    function handleOutsideSortClick(event: MouseEvent) {
+      if (
+        event.target instanceof Node &&
+        !sortMenuRef.current?.contains(event.target)
+      ) {
+        setShowSortMenu(false);
+      }
+    }
+
+    function handleSortEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') setShowSortMenu(false);
+    }
+
+    document.addEventListener('mousedown', handleOutsideSortClick);
+    document.addEventListener('keydown', handleSortEscape);
+
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideSortClick);
+      document.removeEventListener('keydown', handleSortEscape);
+    };
+  }, [showSortMenu]);
+
+  const sortOptions: { label: string; field: InventorySortField | null; direction: 'asc' | 'desc' }[] = [
+    { label: 'Default', field: null, direction: 'asc' },
+    { label: 'Latest', field: 'recentlyAdded', direction: 'desc' },
+    { label: 'Oldest', field: 'recentlyAdded', direction: 'asc' },
+    { label: 'Least diamond pieces', field: 'diamondPieces', direction: 'asc' },
+    { label: 'Most diamond pieces', field: 'diamondPieces', direction: 'desc' },
+    { label: 'Least stone pieces', field: 'stonePieces', direction: 'asc' },
+    { label: 'Most stone pieces', field: 'stonePieces', direction: 'desc' },
+  ];
+
+  const currentSortLabel =
+    sortOptions.find((option) =>
+      option.field === null
+        ? sort.field === 'itemNumber' && sort.direction === 'asc'
+        : option.field === sort.field && option.direction === sort.direction,
+    )?.label ?? 'Custom sort';
+
+  const applySortOption = (field: InventorySortField | null, direction: 'asc' | 'desc') => {
+    setSort(field === null ? { field: 'itemNumber', direction: 'asc' } : { field, direction });
+    setShowSortMenu(false);
+  };
+
+  const handleColumnSort = (field: InventorySortField) => {
+    setSort((current) => {
+      if (current.field !== field) {
+        return { field, direction: 'asc' };
+      }
+
+      if (current.direction === 'asc') {
+        return { field, direction: 'desc' };
+      }
+
+      return { field: 'itemNumber', direction: 'asc' };
+    });
+  };
+
+  const getColumnSortIndicator = (field: InventorySortField) => {
+    if (sort.field !== field) return '';
+    return sort.direction === 'asc' ? ' ↑' : ' ↓';
+  };
 
   const updateFilter = <K extends keyof InventoryFilterValues>(
     key: K,
@@ -252,20 +326,44 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
           />
         )}
 
-        <button
-          type='button'
-          className='inventory-toolbar-button inventory-sort-button'
-          title='Sorting will be implemented later'
-          onClick={() => {
-            // Sorting behavior will be implemented in a later pass.
-          }}
-        >
-          <svg viewBox='0 0 24 24' aria-hidden='true'>
-            <path d='M8 4v16m0 0-4-4m4 4 4-4M16 20V4m0 0-4 4m4-4 4 4' />
-          </svg>
-          <span>Sort:</span>
-          <strong>Item number</strong>
-        </button>
+        <div className='inventory-sort-menu' ref={sortMenuRef}>
+          <button
+            type='button'
+            className='inventory-toolbar-button inventory-sort-button'
+            aria-haspopup='dialog'
+            aria-expanded={showSortMenu}
+            title='Change inventory sorting'
+            onClick={() => setShowSortMenu((current) => !current)}
+          >
+            <svg viewBox='0 0 24 24' aria-hidden='true'>
+              <path d='M8 4v16m0 0-4-4m4 4 4-4M16 20V4m0 0-4 4m4-4 4 4' />
+            </svg>
+            <span>Sort:</span>
+            <strong>{currentSortLabel}</strong>
+          </button>
+
+          {showSortMenu && (
+            <div className='inventory-sort-panel' role='dialog' aria-label='Sort inventory'>
+              {sortOptions.map((option) => {
+                const isActive = option.field === null
+                  ? sort.field === 'itemNumber' && sort.direction === 'asc'
+                  : sort.field === option.field && sort.direction === option.direction;
+                return (
+                  <button
+                    key={option.label}
+                    type='button'
+                    className={`inventory-sort-option${isActive ? ' is-active' : ''}`}
+                    aria-pressed={isActive}
+                    onClick={() => applySortOption(option.field, option.direction)}
+                  >
+                    <span>{option.label}</span>
+                    {isActive && <span className='inventory-sort-check' aria-hidden='true'>✓</span>}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
 
         <div className='inventory-toolbar-spacer' />
 
@@ -443,13 +541,41 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
             <table className='inventory-table'>
               <thead>
                 <tr>
-                  <th scope='col'>Item</th>
-                  <th scope='col'>Category</th>
-                  <th scope='col'>Gross wt.</th>
-                  <th scope='col'>Net wt.</th>
-                  <th scope='col'>Diamonds</th>
-                  <th scope='col'>Other stones</th>
-                  <th scope='col'>Purity</th>
+                  <th scope='col'>
+                    <button type='button' className='inventory-sort-heading' onClick={() => handleColumnSort('itemNumber')} aria-label={`Sort by item number${getColumnSortIndicator('itemNumber')}`}>
+                      Item{getColumnSortIndicator('itemNumber')}
+                    </button>
+                  </th>
+                  <th scope='col'>
+                    <button type='button' className='inventory-sort-heading' onClick={() => handleColumnSort('category')}>
+                      Category{getColumnSortIndicator('category')}
+                    </button>
+                  </th>
+                  <th scope='col'>
+                    <button type='button' className='inventory-sort-heading' onClick={() => handleColumnSort('grossWeight')}>
+                      Gross wt.{getColumnSortIndicator('grossWeight')}
+                    </button>
+                  </th>
+                  <th scope='col'>
+                    <button type='button' className='inventory-sort-heading' onClick={() => handleColumnSort('netWeight')}>
+                      Net wt.{getColumnSortIndicator('netWeight')}
+                    </button>
+                  </th>
+                  <th scope='col'>
+                    <button type='button' className='inventory-sort-heading' onClick={() => handleColumnSort('diamondWeight')}>
+                      Diamonds{getColumnSortIndicator('diamondWeight')}
+                    </button>
+                  </th>
+                  <th scope='col'>
+                    <button type='button' className='inventory-sort-heading' onClick={() => handleColumnSort('stoneWeight')}>
+                      Other stones{getColumnSortIndicator('stoneWeight')}
+                    </button>
+                  </th>
+                  <th scope='col'>
+                    <button type='button' className='inventory-sort-heading' onClick={() => handleColumnSort('purity')}>
+                      Purity{getColumnSortIndicator('purity')}
+                    </button>
+                  </th>
                   <th scope='col'>IGI</th>
                   <th scope='col'>HUID</th>
                   <th scope='col'>Status</th>

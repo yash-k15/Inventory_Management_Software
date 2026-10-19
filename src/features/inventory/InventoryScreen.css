@@ -144,6 +144,87 @@
   font-weight: 700;
 }
 
+
+.inventory-sort-menu {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.inventory-sort-panel {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 8px);
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: min(260px, calc(100vw - 32px));
+  padding: 7px;
+  border: 1px solid #e4d9cd;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 12px 32px rgb(48 40 35 / 14%);
+}
+
+.inventory-sort-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 38px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #302823;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.inventory-sort-option:hover,
+.inventory-sort-option:focus-visible {
+  background: #f6f1eb;
+  outline: none;
+}
+
+.inventory-sort-option.is-active {
+  background: #f1e7db;
+  color: #8a5a24;
+  font-weight: 600;
+}
+
+.inventory-sort-check {
+  color: #8a5a24;
+  font-size: 14px;
+}
+
+.inventory-sort-heading {
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.inventory-sort-heading:hover {
+  color: #95672e;
+}
+
+.inventory-sort-heading:focus-visible {
+  outline: 2px solid #a78350;
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+
 .inventory-sort-button strong {
   color: #95672e;
   font-weight: 500;

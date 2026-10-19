@@ -16,6 +16,7 @@ type SqlValue = string | number;
 
 const SORT_EXPRESSIONS: Record<InventorySort['field'], string> = {
   itemNumber: 'i.item_number COLLATE NOCASE',
+  purity: 'COALESCE(p.percent_bp, -1)',
   recentlyAdded: 'i.created_at',
   category: 'c.name COLLATE NOCASE',
   grossWeight: 'i.gross_weight_milli',
@@ -361,6 +362,7 @@ export async function getInventoryItems(
     LEFT JOIN gold_type gt ON gt.id = i.gold_type_id
     ${whereClause}
     ORDER BY ${sortExpression} ${sortDirection},
+      i.created_at DESC,
       i.item_number COLLATE NOCASE ASC
   `;
 

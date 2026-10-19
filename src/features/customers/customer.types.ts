@@ -19,6 +19,9 @@ export interface Customer {
   primaryContactPhone1: string | null;
   primaryContactPhone2: string | null;
   contactCount: number;
+  orderCount: number;
+  lifetimeValuePaise: number;
+  lastPurchaseDate: string | null;
 }
 
 export interface CustomerContact {
@@ -29,4 +32,37 @@ export interface CustomerContact {
   phone2: string | null;
   isPrimary: number;
   notes: string | null;
+}
+
+export interface CustomerOrderHistoryRow {
+  id: number;
+  orderDate: string;
+  status: string;
+  exhibitionName: string | null;
+  itemCount: number;
+  totalValuePaise: number;
+}
+
+export interface CustomerPaymentHistoryRow {
+  id: number;
+  paymentDate: string;
+  exhibitionName: string;
+  amountPaise: number;
+  paymentMethod: string | null;
+  notes: string | null;
+}
+
+export interface CustomerDetailsSummary {
+  purchaseCount: number;
+  lifetimeValuePaise: number;
+  averageOrderValuePaise: number;
+  lastPurchaseDate: string | null;
+}
+
+export interface CustomerRecentPurchase {
+  orderItemId: number;
+  itemNumber: string;
+  itemName: string;
+  amountPaise: number;
+  orderDate: string;
 }

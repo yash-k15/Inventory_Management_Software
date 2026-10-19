@@ -3,6 +3,7 @@ import InventoryScreen from './features/inventory/InventoryScreen';
 import AddItemScreen from './features/inventory/AddItemScreen';
 import ItemDetailsScreen from './features/inventory/ItemDetailsScreen';
 import CustomersScreen from './features/customers/CustomersScreen';
+import CustomerDetailsScreen from './features/customers/CustomerDetailsScreen';
 import ExhibitionsScreen from './features/exhibitions/ExhibitionsScreen';
 import ExhibitionWorkspace from './features/exhibitions/ExhibitionWorkspace';
 import SettingsScreen from './features/settings/SettingsScreen';
@@ -20,6 +21,9 @@ function App() {
   const [selectedExhibitionId, setSelectedExhibitionId] = useState<
     number | null
   >(null);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(
+    null,
+  );
 
   function canLeaveSettings() {
     if (view !== 'settings' || !settingsDirty) return true;
@@ -77,8 +81,8 @@ function App() {
         }
         onNavigate={(nextView: SidebarView) => {
           if (!canLeaveSettings()) return;
-
           setNotice(null);
+          setSelectedCustomerId(null);
           setView(nextView);
         }}
         onAddItem={openAddItem}
@@ -100,7 +104,21 @@ function App() {
               />
             )}
             {view === 'orders' && <OrdersScreen />}
-            {view === 'customers' && <CustomersScreen />}
+            {view === 'customers' && selectedCustomerId === null && (
+              <CustomersScreen
+                onViewCustomerHistory={(customerId) => {
+                  setSelectedCustomerId(customerId);
+                  setNotice(null);
+                }}
+              />
+            )}
+
+            {view === 'customers' && selectedCustomerId !== null && (
+              <CustomerDetailsScreen
+                customerId={selectedCustomerId}
+                onBack={() => setSelectedCustomerId(null)}
+              />
+            )}
             {view === 'settings' && (
               <SettingsScreen onDirtyChange={setSettingsDirty} />
             )}

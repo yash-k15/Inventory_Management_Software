@@ -1,15 +1,27 @@
-import { Fragment, useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from 'react';
 import { createPortal } from 'react-dom';
 import { invoke } from '@tauri-apps/api/core';
 import AddCustomerModalRedesigned, {
   type NewCustomerInput,
 } from './AddCustomerModal';
 import EditCustomerModal from './EditCustomerModal';
-import { getCustomerContacts, getCustomers } from './customer.queries';
+import {
+  getCustomerContacts,
+  getCustomerRecentPurchases,
+  getCustomers,
+} from './customer.queries';
 import type {
   Customer,
   CustomerArchiveFilter,
   CustomerContact,
+  CustomerRecentPurchase,
 } from './customer.types';
 import './CustomersScreen.css';
 
@@ -23,6 +35,10 @@ type MergeCustomerSelectProps = {
   placeholder?: string;
   ariaLabel: string;
   onChange: (value: number | null) => void;
+};
+
+type CustomersScreenProps = {
+  onViewCustomerHistory: (customerId: number) => void;
 };
 
 function MergeCustomerSelect({
@@ -47,7 +63,10 @@ function MergeCustomerSelect({
     const spaceBelow = window.innerHeight - rect.bottom - gap - 12;
     const spaceAbove = rect.top - gap - 12;
     const openAbove = spaceBelow < 180 && spaceAbove > spaceBelow;
-    const maxHeight = Math.max(100, Math.min(240, openAbove ? spaceAbove : spaceBelow));
+    const maxHeight = Math.max(
+      100,
+      Math.min(240, openAbove ? spaceAbove : spaceBelow),
+    );
     setMenuStyle({
       position: 'fixed',
       left: rect.left,
@@ -70,7 +89,11 @@ function MergeCustomerSelect({
     updateMenuPosition();
     const handleOutsidePointer = (event: PointerEvent) => {
       const target = event.target as Node;
-      if (rootRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      if (
+        rootRef.current?.contains(target) ||
+        menuRef.current?.contains(target)
+      )
+        return;
       setIsOpen(false);
     };
     const handleEscape = (event: globalThis.KeyboardEvent) => {
@@ -99,12 +122,19 @@ function MergeCustomerSelect({
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault();
       if (!isOpen) {
-        setActiveIndex(Math.max(0, options.findIndex((item) => item.id === value)));
+        setActiveIndex(
+          Math.max(
+            0,
+            options.findIndex((item) => item.id === value),
+          ),
+        );
         setIsOpen(true);
       } else if (options.length) {
-        setActiveIndex((current) => event.key === 'ArrowDown'
-          ? (current + 1) % options.length
-          : (current - 1 + options.length) % options.length);
+        setActiveIndex((current) =>
+          event.key === 'ArrowDown'
+            ? (current + 1) % options.length
+            : (current - 1 + options.length) % options.length,
+        );
       }
       return;
     }
@@ -118,10 +148,10 @@ function MergeCustomerSelect({
     <div className={`merge-select ${isOpen ? 'is-open' : ''}`} ref={rootRef}>
       <button
         ref={triggerRef}
-        type="button"
-        className="merge-select-trigger"
+        type='button'
+        className='merge-select-trigger'
         aria-label={ariaLabel}
-        aria-haspopup="listbox"
+        aria-haspopup='listbox'
         aria-expanded={isOpen}
         onClick={() => setIsOpen((open) => !open)}
         onKeyDown={handleKeyDown}
@@ -131,34 +161,62 @@ function MergeCustomerSelect({
             ? `${selected.businessName}${ariaLabel === 'Duplicate customer' && selected.city?.trim() ? ` — ${selected.city}` : ''}`
             : placeholder}
         </span>
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="m7 10 5 5 5-5" />
+        <svg
+          width='18'
+          height='18'
+          viewBox='0 0 24 24'
+          fill='none'
+          stroke='currentColor'
+          strokeWidth='1.8'
+          strokeLinecap='round'
+          strokeLinejoin='round'
+          aria-hidden='true'
+        >
+          <path d='m7 10 5 5 5-5' />
         </svg>
       </button>
-      {isOpen && createPortal(
-        <div className="merge-select-options" role="listbox" aria-label={ariaLabel} style={menuStyle} ref={menuRef}>
-          {options.map((customer, index) => (
-            <button
-              type="button"
-              role="option"
-              aria-selected={customer.id === value}
-              className={`merge-select-option ${customer.id === value ? 'is-selected' : ''} ${index === activeIndex ? 'is-active' : ''}`}
-              key={customer.id}
-              onMouseEnter={() => setActiveIndex(index)}
-              onClick={() => choose(customer)}
-            >
-              <span>{customer.businessName}{ariaLabel === 'Duplicate customer' && customer.city?.trim() ? ` — ${customer.city}` : ''}</span>
-              {customer.id === value && <span className="merge-select-check" aria-hidden="true">✓</span>}
-            </button>
-          ))}
-        </div>,
-        document.body,
-      )}
+      {isOpen &&
+        createPortal(
+          <div
+            className='merge-select-options'
+            role='listbox'
+            aria-label={ariaLabel}
+            style={menuStyle}
+            ref={menuRef}
+          >
+            {options.map((customer, index) => (
+              <button
+                type='button'
+                role='option'
+                aria-selected={customer.id === value}
+                className={`merge-select-option ${customer.id === value ? 'is-selected' : ''} ${index === activeIndex ? 'is-active' : ''}`}
+                key={customer.id}
+                onMouseEnter={() => setActiveIndex(index)}
+                onClick={() => choose(customer)}
+              >
+                <span>
+                  {customer.businessName}
+                  {ariaLabel === 'Duplicate customer' && customer.city?.trim()
+                    ? ` — ${customer.city}`
+                    : ''}
+                </span>
+                {customer.id === value && (
+                  <span className='merge-select-check' aria-hidden='true'>
+                    ✓
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
 
-export default function CustomersScreenRedesigned() {
+export default function CustomersScreenRedesigned({
+  onViewCustomerHistory,
+}: CustomersScreenProps) {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [search, setSearch] = useState('');
   const [archiveStatus, setArchiveStatus] =
@@ -171,6 +229,15 @@ export default function CustomersScreenRedesigned() {
   >({});
   const [loading, setLoading] = useState(true);
   const [, setLoadingContactsId] = useState<number | null>(null);
+  const [recentPurchasesByCustomer, setRecentPurchasesByCustomer] = useState<
+    Record<number, CustomerRecentPurchase[]>
+  >({});
+  const [loadingPurchasesId, setLoadingPurchasesId] = useState<number | null>(
+    null,
+  );
+  const [purchaseErrorsByCustomer, setPurchaseErrorsByCustomer] = useState<
+    Record<number, string>
+  >({});
   const [error, setError] = useState<string | null>(null);
   const [, setContactError] = useState<string | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -563,20 +630,50 @@ export default function CustomersScreenRedesigned() {
 
     setExpandedCustomerId(customerId);
     setContactError(null);
-    if (contactsByCustomer[customerId]) return;
 
-    setLoadingContactsId(customerId);
-    try {
-      const contacts = await getCustomerContacts(customerId);
-      setContactsByCustomer((current) => ({
-        ...current,
-        [customerId]: contacts,
-      }));
-    } catch (err) {
-      console.error('Failed to load customer contacts:', err);
-      setContactError('Unable to load contact details.');
-    } finally {
-      setLoadingContactsId(null);
+    if (!contactsByCustomer[customerId]) {
+      setLoadingContactsId(customerId);
+      try {
+        const contacts = await getCustomerContacts(customerId);
+        setContactsByCustomer((current) => ({
+          ...current,
+          [customerId]: contacts,
+        }));
+      } catch (err) {
+        console.error('Failed to load customer contacts:', err);
+        setContactError('Unable to load contact details.');
+      } finally {
+        setLoadingContactsId(null);
+      }
+    }
+
+    if (
+      !Object.prototype.hasOwnProperty.call(
+        recentPurchasesByCustomer,
+        customerId,
+      )
+    ) {
+      setLoadingPurchasesId(customerId);
+      setPurchaseErrorsByCustomer((current) => {
+        const next = { ...current };
+        delete next[customerId];
+        return next;
+      });
+      try {
+        const purchases = await getCustomerRecentPurchases(customerId);
+        setRecentPurchasesByCustomer((current) => ({
+          ...current,
+          [customerId]: purchases,
+        }));
+      } catch (err) {
+        console.error('Failed to load recent customer purchases:', err);
+        setPurchaseErrorsByCustomer((current) => ({
+          ...current,
+          [customerId]: 'Unable to load recent purchases.',
+        }));
+      } finally {
+        setLoadingPurchasesId(null);
+      }
     }
   };
 
@@ -590,6 +687,31 @@ export default function CustomersScreenRedesigned() {
       .slice(0, 2)
       .map((part) => part[0].toUpperCase())
       .join('');
+
+  const currency = new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
+  function formatCurrency(paise: number) {
+    return currency.format(paise / 100);
+  }
+
+  function formatDate(value: string | null | undefined) {
+    if (!value) return '—';
+
+    const date = new Date(`${value.slice(0, 10)}T00:00:00`);
+
+    if (Number.isNaN(date.getTime())) return value;
+
+    return new Intl.DateTimeFormat('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    }).format(date);
+  }
 
   return (
     <section className='customers-v2'>
@@ -828,9 +950,15 @@ export default function CustomersScreenRedesigned() {
                         </span>
                       </td>
                       <td>{formatValue(customer.city)}</td>
-                      <td className='customers-metric'>—</td>
-                      <td className='customers-metric'>—</td>
-                      <td className='customers-metric'>—</td>
+                      <td className='customers-metric'>
+                        {customer.orderCount}
+                      </td>
+                      <td className='customers-metric'>
+                        {formatCurrency(customer.lifetimeValuePaise)}
+                      </td>
+                      <td className='customers-metric'>
+                        {formatDate(customer.lastPurchaseDate)}
+                      </td>
                     </tr>
                     {expanded && (
                       <tr
@@ -858,10 +986,97 @@ export default function CustomersScreenRedesigned() {
 
                               <section className='customers-expanded-section'>
                                 <h3>Recent purchases</h3>
-                                <p className='customers-muted'>
-                                  Purchase history will appear here once orders
-                                  are available.
-                                </p>
+                                {loadingPurchasesId === customer.id &&
+                                  !Object.prototype.hasOwnProperty.call(
+                                    recentPurchasesByCustomer,
+                                    customer.id,
+                                  ) && (
+                                    <p className='customers-muted'>
+                                      Loading recent purchases…
+                                    </p>
+                                  )}
+                                {purchaseErrorsByCustomer[customer.id] && (
+                                  <div className='customers-inline-error'>
+                                    <span>
+                                      {purchaseErrorsByCustomer[customer.id]}
+                                    </span>
+                                    <button
+                                      type='button'
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        setLoadingPurchasesId(customer.id);
+                                        setPurchaseErrorsByCustomer(
+                                          (current) => {
+                                            const next = { ...current };
+                                            delete next[customer.id];
+                                            return next;
+                                          },
+                                        );
+                                        void getCustomerRecentPurchases(
+                                          customer.id,
+                                        )
+                                          .then((purchases) => {
+                                            setRecentPurchasesByCustomer(
+                                              (current) => ({
+                                                ...current,
+                                                [customer.id]: purchases,
+                                              }),
+                                            );
+                                          })
+                                          .catch((err) => {
+                                            console.error(
+                                              'Failed to reload recent customer purchases:',
+                                              err,
+                                            );
+                                            setPurchaseErrorsByCustomer(
+                                              (current) => ({
+                                                ...current,
+                                                [customer.id]:
+                                                  'Unable to load recent purchases.',
+                                              }),
+                                            );
+                                          })
+                                          .finally(() =>
+                                            setLoadingPurchasesId(null),
+                                          );
+                                      }}
+                                    >
+                                      Retry
+                                    </button>
+                                  </div>
+                                )}
+                                {Object.prototype.hasOwnProperty.call(
+                                  recentPurchasesByCustomer,
+                                  customer.id,
+                                ) &&
+                                  recentPurchasesByCustomer[customer.id]
+                                    .length === 0 && (
+                                    <p className='customers-muted'>
+                                      No purchases recorded yet.
+                                    </p>
+                                  )}
+                                {(
+                                  recentPurchasesByCustomer[customer.id] ?? []
+                                ).map((purchase) => (
+                                  <div
+                                    className='customers-recent-purchase'
+                                    key={purchase.orderItemId}
+                                  >
+                                    <div className='customers-recent-purchase-copy'>
+                                      <span>
+                                        <strong>{purchase.itemNumber}</strong>
+                                        {' · '}
+                                        {formatValue(purchase.itemName)}
+                                        {' · '}
+                                        {formatDate(purchase.orderDate)}
+                                      </span>
+                                    </div>
+
+                                    <strong className='customers-recent-purchase-amount'>
+                                      {formatCurrency(purchase.amountPaise)}
+                                    </strong>
+                                  </div>
+                                ))}
                               </section>
 
                               <section className='customers-expanded-section'>
@@ -876,8 +1091,11 @@ export default function CustomersScreenRedesigned() {
                               <button
                                 type='button'
                                 className='customers-action-primary'
-                                onClick={(event) => event.stopPropagation()}
-                                title='View customer history (coming soon)'
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  onViewCustomerHistory(customer.id);
+                                }}
+                                title='View customer history'
                               >
                                 View full history
                               </button>
@@ -1084,22 +1302,27 @@ export default function CustomersScreenRedesigned() {
                   <label className='customer-field'>
                     <span>KEEP CUSTOMER</span>
                     <MergeCustomerSelect
-                      options={mergeCustomerOptions.filter((c) => c.id !== mergeDuplicateId)}
+                      options={mergeCustomerOptions.filter(
+                        (c) => c.id !== mergeDuplicateId,
+                      )}
                       value={mergeKeepId}
-                      ariaLabel="Keep customer"
+                      ariaLabel='Keep customer'
                       onChange={(next) => {
                         setMergeKeepId(next);
-                        if (next === mergeDuplicateId) setMergeDuplicateId(null);
+                        if (next === mergeDuplicateId)
+                          setMergeDuplicateId(null);
                       }}
                     />
                   </label>
                   <label className='customer-field'>
                     <span>DUPLICATE CUSTOMER</span>
                     <MergeCustomerSelect
-                      options={mergeCustomerOptions.filter((c) => c.id !== mergeKeepId)}
+                      options={mergeCustomerOptions.filter(
+                        (c) => c.id !== mergeKeepId,
+                      )}
                       value={mergeDuplicateId}
-                      placeholder="Choose duplicate…"
-                      ariaLabel="Duplicate customer"
+                      placeholder='Choose duplicate…'
+                      ariaLabel='Duplicate customer'
                       onChange={setMergeDuplicateId}
                     />
                   </label>

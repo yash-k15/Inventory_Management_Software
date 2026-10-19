@@ -87,64 +87,67 @@ function App() {
 
       <div className='app-main'>
         <main className='app-content' id='inventory'>
-          {notice && view === 'inventory' && (
-            <p role='status' className='app-success-message'>
-              {notice}
-            </p>
-          )}
-          {view === 'inventory' && (
-            <InventoryScreen
-              onAddItem={openAddItem}
-              onViewItem={openItemDetails}
-            />
-          )}
-          {view === 'orders' && <OrdersScreen />}
-          {view === 'customers' && <CustomersScreen />}
-          {view === 'settings' && (
-            <SettingsScreen onDirtyChange={setSettingsDirty} />
-          )}
-          {view === 'exhibitions' && (
-            <ExhibitionsScreen onOpenExhibition={openExhibitionWorkspace} />
-          )}
-          {view === 'exhibition-workspace' && selectedExhibitionId !== null && (
-            <ExhibitionWorkspace
-              exhibitionId={selectedExhibitionId}
-              onBack={openExhibitions}
-            />
-          )}
-          {view === 'payments' && (
-            <PaymentsScreen
-              onAddPayment={() => {
-                // Modal wiring will be added in the next step.
-              }}
-            />
-          )}
-          {view === 'add-item' && (
-            <AddItemScreen
-              onCancel={() => setView('inventory')}
-              onCreated={(itemNumber) => {
-                setNotice(
-                  `Jewelry item ${itemNumber} was created successfully.`,
-                );
-                setView('inventory');
-              }}
-            />
-          )}
-          {view === 'edit-item' && selectedItemId !== null && (
-            <AddItemScreen
-              itemId={selectedItemId}
-              onCancel={() => setView('item-details')}
-              onUpdated={handleUpdated}
-              onCreated={() => {}}
-            />
-          )}
-          {view === 'item-details' && selectedItemId !== null && (
-            <ItemDetailsScreen
-              itemId={selectedItemId}
-              onBack={() => setView('inventory')}
-              onEdit={openEditItem}
-            />
-          )}
+          <div className='app-content-inner'>
+            {notice && view === 'inventory' && (
+              <p role='status' className='app-success-message'>
+                {notice}
+              </p>
+            )}
+            {view === 'inventory' && (
+              <InventoryScreen
+                onAddItem={openAddItem}
+                onViewItem={openItemDetails}
+              />
+            )}
+            {view === 'orders' && <OrdersScreen />}
+            {view === 'customers' && <CustomersScreen />}
+            {view === 'settings' && (
+              <SettingsScreen onDirtyChange={setSettingsDirty} />
+            )}
+            {view === 'exhibitions' && (
+              <ExhibitionsScreen onOpenExhibition={openExhibitionWorkspace} />
+            )}
+            {view === 'exhibition-workspace' &&
+              selectedExhibitionId !== null && (
+                <ExhibitionWorkspace
+                  exhibitionId={selectedExhibitionId}
+                  onBack={openExhibitions}
+                />
+              )}
+            {view === 'payments' && (
+              <PaymentsScreen
+                onAddPayment={() => {
+                  // Modal wiring will be added in the next step.
+                }}
+              />
+            )}
+            {view === 'add-item' && (
+              <AddItemScreen
+                onCancel={() => setView('inventory')}
+                onCreated={(itemNumber) => {
+                  setNotice(
+                    `Jewelry item ${itemNumber} was created successfully.`,
+                  );
+                  setView('inventory');
+                }}
+              />
+            )}
+            {view === 'edit-item' && selectedItemId !== null && (
+              <AddItemScreen
+                itemId={selectedItemId}
+                onCancel={() => setView('item-details')}
+                onUpdated={handleUpdated}
+                onCreated={() => {}}
+              />
+            )}
+            {view === 'item-details' && selectedItemId !== null && (
+              <ItemDetailsScreen
+                itemId={selectedItemId}
+                onBack={() => setView('inventory')}
+                onEdit={openEditItem}
+              />
+            )}
+          </div>
         </main>
       </div>
     </div>

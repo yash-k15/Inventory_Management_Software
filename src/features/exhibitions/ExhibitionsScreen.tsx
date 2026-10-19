@@ -335,7 +335,7 @@ export default function ExhibitionsScreen({
     setLoading(true);
     setError(null);
     try {
-      const result = await getExhibitions({ search, status: filter });
+      const result = await getExhibitions({ search, status: 'all' });
       setExhibitions(result);
     } catch (err) {
       console.error('Failed to load exhibitions:', err);
@@ -347,7 +347,7 @@ export default function ExhibitionsScreen({
     } finally {
       setLoading(false);
     }
-  }, [search, filter]);
+  }, [search]);
 
   useEffect(() => {
     void load();
@@ -362,6 +362,23 @@ export default function ExhibitionsScreen({
     }),
     [exhibitions],
   );
+
+  const filteredExhibitions = useMemo(() => {
+    if (filter === 'all') return exhibitions;
+
+    const statusByFilter: Record<
+      Exclude<ExhibitionFilter, 'all'>,
+      Exhibition['status']
+    > = {
+      upcoming: 'Planned',
+      active: 'Active',
+      past: 'Closed',
+    };
+
+    return exhibitions.filter(
+      (exhibition) => exhibition.status === statusByFilter[filter],
+    );
+  }, [exhibitions, filter]);
 
   async function handleSave(input: ExhibitionInput) {
     setSaving(true);
@@ -498,7 +515,7 @@ export default function ExhibitionsScreen({
         <span>
           {loading
             ? 'Loading exhibitions…'
-            : `${exhibitions.length} ${exhibitions.length === 1 ? 'exhibition' : 'exhibitions'}`}
+            : `${filteredExhibitions.length} ${filteredExhibitions.length === 1 ? 'exhibition' : 'exhibitions'}`}
         </span>
         <button
           type='button'
@@ -525,7 +542,7 @@ export default function ExhibitionsScreen({
       {!error && loading && (
         <div className='exhibitions-state'>Loading exhibitions…</div>
       )}
-      {!error && !loading && exhibitions.length === 0 && (
+      {!error && !loading && filteredExhibitions.length === 0 && (
         <div className='exhibitions-empty'>
           <div className='exhibitions-empty-icon' aria-hidden='true'>
             ◇
@@ -554,9 +571,9 @@ export default function ExhibitionsScreen({
         </div>
       )}
 
-      {!error && !loading && exhibitions.length > 0 && (
+      {!error && !loading && filteredExhibitions.length > 0 && (
         <div className='exhibitions-list'>
-          {exhibitions.map((exhibition) => {
+          {filteredExhibitions.map((exhibition) => {
             const isUpcoming = exhibition.status === 'Planned';
             const avgPerClient = exhibition.customersWithSelections
               ? (

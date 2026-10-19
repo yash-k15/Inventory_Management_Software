@@ -47,6 +47,7 @@ type Props = {
 function InventoryScreen({ onAddItem, onViewItem }: Props) {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [imageUrls, setImageUrls] = useState<Record<number, string>>({});
+  const [previewImage, setPreviewImage] = useState<{ itemId: number; url: string; left: number; top: number } | null>(null);
 
   const [filterOptions, setFilterOptions] =
     useState<InventoryFilterOptions | null>(null);
@@ -69,6 +70,44 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
 
   const devMenuRef = useRef<HTMLDivElement>(null);
   const sortMenuRef = useRef<HTMLDivElement>(null);
+  const imagePreviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearImagePreviewTimer = () => {
+    if (imagePreviewTimerRef.current !== null) {
+      clearTimeout(imagePreviewTimerRef.current);
+      imagePreviewTimerRef.current = null;
+    }
+  };
+
+  const handleImageMouseEnter = (
+    itemId: number,
+    url: string,
+    event: React.MouseEvent<HTMLImageElement>,
+  ) => {
+    clearImagePreviewTimer();
+    const rect = event.currentTarget.getBoundingClientRect();
+    const previewWidth = Math.min(420, window.innerWidth - 32);
+    const previewHeight = Math.min(560, window.innerHeight - 32);
+    const left = rect.right + previewWidth + 16 <= window.innerWidth
+      ? rect.right + 16
+      : Math.max(16, rect.left - previewWidth - 16);
+    const top = Math.min(
+      Math.max(16, rect.top),
+      Math.max(16, window.innerHeight - previewHeight - 16),
+    );
+
+    imagePreviewTimerRef.current = setTimeout(() => {
+      setPreviewImage({ itemId, url, left, top });
+      imagePreviewTimerRef.current = null;
+    }, 1500);
+  };
+
+  const handleImageMouseLeave = () => {
+    clearImagePreviewTimer();
+    setPreviewImage(null);
+  };
+
+  useEffect(() => () => clearImagePreviewTimer(), []);
 
   const loadInventory = useCallback(async () => {
     setIsLoading(true);
@@ -602,8 +641,11 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
                               className='inventory-item-image'
                               src={imageUrls[item.id]}
                               alt={`${item.itemNumber} jewelry design`}
+                              onMouseEnter={(event) => handleImageMouseEnter(item.id, imageUrls[item.id], event)}
+                              onMouseLeave={handleImageMouseLeave}
                               onError={(event) => {
                                 event.currentTarget.style.display = 'none';
+                                handleImageMouseLeave();
                               }}
                             />
                           ) : (
@@ -719,6 +761,16 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
           </div>
         )}
       </section>
+
+      {previewImage && (
+        <div
+          className='inventory-image-preview'
+          aria-hidden='true'
+          style={{ left: previewImage.left, top: previewImage.top }}
+        >
+          <img src={previewImage.url} alt='' />
+        </div>
+      )}
 
       <span className='inventory-visually-hidden'>
         {activeItemsCount} active inventory items

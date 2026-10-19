@@ -788,6 +788,29 @@
   }
 }
 
+/* Preview is positioned beside the hovered thumbnail and sized to the image itself. */
+.inventory-image-preview {
+  position: fixed;
+  z-index: 1100;
+  display: block;
+  max-width: min(420px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  pointer-events: none;
+}
+
+.inventory-image-preview img {
+  display: block;
+  max-width: min(420px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  width: auto;
+  height: auto;
+  border: 1px solid #e6ddd3;
+  border-radius: 9px;
+  background: transparent;
+  box-shadow: 0 12px 32px rgb(48 40 35 / 24%);
+  object-fit: contain;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .inventory-spinner {
     animation: none;

@@ -125,6 +125,26 @@ function ExhibitionModal({
   );
   const [formError, setFormError] = useState<string | null>(null);
 
+  function handleDatePickerChange(
+    value: string,
+    field: 'startDate' | 'endDate',
+  ) {
+    if (!value) return;
+
+    const [year, month, day] = value.split('-');
+    const formatted = `${day}/${month}/${year}`;
+    const parsed = parseIndianDate(formatted);
+    if (!parsed) return;
+
+    if (field === 'startDate') {
+      setStartDateText(formatted);
+      setForm((current) => ({ ...current, startDate: parsed }));
+    } else {
+      setEndDateText(formatted);
+      setForm((current) => ({ ...current, endDate: parsed }));
+    }
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFormError(null);
@@ -225,48 +245,87 @@ function ExhibitionModal({
                 <span>
                   Start date <b>*</b>
                 </span>
-                <input
-                  type='text'
-                  required
-                  inputMode='numeric'
-                  placeholder='DD/MM/YYYY'
-                  maxLength={10}
-                  value={startDateText}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    setStartDateText(value);
-                    const parsed = parseIndianDate(value);
-                    if (parsed)
-                      setForm((current) => ({ ...current, startDate: parsed }));
-                  }}
-                  aria-describedby='exhibition-date-format'
-                />
+                <div className='exhibitions-date-input-wrap'>
+                  <input
+                    type='text'
+                    required
+                    inputMode='numeric'
+                    placeholder='DD/MM/YYYY'
+                    maxLength={10}
+                    value={startDateText}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      setStartDateText(value);
+                      const parsed = parseIndianDate(value);
+                      if (parsed)
+                        setForm((current) => ({
+                          ...current,
+                          startDate: parsed,
+                        }));
+                    }}
+                    aria-describedby='exhibition-date-format'
+                  />
+                  <span className='exhibitions-calendar-control'>
+                    <svg viewBox='0 0 24 24' fill='none' aria-hidden='true'>
+                      <rect x='3.5' y='5' width='17' height='15.5' rx='2' />
+                      <path d='M7.5 3.5v3M16.5 3.5v3M3.5 9.5h17' />
+                    </svg>
+                    <input
+                      className='exhibitions-native-date-picker'
+                      type='date'
+                      aria-label='Open calendar for start date'
+                      title='Choose start date'
+                      value={parseIndianDate(startDateText) ?? ''}
+                      onChange={(event) => {
+                        handleDatePickerChange(event.target.value, 'startDate');
+                        event.currentTarget.blur();
+                      }}
+                    />
+                  </span>
+                </div>
               </label>
               <label className='exhibitions-field'>
                 <span>
                   End date <b>*</b>
                 </span>
-                <input
-                  type='text'
-                  required
-                  inputMode='numeric'
-                  placeholder='DD/MM/YYYY'
-                  maxLength={10}
-                  value={endDateText}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    setEndDateText(value);
-                    const parsed = parseIndianDate(value);
-                    if (parsed)
-                      setForm((current) => ({ ...current, endDate: parsed }));
-                  }}
-                  aria-describedby='exhibition-date-format'
-                />
+                <div className='exhibitions-date-input-wrap'>
+                  <input
+                    type='text'
+                    required
+                    inputMode='numeric'
+                    placeholder='DD/MM/YYYY'
+                    maxLength={10}
+                    value={endDateText}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      setEndDateText(value);
+                      const parsed = parseIndianDate(value);
+                      if (parsed)
+                        setForm((current) => ({ ...current, endDate: parsed }));
+                    }}
+                    aria-describedby='exhibition-date-format'
+                  />
+                  <span className='exhibitions-calendar-control'>
+                    <svg viewBox='0 0 24 24' fill='none' aria-hidden='true'>
+                      <rect x='3.5' y='5' width='17' height='15.5' rx='2' />
+                      <path d='M7.5 3.5v3M16.5 3.5v3M3.5 9.5h17' />
+                    </svg>
+                    <input
+                      className='exhibitions-native-date-picker'
+                      type='date'
+                      aria-label='Open calendar for end date'
+                      title='Choose end date'
+                      value={parseIndianDate(endDateText) ?? ''}
+                      onChange={(event) => {
+                        handleDatePickerChange(event.target.value, 'endDate');
+                        event.currentTarget.blur();
+                      }}
+                    />
+                  </span>
+                </div>
               </label>
             </div>
-            <p id='exhibition-date-format' className='exhibitions-date-hint'>
-              Use DD/MM/YYYY format.
-            </p>
+
             <label className='exhibitions-field'>
               <span>Notes</span>
               <textarea
@@ -284,9 +343,7 @@ function ExhibitionModal({
             </label>
           </div>
           <footer className='exhibitions-modal-footer'>
-            <span className='exhibitions-footer-hint'>
-              Status is determined automatically from the dates.
-            </span>
+            <span className='exhibitions-footer-hint'></span>
             <div>
               <button
                 type='button'

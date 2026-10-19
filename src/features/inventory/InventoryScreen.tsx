@@ -3,20 +3,19 @@ import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import { appDataDir, join } from '@tauri-apps/api/path';
 import './InventoryScreen.css';
 
-import { getInventoryCategories, getInventoryItems } from './inventory.queries';
-
+import InventoryFilters, {
+  getActiveInventoryFilterChips,
+  INITIAL_INVENTORY_FILTERS,
+} from './InventoryFilters';
+import {
+  getInventoryFilterOptions,
+  getInventoryItems,
+} from './inventory.queries';
 import type {
-  InventoryCategoryOption,
-  InventoryFilters,
+  InventoryFilterOptions,
+  InventoryFilters as InventoryFilterValues,
   InventoryItem,
 } from './inventory.types';
-
-const INITIAL_FILTERS: InventoryFilters = {
-  search: '',
-  categoryId: null,
-  certification: 'all',
-  archiveStatus: 'active',
-};
 
 function formatWeight(weightMilli: number | null): string {
   if (weightMilli === null) return '—';
@@ -46,8 +45,13 @@ type Props = {
 function InventoryScreen({ onAddItem, onViewItem }: Props) {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [imageUrls, setImageUrls] = useState<Record<number, string>>({});
-  const [categories, setCategories] = useState<InventoryCategoryOption[]>([]);
-  const [filters, setFilters] = useState<InventoryFilters>(INITIAL_FILTERS);
+
+  const [filterOptions, setFilterOptions] =
+    useState<InventoryFilterOptions | null>(null);
+  const [filters, setFilters] = useState<InventoryFilterValues>(
+    INITIAL_INVENTORY_FILTERS,
+  );
+
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -63,13 +67,13 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
     setError(null);
 
     try {
-      const [inventoryItems, categoryOptions] = await Promise.all([
+      const [inventoryItems, options] = await Promise.all([
         getInventoryItems(filters),
-        getInventoryCategories(),
+        getInventoryFilterOptions(),
       ]);
 
       setItems(inventoryItems);
-      setCategories(categoryOptions);
+      setFilterOptions(options);
     } catch (err) {
       console.error('Failed to load inventory:', err);
       setError(
@@ -148,9 +152,9 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
     };
   }, [showDevMenu]);
 
-  const updateFilter = <K extends keyof InventoryFilters>(
+  const updateFilter = <K extends keyof InventoryFilterValues>(
     key: K,
-    value: InventoryFilters[K],
+    value: InventoryFilterValues[K],
   ) => {
     setFilters((current) => ({
       ...current,
@@ -158,9 +162,20 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
     }));
   };
 
-  const resetFilters = () => {
-    setFilters({ ...INITIAL_FILTERS });
+  const updateFilters = (patch: Partial<InventoryFilterValues>) => {
+    setFilters((current) => ({
+      ...current,
+      ...patch,
+    }));
   };
+
+  const resetFilters = () => {
+    setFilters({ ...INITIAL_INVENTORY_FILTERS });
+  };
+
+  const activeFilterChips = filterOptions
+    ? getActiveInventoryFilterChips(filters, filterOptions)
+    : [];
 
   const seedSampleInventory = async () => {
     setIsSeeding(true);
@@ -201,11 +216,6 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
     }
   };
 
-  const activeFilterCount = [
-    filters.categoryId !== null,
-    filters.certification !== 'all',
-  ].filter(Boolean).length;
-
   const activeItemsCount = items.filter((item) => item.isArchived === 0).length;
 
   return (
@@ -234,22 +244,13 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
           />
         </div>
 
-        <button
-          type='button'
-          className='inventory-toolbar-button'
-          onClick={() => {
-            // Filtering behavior will be implemented in a later pass.
-          }}
-          title='Filtering will be implemented later'
-        >
-          <svg viewBox='0 0 24 24' aria-hidden='true'>
-            <path d='M4 5h16l-6.5 7.5V19l-3 1v-7.5L4 5Z' />
-          </svg>
-          <span>Filters</span>
-          {activeFilterCount > 0 && (
-            <span className='inventory-toolbar-count'>{activeFilterCount}</span>
-          )}
-        </button>
+        {filterOptions && (
+          <InventoryFilters
+            filters={filters}
+            options={filterOptions}
+            onApply={setFilters}
+          />
+        )}
 
         <button
           type='button'
@@ -335,55 +336,18 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
             : `${items.length} ${items.length === 1 ? 'item' : 'items'}`}
         </span>
 
-        {filters.archiveStatus === 'active' && (
+        {activeFilterChips.map((chip) => (
           <button
+            key={chip.id}
             type='button'
             className='inventory-filter-chip'
-            onClick={() => updateFilter('archiveStatus', 'all')}
-            title='Show all items'
+            onClick={() => updateFilters(chip.clear)}
+            title={`Remove filter: ${chip.label}`}
           >
-            Active items
+            {chip.label}
             <span aria-hidden='true'>×</span>
           </button>
-        )}
-
-        {filters.categoryId !== null && (
-          <button
-            type='button'
-            className='inventory-filter-chip'
-            onClick={() => updateFilter('categoryId', null)}
-          >
-            {categories.find((category) => category.id === filters.categoryId)
-              ?.name ?? 'Category'}
-            <span aria-hidden='true'>×</span>
-          </button>
-        )}
-
-        {filters.certification !== 'all' && (
-          <button
-            type='button'
-            className='inventory-filter-chip'
-            onClick={() => updateFilter('certification', 'all')}
-          >
-            {filters.certification === 'certified'
-              ? 'Certified'
-              : 'Not certified'}
-            <span aria-hidden='true'>×</span>
-          </button>
-        )}
-
-        {filters.archiveStatus !== 'active' && (
-          <button
-            type='button'
-            className='inventory-filter-chip'
-            onClick={() => updateFilter('archiveStatus', 'active')}
-          >
-            {filters.archiveStatus === 'archived'
-              ? 'Archived items'
-              : 'All items'}
-            <span aria-hidden='true'>×</span>
-          </button>
-        )}
+        ))}
       </div>
 
       {import.meta.env.DEV && seedMessage && (

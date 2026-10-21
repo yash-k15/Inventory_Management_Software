@@ -192,6 +192,62 @@ export async function getExhibitions(
   }));
 }
 
+
+export interface SharedInterestItem {
+  itemId: number;
+  itemNumber: string;
+  imagePath: string | null;
+  categoryName: string;
+  customerCount: number;
+  customerNames: string[];
+}
+
+interface SharedInterestRow {
+  itemId: number;
+  itemNumber: string;
+  imagePath: string | null;
+  categoryName: string;
+  customerCount: number;
+  customerNames: string | null;
+}
+
+export async function getSharedInterestItems(
+  exhibitionId: number,
+): Promise<SharedInterestItem[]> {
+  const database = await getDatabase();
+  const rows = await database.select<SharedInterestRow[]>(
+    `SELECT
+       i.id AS itemId,
+       i.item_number AS itemNumber,
+       i.image_path AS imagePath,
+       c.name AS categoryName,
+       COUNT(DISTINCT s.customer_id) AS customerCount,
+       json_group_array(DISTINCT COALESCE(NULLIF(cust.business_name, ''), 'Unnamed customer')) AS customerNames
+     FROM selection_item si
+     JOIN selection s ON s.id = si.selection_id
+     JOIN item i ON i.id = si.inventory_item_id
+     JOIN category c ON c.id = i.category_id
+     JOIN customer cust ON cust.id = s.customer_id
+     WHERE s.exhibition_id = ?
+       AND si.status = 'active'
+       AND si.inventory_item_id IS NOT NULL
+       AND EXISTS (
+         SELECT 1 FROM exhibition_item ei
+         WHERE ei.exhibition_id = s.exhibition_id AND ei.item_id = i.id
+       )
+     GROUP BY i.id, i.item_number, c.name
+     HAVING COUNT(DISTINCT s.customer_id) >= 2
+     ORDER BY customerCount DESC, i.item_number COLLATE NOCASE ASC`,
+    [exhibitionId],
+  );
+
+  return rows.map((row) => ({
+    ...row,
+    customerNames: (row.customerNames ? JSON.parse(row.customerNames) as string[] : [])
+      .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })),
+  }));
+}
+
 export async function createExhibition(input: ExhibitionInput): Promise<void> {
   const database = await getDatabase();
   await database.execute(

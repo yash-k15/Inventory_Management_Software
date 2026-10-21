@@ -38,3 +38,13 @@ export interface ExhibitionFilters {
   search: string;
   status: ExhibitionFilter;
 }
+
+
+export interface SharedInterestItem {
+  itemId: number;
+  itemNumber: string;
+  imagePath: string | null;
+  categoryName: string;
+  customerCount: number;
+  customerNames: string[];
+}

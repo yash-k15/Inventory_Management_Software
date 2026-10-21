@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
-import { getExhibitions } from './exhibition.queries';
+import { useEffect, useRef, useState } from 'react';
+import { convertFileSrc } from '@tauri-apps/api/core';
+import { getExhibitions, getSharedInterestItems } from './exhibition.queries';
 import {
   getRecentSelectionActivity,
   type RecentSelectionActivity,
@@ -7,10 +8,15 @@ import {
 import ExhibitionInventory from './ExhibitionInventory';
 import ExhibitionSelections from './ExhibitionSelections';
 import ExhibitionCustomers from './ExhibitionCustomers';
-import type { Exhibition } from './exhibition.types';
+import type { Exhibition, SharedInterestItem } from './exhibition.types';
 import './ExhibitionWorkspace.css';
 
-type WorkspaceTab = 'overview' | 'inventory' | 'selections' | 'customers';
+type WorkspaceTab =
+  | 'overview'
+  | 'inventory'
+  | 'selections'
+  | 'customers'
+  | 'shared-interest';
 
 const TABS: {
   id: WorkspaceTab;
@@ -21,6 +27,7 @@ const TABS: {
   { id: 'inventory', label: 'Inventory', countKey: 'registeredItems' },
   { id: 'selections', label: 'Selections', countKey: 'totalSelections' },
   { id: 'customers', label: 'Customers', countKey: 'customersAttended' },
+  { id: 'shared-interest', label: 'Shared Interest' },
 ];
 
 function formatDate(date: string) {
@@ -436,6 +443,282 @@ function Overview({
   );
 }
 
+type SharedInterestSortKey =
+  | 'itemNumber'
+  | 'categoryName'
+  | 'customerCount'
+  | 'customerNames';
+type SortDirection = 'asc' | 'desc';
+
+function SharedInterest({ exhibitionId }: { exhibitionId: number }) {
+  const [items, setItems] = useState<SharedInterestItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [search, setSearch] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [categoryMenuOpen, setCategoryMenuOpen] = useState(false);
+  const categoryDropdownRef = useRef<HTMLDivElement>(null);
+  const [imageErrors, setImageErrors] = useState<Set<number>>(() => new Set());
+  const [sortKey, setSortKey] =
+    useState<SharedInterestSortKey>('customerCount');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+
+  useEffect(() => {
+    if (!categoryMenuOpen) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (
+        categoryDropdownRef.current &&
+        event.target instanceof Node &&
+        !categoryDropdownRef.current.contains(event.target)
+      ) {
+        setCategoryMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => document.removeEventListener('pointerdown', handlePointerDown);
+  }, [categoryMenuOpen]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      setLoading(true);
+      setError(false);
+      try {
+        const result = await getSharedInterestItems(exhibitionId);
+        if (!cancelled) setItems(result);
+      } catch (err) {
+        console.error('Unable to load shared interest:', err);
+        if (!cancelled) setError(true);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [exhibitionId]);
+
+  const categories = [...new Set(items.map((item) => item.categoryName))].sort(
+    (a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }),
+  );
+  const term = search.trim().toLowerCase();
+  const filteredItems = items.filter(
+    (item) =>
+      (categoryFilter === 'all' || item.categoryName === categoryFilter) &&
+      (!term ||
+        item.itemNumber.toLowerCase().includes(term) ||
+        item.categoryName.toLowerCase().includes(term) ||
+        item.customerNames.some((name) => name.toLowerCase().includes(term))),
+  );
+  const sortedItems = [...filteredItems].sort((a, b) => {
+    let comparison = 0;
+    if (sortKey === 'customerCount')
+      comparison = a.customerCount - b.customerCount;
+    else if (sortKey === 'customerNames')
+      comparison = a.customerNames
+        .join(', ')
+        .localeCompare(b.customerNames.join(', '), undefined, {
+          sensitivity: 'base',
+        });
+    else
+      comparison = a[sortKey].localeCompare(b[sortKey], undefined, {
+        sensitivity: 'base',
+      });
+    if (comparison === 0)
+      comparison = a.itemNumber.localeCompare(b.itemNumber, undefined, {
+        numeric: true,
+        sensitivity: 'base',
+      });
+    return sortDirection === 'asc' ? comparison : -comparison;
+  });
+
+  function changeSort(key: SharedInterestSortKey) {
+    if (sortKey === key)
+      setSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'));
+    else {
+      setSortKey(key);
+      setSortDirection(key === 'customerCount' ? 'desc' : 'asc');
+    }
+  }
+  function sortLabel(key: SharedInterestSortKey) {
+    return sortKey === key ? (sortDirection === 'asc' ? ' ↑' : ' ↓') : '';
+  }
+
+  return (
+    <section className='exhibition-shared-interest'>
+      <header className='exhibition-shared-interest-header'>
+        <div>
+          <h2>Shared Interest</h2>
+          <p>
+            Pieces actively selected by two or more customers in this
+            exhibition.
+          </p>
+        </div>
+        <span className='exhibition-shared-interest-total'>
+          {items.length} {items.length === 1 ? 'piece' : 'pieces'}
+        </span>
+      </header>
+      <div className='exhibition-shared-interest-filters'>
+        <label className='exhibition-shared-interest-search'>
+          <span>Search</span>
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder='Item number, category, or customer'
+          />
+        </label>
+        <div className='exhibition-shared-interest-category'>
+          <span className='exhibition-shared-interest-filter-label'>Category</span>
+          <div className='exhibition-shared-interest-category-dropdown' ref={categoryDropdownRef}>
+            <button
+              type='button'
+              className='exhibition-shared-interest-category-select'
+              aria-haspopup='listbox'
+              aria-expanded={categoryMenuOpen}
+              onClick={() => setCategoryMenuOpen((open) => !open)}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') setCategoryMenuOpen(false);
+              }}
+            >
+              <span>{categoryFilter === 'all' ? 'All categories' : categoryFilter}</span>
+              <span className='exhibition-shared-interest-category-chevron' aria-hidden='true'>⌄</span>
+            </button>
+            {categoryMenuOpen && (
+              <div className='exhibition-shared-interest-category-menu' role='listbox' aria-label='Filter by category'>
+                {[{ value: 'all', label: 'All categories' }, ...categories.map((category) => ({ value: category, label: category }))].map((option) => (
+                  <button
+                    key={option.value}
+                    type='button'
+                    role='option'
+                    aria-selected={categoryFilter === option.value}
+                    className={`exhibition-shared-interest-category-option ${categoryFilter === option.value ? 'is-selected' : ''}`}
+                    onClick={() => {
+                      setCategoryFilter(option.value);
+                      setCategoryMenuOpen(false);
+                    }}
+                  >
+                    <span>{option.label}</span>
+                    {categoryFilter === option.value && <span aria-hidden='true'>✓</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+      {loading ? (
+        <div className='exhibition-shared-interest-state'>
+          Loading shared interest…
+        </div>
+      ) : error ? (
+        <div className='exhibition-shared-interest-state' role='alert'>
+          Unable to load shared interest. Please try reopening this exhibition.
+        </div>
+      ) : sortedItems.length === 0 ? (
+        <div className='exhibition-shared-interest-state'>
+          <strong>
+            {items.length === 0
+              ? 'No shared interest yet'
+              : 'No matching pieces'}
+          </strong>
+          <p>
+            {items.length === 0
+              ? 'When multiple customers actively select the same registered piece, it will appear here.'
+              : 'Try changing your search or category filter.'}
+          </p>
+        </div>
+      ) : (
+        <div className='exhibition-shared-interest-table-wrap'>
+          <table className='exhibition-shared-interest-table'>
+            <thead>
+              <tr>
+                <th></th>
+                <th>
+                  <button
+                    type='button'
+                    onClick={() => changeSort('itemNumber')}
+                  >
+                    Item No.{sortLabel('itemNumber')}
+                  </button>
+                </th>
+                <th>
+                  <button
+                    type='button'
+                    onClick={() => changeSort('categoryName')}
+                  >
+                    Category{sortLabel('categoryName')}
+                  </button>
+                </th>
+                <th className='is-numeric'>
+                  <button
+                    type='button'
+                    onClick={() => changeSort('customerCount')}
+                  >
+                    Customers interested{sortLabel('customerCount')}
+                  </button>
+                </th>
+                <th>
+                  <button
+                    type='button'
+                    onClick={() => changeSort('customerNames')}
+                  >
+                    Customer names{sortLabel('customerNames')}
+                  </button>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {sortedItems.map((item) => (
+                <tr key={item.itemId}>
+                  <td className='exhibition-shared-interest-image-cell'>
+                    {item.imagePath && !imageErrors.has(item.itemId) ? (
+                      <img
+                        className='exhibition-shared-interest-image'
+                        src={convertFileSrc(item.imagePath)}
+                        alt={`${item.itemNumber}`}
+                        onError={() => setImageErrors((current) => new Set(current).add(item.itemId))}
+                      />
+                    ) : (
+                      <span
+                        className='exhibition-shared-interest-image-fallback'
+                        aria-label='No image available'
+                        title='No image available'
+                      >
+                        ◇
+                      </span>
+                    )}
+                  </td>
+                  <td className='exhibition-shared-interest-item-number'>
+                    {item.itemNumber}
+                  </td>
+                  <td>{item.categoryName}</td>
+                  <td className='is-numeric'>
+                    <span className='exhibition-shared-interest-count'>
+                      {item.customerCount}
+                    </span>
+                  </td>
+                  <td className='exhibition-shared-interest-customer-names'>
+                    <div className='exhibition-shared-interest-customer-chips'>
+                      {item.customerNames.map((name) => (
+                        <span className='exhibition-shared-interest-customer-chip' key={name}>
+                          {name}
+                        </span>
+                      ))}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
 export default function ExhibitionWorkspace({
   exhibitionId,
   onBack,
@@ -448,6 +731,7 @@ export default function ExhibitionWorkspace({
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(
     null,
   );
+  const [sharedInterestCount, setSharedInterestCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -478,6 +762,20 @@ export default function ExhibitionWorkspace({
       }
     }
     void loadExhibition();
+    return () => {
+      cancelled = true;
+    };
+  }, [exhibitionId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    getSharedInterestItems(exhibitionId)
+      .then((items) => {
+        if (!cancelled) setSharedInterestCount(items.length);
+      })
+      .catch((err) =>
+        console.error('Unable to load shared interest count:', err),
+      );
     return () => {
       cancelled = true;
     };
@@ -578,9 +876,11 @@ export default function ExhibitionWorkspace({
             onClick={() => setActiveTab(tab.id)}
           >
             <span>{tab.label}</span>
-            {tab.countKey && (
+            {(tab.countKey || tab.id === 'shared-interest') && (
               <span className='exhibition-workspace-tab-count'>
-                {exhibition[tab.countKey]}
+                {tab.id === 'shared-interest'
+                  ? sharedInterestCount
+                  : exhibition[tab.countKey!]}
               </span>
             )}
           </button>
@@ -611,6 +911,8 @@ export default function ExhibitionWorkspace({
               if (match) setExhibition(match);
             }}
           />
+        ) : activeTab === 'shared-interest' ? (
+          <SharedInterest exhibitionId={exhibitionId} />
         ) : (
           <ExhibitionCustomers
             exhibitionId={exhibitionId}

@@ -45,6 +45,8 @@ pub fn run() {
     let settings_defaults = include_str!("../../src/db/migrations/009_settings_defaults.sql");
     let orders_migration = include_str!("../../src/db/migrations/010_orders.sql");
     let orders_safeguards = include_str!("../../src/db/migrations/011_orders_safeguards.sql");
+    let activity_log = include_str!("../../src/db/migrations/012_activity_log.sql");
+    let activity_operation_id = include_str!("../../src/db/migrations/013_activity_operation_id.sql");
 
     let migrations = || {
         vec![
@@ -112,6 +114,18 @@ pub fn run() {
                 version: 11,
                 description: "add order integrity safeguards",
                 sql: orders_safeguards,
+                kind: MigrationKind::Up,
+            },
+            Migration {
+                version: 12,
+                description: "add inventory and selection activity log",
+                sql: activity_log,
+                kind: MigrationKind::Up,
+            },
+            Migration {
+                version: 13,
+                description: "add operation id to activity log",
+                sql: activity_operation_id,
                 kind: MigrationKind::Up,
             },
         ]

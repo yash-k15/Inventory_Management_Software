@@ -1,4 +1,5 @@
 import { getDatabase } from '../../db';
+import { logActivity } from '../../db/activityLog';
 
 export interface SelectionCustomer {
   id: number;
@@ -163,6 +164,7 @@ export async function addSelectionItem(
   exhibitionId: number,
   customerId: number,
   itemId: number,
+  operationId?: string,
 ): Promise<boolean> {
   const db = await getDatabase();
 
@@ -286,13 +288,39 @@ export async function addSelectionItem(
     [selectionId, itemId, JSON.stringify(snapshot)],
   );
 
+  const customers = await db.select<{ businessName: string }[]>(
+    `SELECT business_name AS businessName
+     FROM customer
+     WHERE id = ?`,
+    [customerId],
+  );
+
+  await logActivity({
+    activityType: 'selection_items_added',
+    exhibitionId,
+    customerId,
+    customerName: customers[0]?.businessName ?? null,
+    summary: `Added ${item.itemNumber} to ${customers[0]?.businessName ?? 'customer'}'s selection`,
+    itemNumbers: [item.itemNumber],
+    operationId,
+  });
+
   return true;
 }
 
 export async function removeSelectionItem(selectionItemId: number) {
   const db = await getDatabase();
 
-  const rows = await db.select<{ status: string; locked: number }[]>(
+  const rows = await db.select<
+    {
+      status: string;
+      locked: number;
+      exhibitionId: number;
+      customerId: number;
+      customerName: string;
+      itemNumber: string;
+    }[]
+  >(
     `SELECT
        si.status,
        CASE
@@ -304,8 +332,17 @@ export async function removeSelectionItem(selectionItemId: number) {
              AND co.status <> 'Cancelled'
          ) THEN 1
          ELSE 0
-       END AS locked
+       END AS locked,
+       s.exhibition_id AS exhibitionId,
+       s.customer_id AS customerId,
+       c.business_name AS customerName,
+       COALESCE(
+         json_extract(si.snapshot_data, '$.item_number'),
+         'Deleted item'
+       ) AS itemNumber
      FROM selection_item si
+     JOIN selection s ON s.id = si.selection_id
+     JOIN customer c ON c.id = s.customer_id
      WHERE si.id = ?`,
     [selectionItemId],
   );
@@ -324,7 +361,7 @@ export async function removeSelectionItem(selectionItemId: number) {
     throw new Error('This item already has an order and is locked.');
   }
 
-  await db.execute(
+  const result = await db.execute(
     `UPDATE selection_item
      SET status = 'removed',
          removed_at = datetime('now', 'localtime'),
@@ -332,4 +369,15 @@ export async function removeSelectionItem(selectionItemId: number) {
      WHERE id = ? AND status = 'active'`,
     [selectionItemId],
   );
+
+  if (result.rowsAffected > 0) {
+    await logActivity({
+      activityType: 'selection_items_removed',
+      exhibitionId: row.exhibitionId,
+      customerId: row.customerId,
+      customerName: row.customerName,
+      summary: `Removed ${row.itemNumber} from ${row.customerName}'s selection`,
+      itemNumbers: [row.itemNumber],
+    });
+  }
 }

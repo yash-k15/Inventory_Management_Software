@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react';
 import { getExhibitions } from './exhibition.queries';
+import {
+  getRecentSelectionActivity,
+  type RecentSelectionActivity,
+} from '../../db/activityLog';
 import ExhibitionInventory from './ExhibitionInventory';
 import ExhibitionSelections from './ExhibitionSelections';
 import ExhibitionCustomers from './ExhibitionCustomers';
@@ -27,6 +31,20 @@ function formatDate(date: string) {
     month: 'short',
     year: 'numeric',
   }).format(parsed);
+}
+
+function formatActivityTime(value: string) {
+  const normalized = value.includes('T') ? value : value.replace(' ', 'T');
+  const date = new Date(normalized);
+
+  if (Number.isNaN(date.getTime())) return value;
+
+  return new Intl.DateTimeFormat('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(date);
 }
 
 function formatDateRange(start: string, end: string) {
@@ -91,6 +109,36 @@ function Overview({
   const [hoveredCategoryId, setHoveredCategoryId] = useState<number | null>(
     null,
   );
+  const [recentActivity, setRecentActivity] = useState<
+    RecentSelectionActivity[]
+  >([]);
+  const [activityLoading, setActivityLoading] = useState(true);
+  const [activityError, setActivityError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadActivity() {
+      setActivityLoading(true);
+      setActivityError(false);
+
+      try {
+        const activities = await getRecentSelectionActivity(exhibition.id, 5);
+        if (!cancelled) setRecentActivity(activities);
+      } catch (error) {
+        console.error('Unable to load recent exhibition activity:', error);
+        if (!cancelled) setActivityError(true);
+      } finally {
+        if (!cancelled) setActivityLoading(false);
+      }
+    }
+
+    void loadActivity();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [exhibition.id]);
   const donutCircumference = 2 * Math.PI * 72;
   let accumulatedItems = 0;
   const donutSegments = exhibition.categories
@@ -150,111 +198,175 @@ function Overview({
       </section>
 
       <div className='exhibition-overview-panels'>
-        <section className='exhibition-overview-panel'>
-          <header className='exhibition-overview-panel-header'>
-            <h2>Registered inventory by category</h2>
-            <span>Registered items, not selections</span>
-          </header>
-          {exhibition.categories.length === 0 ? (
-            <div className='exhibition-overview-empty'>
-              <p>No inventory categories are available yet.</p>
-              <button
-                type='button'
-                className='exhibition-overview-secondary'
-                onClick={() => onOpenTab('inventory')}
-              >
-                Register items
-              </button>
-            </div>
-          ) : (
-            <div className='exhibition-overview-inventory-chart'>
-              <div className='exhibition-overview-donut-wrap'>
-                <div
-                  className='exhibition-overview-donut'
-                  aria-label='Registered inventory by category'
+        <div className='exhibition-overview-left-column'>
+          <section className='exhibition-overview-panel'>
+            <header className='exhibition-overview-panel-header'>
+              <h2>Registered inventory by category</h2>
+              <span>Registered items, not selections</span>
+            </header>
+            {exhibition.categories.length === 0 ? (
+              <div className='exhibition-overview-empty'>
+                <p>No inventory categories are available yet.</p>
+                <button
+                  type='button'
+                  className='exhibition-overview-secondary'
+                  onClick={() => onOpenTab('inventory')}
                 >
-                  <svg
-                    viewBox='0 0 180 180'
-                    role='img'
-                    aria-label='Hover over a colored segment to see its category and registered item count'
-                  >
-                    {donutSegments.map(
-                      ({ category, color, length, offset }) => (
-                        <circle
-                          key={category.categoryId}
-                          cx='90'
-                          cy='90'
-                          r='72'
-                          fill='none'
-                          stroke={color}
-                          strokeWidth='32'
-                          strokeDasharray={`${length} ${donutCircumference - length}`}
-                          strokeDashoffset={-offset}
-                          transform='rotate(-90 90 90)'
-                          className='exhibition-overview-donut-segment'
-                          tabIndex={0}
-                          onMouseEnter={() =>
-                            setHoveredCategoryId(category.categoryId)
-                          }
-                          onMouseLeave={() => setHoveredCategoryId(null)}
-                          onFocus={() =>
-                            setHoveredCategoryId(category.categoryId)
-                          }
-                          onBlur={() => setHoveredCategoryId(null)}
-                          aria-label={`${category.categoryName}: ${category.itemCount} registered items`}
-                        />
-                      ),
-                    )}
-                  </svg>
-                  <div className='exhibition-overview-donut-hole'>
-                    {hoveredCategory ? (
-                      <>
-                        <strong>{hoveredCategory.itemCount}</strong>
-                        <span>{hoveredCategory.categoryName}</span>
-                      </>
-                    ) : (
-                      <>
-                        <strong>{categoryTotal}</strong>
-                        <span>registered</span>
-                      </>
-                    )}
-                  </div>
-                </div>
-                <p
-                  className='exhibition-overview-donut-hint'
-                  aria-live='polite'
-                >
-                  {hoveredCategory
-                    ? `${hoveredCategory.categoryName}: ${hoveredCategory.itemCount} registered ${hoveredCategory.itemCount === 1 ? 'item' : 'items'}`
-                    : 'Hover over a segment for category details'}
-                </p>
+                  Register items
+                </button>
               </div>
-              <div className='exhibition-overview-legend'>
-                {exhibition.categories.map((category, index) => (
+            ) : (
+              <div className='exhibition-overview-inventory-chart'>
+                <div className='exhibition-overview-donut-wrap'>
                   <div
-                    className='exhibition-overview-legend-item'
-                    key={category.categoryId}
+                    className='exhibition-overview-donut'
+                    aria-label='Registered inventory by category'
                   >
-                    <span
-                      className='exhibition-overview-legend-swatch'
-                      style={{
-                        backgroundColor:
-                          CATEGORY_CHART_COLORS[
-                            index % CATEGORY_CHART_COLORS.length
-                          ],
-                      }}
-                      aria-hidden='true'
-                    />
-                    <span className='exhibition-overview-legend-name'>
-                      {category.categoryName}
-                    </span>
-                    <strong>{category.itemCount}</strong>
+                    <svg
+                      viewBox='0 0 180 180'
+                      role='img'
+                      aria-label='Hover over a colored segment to see its category and registered item count'
+                    >
+                      {donutSegments.map(
+                        ({ category, color, length, offset }) => (
+                          <circle
+                            key={category.categoryId}
+                            cx='90'
+                            cy='90'
+                            r='72'
+                            fill='none'
+                            stroke={color}
+                            strokeWidth='32'
+                            strokeDasharray={`${length} ${donutCircumference - length}`}
+                            strokeDashoffset={-offset}
+                            transform='rotate(-90 90 90)'
+                            className='exhibition-overview-donut-segment'
+                            tabIndex={0}
+                            onMouseEnter={() =>
+                              setHoveredCategoryId(category.categoryId)
+                            }
+                            onMouseLeave={() => setHoveredCategoryId(null)}
+                            onFocus={() =>
+                              setHoveredCategoryId(category.categoryId)
+                            }
+                            onBlur={() => setHoveredCategoryId(null)}
+                            aria-label={`${category.categoryName}: ${category.itemCount} registered items`}
+                          />
+                        ),
+                      )}
+                    </svg>
+                    <div className='exhibition-overview-donut-hole'>
+                      {hoveredCategory ? (
+                        <>
+                          <strong>{hoveredCategory.itemCount}</strong>
+                          <span>{hoveredCategory.categoryName}</span>
+                        </>
+                      ) : (
+                        <>
+                          <strong>{categoryTotal}</strong>
+                          <span>registered</span>
+                        </>
+                      )}
+                    </div>
                   </div>
-                ))}
+                  <p
+                    className='exhibition-overview-donut-hint'
+                    aria-live='polite'
+                  >
+                    {hoveredCategory
+                      ? `${hoveredCategory.categoryName}: ${hoveredCategory.itemCount} registered ${hoveredCategory.itemCount === 1 ? 'item' : 'items'}`
+                      : 'Hover over a segment for category details'}
+                  </p>
+                </div>
+                <div className='exhibition-overview-legend'>
+                  {exhibition.categories.map((category, index) => (
+                    <div
+                      className='exhibition-overview-legend-item'
+                      key={category.categoryId}
+                    >
+                      <span
+                        className='exhibition-overview-legend-swatch'
+                        style={{
+                          backgroundColor:
+                            CATEGORY_CHART_COLORS[
+                              index % CATEGORY_CHART_COLORS.length
+                            ],
+                        }}
+                        aria-hidden='true'
+                      />
+                      <span className='exhibition-overview-legend-name'>
+                        {category.categoryName}
+                      </span>
+                      <strong>{category.itemCount}</strong>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
-        </section>
+            )}
+          </section>
+
+          <section className='exhibition-overview-panel exhibition-overview-activity'>
+            <header className='exhibition-overview-panel-header'>
+              <h2>Recent activity</h2>
+            </header>
+            {activityLoading ? (
+              <div
+                className='exhibition-overview-activity-empty'
+                aria-live='polite'
+              >
+                <p>Loading recent activity…</p>
+              </div>
+            ) : activityError ? (
+              <div className='exhibition-overview-activity-empty' role='alert'>
+                <p>Unable to load recent activity.</p>
+                <span>Please try reopening this exhibition.</span>
+              </div>
+            ) : recentActivity.length === 0 ? (
+              <div className='exhibition-overview-activity-empty'>
+                <span aria-hidden='true'>◇</span>
+                <p>No selection activity yet</p>
+                <span>Selection additions and removals will appear here.</span>
+              </div>
+            ) : (
+              <div className='exhibition-overview-activity-list'>
+                {recentActivity.map((activity) => {
+                  const added =
+                    activity.activityType === 'selection_items_added';
+                  const count = activity.itemCount;
+
+                  return (
+                    <article
+                      className='exhibition-overview-activity-item'
+                      key={activity.operationId ?? `activity-${activity.id}`}
+                    >
+                      <span
+                        className={`exhibition-overview-activity-badge ${added ? 'is-added' : 'is-removed'}`}
+                      >
+                        {added ? 'Added' : 'Removed'}
+                      </span>
+                      <div className='exhibition-overview-activity-details'>
+                        <p>
+                          <strong>{activity.customerName}</strong>{' '}
+                          {added ? 'added' : 'removed'}{' '}
+                          <strong>
+                            {count} {count === 1 ? 'item' : 'items'}
+                          </strong>{' '}
+                          {added ? 'to' : 'from'} their selection
+                        </p>
+                      </div>
+                      <time
+                        className='exhibition-overview-activity-time'
+                        dateTime={activity.createdAt}
+                      >
+                        {formatActivityTime(activity.createdAt)}
+                      </time>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        </div>
 
         <section className='exhibition-overview-panel exhibition-overview-selection-panel'>
           <header className='exhibition-overview-panel-header'>
@@ -322,20 +434,6 @@ function Overview({
               })}
             </div>
           )}
-        </section>
-
-        <section className='exhibition-overview-panel exhibition-overview-activity'>
-          <header className='exhibition-overview-panel-header'>
-            <h2>Recent activity</h2>
-          </header>
-          <div className='exhibition-overview-activity-empty'>
-            <span aria-hidden='true'>◇</span>
-            <p>Activity history isn't available yet.</p>
-            <span>
-              We'll show registration and selection events here when event
-              history is supported.
-            </span>
-          </div>
         </section>
       </div>
 

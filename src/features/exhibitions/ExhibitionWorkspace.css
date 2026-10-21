@@ -301,21 +301,19 @@
 .exhibition-overview-panels {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  grid-template-areas: 'inventory selections' 'activity selections';
   gap: 20px;
   align-items: start;
 }
 
-.exhibition-overview-panels > .exhibition-overview-panel:first-child {
-  grid-area: inventory;
+.exhibition-overview-left-column {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 20px;
 }
 
 .exhibition-overview-selection-panel {
-  grid-area: selections;
-}
-
-.exhibition-overview-activity {
-  grid-area: activity;
+  min-width: 0;
 }
 
 .exhibition-overview-panel {
@@ -922,4 +920,98 @@
 .exhibition-inventory-remove:disabled {
   cursor: not-allowed;
   opacity: 0.45;
+}
+
+/* Recent selection activity */
+.exhibition-overview-activity-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.exhibition-overview-activity-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid #eee4db;
+}
+
+.exhibition-overview-activity-item:first-child {
+  padding-top: 0;
+}
+
+.exhibition-overview-activity-item:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.exhibition-overview-activity-badge {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  min-width: 66px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.exhibition-overview-activity-badge.is-added {
+  background: #e2f2e7;
+  color: #287a4a;
+}
+
+.exhibition-overview-activity-badge.is-removed {
+  background: #f8e5e2;
+  color: #a3453c;
+}
+
+.exhibition-overview-activity-details {
+  min-width: 0;
+  flex: 1;
+}
+
+.exhibition-overview-activity-details p {
+  margin: 0;
+  color: #6e6258;
+  font-size: 13px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.exhibition-overview-activity-details p strong {
+  color: #302722;
+  font-weight: 600;
+}
+
+.exhibition-overview-activity-time {
+  flex: 0 0 auto;
+  color: #8a7d72;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .exhibition-overview-panels {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .exhibition-overview-left-column {
+    gap: 16px;
+  }
+
+  .exhibition-overview-activity-item {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .exhibition-overview-activity-details {
+    flex-basis: calc(100% - 80px);
+  }
+
+  .exhibition-overview-activity-time {
+    margin-left: 78px;
+  }
 }

@@ -457,6 +457,31 @@ pub fn create_item(
                 .map_err(|error| format!("Could not save other-stone details: {error}"))?;
         }
 
+                let details_json = serde_json::json!({
+            "itemNumbers": [&item_number],
+            "itemCount": 1
+        })
+        .to_string();
+
+        transaction
+            .execute(
+                "INSERT INTO activity_log (
+                    activity_type,
+                    exhibition_id,
+                    customer_id,
+                    customer_name_snapshot,
+                    summary,
+                    details_json
+                )
+                VALUES (?1, NULL, NULL, NULL, ?2, ?3)",
+                params![
+                    "inventory_items_added",
+                    format!("Added inventory item {item_number}"),
+                    details_json
+                ],
+            )
+            .map_err(|error| format!("Could not log inventory activity: {error}"))?;
+
         Ok(CreatedItem {
             id: item_id,
             item_number,

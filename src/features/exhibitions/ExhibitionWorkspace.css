@@ -301,8 +301,21 @@
 .exhibition-overview-panels {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-areas: 'inventory selections' 'activity selections';
   gap: 20px;
   align-items: start;
+}
+
+.exhibition-overview-panels > .exhibition-overview-panel:first-child {
+  grid-area: inventory;
+}
+
+.exhibition-overview-selection-panel {
+  grid-area: selections;
+}
+
+.exhibition-overview-activity {
+  grid-area: activity;
 }
 
 .exhibition-overview-panel {
@@ -334,28 +347,146 @@
   font-size: 11px;
 }
 
-.exhibition-overview-category-list {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+.exhibition-overview-inventory-chart {
+  display: grid;
+  grid-template-columns: minmax(130px, 0.9fr) minmax(0, 1.1fr);
+  align-items: center;
+  gap: 22px;
 }
 
-.exhibition-overview-category {
+.exhibition-overview-donut-wrap {
+  min-width: 0;
+  text-align: center;
+}
+
+.exhibition-overview-donut {
+  position: relative;
   display: grid;
-  grid-template-columns: minmax(80px, 110px) minmax(40px, 1fr) 28px;
+  place-items: center;
+  width: min(100%, 220px);
+  aspect-ratio: 1;
+  margin: 0 auto;
+}
+
+.exhibition-overview-donut svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.exhibition-overview-donut-segment {
+  cursor: pointer;
+  outline: none;
+  transition: opacity 120ms ease, stroke-width 120ms ease;
+}
+
+.exhibition-overview-donut-segment:hover,
+.exhibition-overview-donut-segment:focus {
+  stroke-width: 38;
+  opacity: 0.9;
+}
+
+.exhibition-overview-donut-hint {
+  min-height: 16px;
+  margin: 8px 0 0;
+  color: #786d63;
+  font-size: 11px;
+}
+
+.exhibition-overview-donut-hole {
+  display: flex;
+  width: 62%;
+  aspect-ratio: 1;
+  flex-direction: column;
   align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #fff;
+  text-align: center;
+}
+
+.exhibition-overview-donut-hole strong {
+  color: #302722;
+  font-size: clamp(22px, 2.2vw, 30px);
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.exhibition-overview-donut-hole span {
+  margin-top: 4px;
+  color: #786d63;
+  font-size: 11px;
+}
+
+.exhibition-overview-legend {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.exhibition-overview-legend-item {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  color: #352c26;
+  font-size: 12px;
+}
+
+.exhibition-overview-legend-swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+}
+
+.exhibition-overview-legend-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.exhibition-overview-legend-item strong {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.exhibition-overview-selection-list {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.exhibition-overview-selection {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.exhibition-overview-selection-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
   gap: 12px;
   color: #352c26;
   font-size: 13px;
 }
 
+.exhibition-overview-selection-heading strong {
+  flex: none;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
 .exhibition-overview-category-name {
+  min-width: 0;
   overflow-wrap: anywhere;
 }
 
 .exhibition-overview-category-track {
   display: block;
-  height: 8px;
+  height: 9px;
   overflow: hidden;
   border-radius: 99px;
   background: #efe5d8;
@@ -365,13 +496,18 @@
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: #947044;
+  background: #64816f;
   transition: width 180ms ease;
 }
 
-.exhibition-overview-category > strong {
-  text-align: right;
-  font-size: 13px;
+.exhibition-overview-selection-counts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+  color: #786d63;
+  font-size: 11px;
+  line-height: 1.45;
 }
 
 .exhibition-overview-empty {
@@ -469,6 +605,7 @@
 @media (max-width: 760px) {
   .exhibition-overview-panels {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'inventory' 'selections' 'activity';
   }
 
   .exhibition-overview-category {
@@ -477,7 +614,33 @@
   }
 }
 
+@media (max-width: 1050px) {
+  .exhibition-overview-inventory-chart {
+    grid-template-columns: minmax(110px, 0.8fr) minmax(0, 1.2fr);
+    gap: 16px;
+  }
+}
+
+@media (max-width: 760px) {
+  .exhibition-overview-inventory-chart {
+    grid-template-columns: minmax(120px, 0.8fr) minmax(0, 1.2fr);
+  }
+}
+
 @media (max-width: 480px) {
+  .exhibition-overview-inventory-chart {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 18px;
+  }
+
+  .exhibition-overview-donut {
+    width: min(72%, 200px);
+  }
+
+  .exhibition-overview-legend {
+    gap: 10px;
+  }
+
   .exhibition-overview-metric {
     padding: 14px 12px;
   }

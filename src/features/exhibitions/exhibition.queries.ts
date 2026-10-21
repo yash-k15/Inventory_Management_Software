@@ -1,4 +1,6 @@
 import { getDatabase } from '../../db';
+import { getSelectionCustomers, getSelectionItems } from './selection.queries';
+
 import type {
   Exhibition,
   ExhibitionCategoryCount,
@@ -27,9 +29,13 @@ interface CategoryCountRow {
   categoryId: number;
   categoryName: string;
   itemCount: number;
+  uniqueSelectedItems: number;
+  totalSelections: number;
 }
 
-export async function getExhibitions(filters: ExhibitionFilters): Promise<Exhibition[]> {
+export async function getExhibitions(
+  filters: ExhibitionFilters,
+): Promise<Exhibition[]> {
   const database = await getDatabase();
   const conditions: string[] = [];
   const params: (string | number)[] = [];
@@ -45,7 +51,9 @@ export async function getExhibitions(filters: ExhibitionFilters): Promise<Exhibi
   else if (filters.status === 'active') conditions.push("e.status = 'Active'");
   else if (filters.status === 'past') conditions.push("e.status = 'Closed'");
 
-  const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  const whereClause = conditions.length
+    ? `WHERE ${conditions.join(' AND ')}`
+    : '';
 
   const rows = await database.select<ExhibitionRow[]>(
     `
@@ -77,28 +85,105 @@ export async function getExhibitions(filters: ExhibitionFilters): Promise<Exhibi
         e.id AS exhibitionId,
         c.id AS categoryId,
         c.name AS categoryName,
-        COUNT(ei.item_id) AS itemCount
+        (
+          SELECT COUNT(*)
+          FROM exhibition_item ei
+          JOIN item registered_item ON registered_item.id = ei.item_id
+          WHERE ei.exhibition_id = e.id
+            AND registered_item.category_id = c.id
+        ) AS itemCount,
+        (
+          SELECT COUNT(DISTINCT si.inventory_item_id)
+          FROM selection s
+          JOIN selection_item si ON si.selection_id = s.id
+          JOIN item selected_item ON selected_item.id = si.inventory_item_id
+          WHERE s.exhibition_id = e.id
+            AND selected_item.category_id = c.id
+            AND si.status = 'active'
+            AND si.inventory_item_id IS NOT NULL
+            AND EXISTS (
+              SELECT 1 FROM exhibition_item ei
+              WHERE ei.exhibition_id = e.id AND ei.item_id = si.inventory_item_id
+            )
+        ) AS uniqueSelectedItems,
+        (
+          SELECT COUNT(*)
+          FROM selection s
+          JOIN selection_item si ON si.selection_id = s.id
+          JOIN item selected_item ON selected_item.id = si.inventory_item_id
+          WHERE s.exhibition_id = e.id
+            AND selected_item.category_id = c.id
+            AND si.status = 'active'
+            AND si.inventory_item_id IS NOT NULL
+            AND EXISTS (
+              SELECT 1 FROM exhibition_item ei
+              WHERE ei.exhibition_id = e.id AND ei.item_id = si.inventory_item_id
+            )
+        ) AS totalSelections
       FROM v_exhibition e
       CROSS JOIN category c
-      LEFT JOIN item i ON i.category_id = c.id
-      LEFT JOIN exhibition_item ei
-        ON ei.item_id = i.id
-        AND ei.exhibition_id = e.id
       WHERE c.is_archived = 0
-      GROUP BY e.id, c.id, c.name, c.sort_order
       ORDER BY c.sort_order ASC, c.name COLLATE NOCASE ASC
     `,
   );
 
   const categoriesByExhibition = new Map<number, ExhibitionCategoryCount[]>();
+
   for (const row of categoryRows) {
     const categories = categoriesByExhibition.get(row.exhibitionId) ?? [];
     categories.push({
       categoryId: row.categoryId,
       categoryName: row.categoryName,
       itemCount: row.itemCount,
+      uniqueSelectedItems: 0,
+      totalSelections: 0,
     });
     categoriesByExhibition.set(row.exhibitionId, categories);
+  }
+
+  // Use the same selection records as the Selections tab.
+  for (const row of rows) {
+    const categories = categoriesByExhibition.get(row.id) ?? [];
+    const categoriesByName = new Map(
+      categories.map((category) => [
+        category.categoryName.trim().toLowerCase(),
+        category,
+      ]),
+    );
+    const uniqueItemsByCategory = new Map<string, Set<number>>();
+
+    const customers = await getSelectionCustomers(row.id, '');
+
+    for (const customer of customers) {
+      if (customer.selectionId === null) continue;
+
+      const items = await getSelectionItems(customer.selectionId);
+
+      for (const item of items) {
+        if (item.status !== 'active') continue;
+
+        const categoryKey = item.categoryName.trim().toLowerCase();
+        const category = categoriesByName.get(categoryKey);
+
+        if (!category) continue;
+
+        category.totalSelections += 1;
+
+        if (item.inventoryItemId === null) continue;
+
+        const uniqueItems =
+          uniqueItemsByCategory.get(categoryKey) ?? new Set<number>();
+        uniqueItems.add(item.inventoryItemId);
+        uniqueItemsByCategory.set(categoryKey, uniqueItems);
+      }
+    }
+
+    for (const [categoryKey, uniqueItems] of uniqueItemsByCategory) {
+      const category = categoriesByName.get(categoryKey);
+      if (category) {
+        category.uniqueSelectedItems = uniqueItems.size;
+      }
+    }
   }
 
   return rows.map((row) => ({
@@ -111,15 +196,31 @@ export async function createExhibition(input: ExhibitionInput): Promise<void> {
   const database = await getDatabase();
   await database.execute(
     `INSERT INTO exhibition (name, location, start_date, end_date, notes) VALUES (?, ?, ?, ?, ?)`,
-    [input.name.trim(), input.location.trim() || null, input.startDate, input.endDate, input.notes.trim() || null],
+    [
+      input.name.trim(),
+      input.location.trim() || null,
+      input.startDate,
+      input.endDate,
+      input.notes.trim() || null,
+    ],
   );
 }
 
-export async function updateExhibition(exhibitionId: number, input: ExhibitionInput): Promise<void> {
+export async function updateExhibition(
+  exhibitionId: number,
+  input: ExhibitionInput,
+): Promise<void> {
   const database = await getDatabase();
   await database.execute(
     `UPDATE exhibition SET name = ?, location = ?, start_date = ?, end_date = ?, notes = ?, updated_at = datetime('now','localtime') WHERE id = ?`,
-    [input.name.trim(), input.location.trim() || null, input.startDate, input.endDate, input.notes.trim() || null, exhibitionId],
+    [
+      input.name.trim(),
+      input.location.trim() || null,
+      input.startDate,
+      input.endDate,
+      input.notes.trim() || null,
+      exhibitionId,
+    ],
   );
 }
 
@@ -127,7 +228,6 @@ export async function deleteExhibition(exhibitionId: number): Promise<void> {
   const database = await getDatabase();
   await database.execute('DELETE FROM exhibition WHERE id = ?', [exhibitionId]);
 }
-
 
 export interface ExhibitionInventoryRow {
   id: number;
@@ -190,7 +290,9 @@ export async function getExhibitionInventory(
     params.push(pattern, pattern, pattern, pattern, pattern, pattern);
   }
 
-  const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  const whereClause = conditions.length
+    ? `WHERE ${conditions.join(' AND ')}`
+    : '';
   return database.select<ExhibitionInventoryRow[]>(
     `
       SELECT
@@ -256,7 +358,9 @@ export async function registerExhibitionItems(
     "SELECT date('now','localtime') AS today",
   );
   if (rows[0].endDate < todayRows[0].today) {
-    throw new Error('Inventory registration is closed because this exhibition has ended.');
+    throw new Error(
+      'Inventory registration is closed because this exhibition has ended.',
+    );
   }
 
   let added = 0;
@@ -291,7 +395,6 @@ export async function registerExhibitionItemByBarcode(
   return added ? 'registered' : 'already-registered';
 }
 
-
 export async function unregisterExhibitionItem(
   exhibitionId: number,
   itemId: number,
@@ -302,13 +405,16 @@ export async function unregisterExhibitionItem(
     'SELECT end_date AS endDate FROM exhibition WHERE id = ?',
     [exhibitionId],
   );
-  if (!exhibitions.length) throw new Error('This exhibition could not be found.');
+  if (!exhibitions.length)
+    throw new Error('This exhibition could not be found.');
 
   const todayRows = await database.select<{ today: string }[]>(
     "SELECT date('now','localtime') AS today",
   );
   if (exhibitions[0].endDate < todayRows[0].today) {
-    throw new Error('Inventory cannot be removed because this exhibition has ended.');
+    throw new Error(
+      'Inventory cannot be removed because this exhibition has ended.',
+    );
   }
 
   const activeSelections = await database.select<{ count: number }[]>(
@@ -321,7 +427,9 @@ export async function unregisterExhibitionItem(
     [exhibitionId, itemId],
   );
   if ((activeSelections[0]?.count ?? 0) > 0) {
-    throw new Error('This item has active customer selections. Remove those selections before unregistering the item.');
+    throw new Error(
+      'This item has active customer selections. Remove those selections before unregistering the item.',
+    );
   }
 
   await database.execute(

@@ -5,6 +5,8 @@ export interface ExhibitionCategoryCount {
   categoryId: number;
   categoryName: string;
   itemCount: number;
+  uniqueSelectedItems: number;
+  totalSelections: number;
 }
 
 export interface Exhibition {

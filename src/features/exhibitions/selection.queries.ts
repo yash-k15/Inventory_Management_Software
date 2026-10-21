@@ -66,7 +66,7 @@ export async function getSelectionCustomers(
          WHERE si.selection_id = s.id AND si.status = 'active'
        ) AS activeItemCount
      FROM customer c
-     LEFT JOIN selection s
+     JOIN selection s
        ON s.customer_id = c.id AND s.exhibition_id = ?
      WHERE c.is_archived = 0
        AND (
@@ -87,6 +87,63 @@ export async function getSelectionCustomers(
        )
      ORDER BY c.business_name COLLATE NOCASE`,
     [exhibitionId, pattern, pattern, pattern, pattern],
+  );
+}
+
+
+export interface AvailableSelectionCustomer {
+  id: number;
+  businessName: string;
+  contactName: string | null;
+  phone: string | null;
+}
+
+export async function searchAvailableSelectionCustomers(
+  exhibitionId: number,
+  search: string,
+) {
+  const db = await getDatabase();
+  const term = search.trim();
+  const pattern = `%${term}%`;
+  return db.select<AvailableSelectionCustomer[]>(
+    `SELECT c.id,
+       c.business_name AS businessName,
+       (SELECT cc.name FROM customer_contact cc
+        WHERE cc.customer_id = c.id AND cc.is_primary = 1
+        ORDER BY cc.id LIMIT 1) AS contactName,
+       (SELECT cc.phone_1 FROM customer_contact cc
+        WHERE cc.customer_id = c.id AND cc.is_primary = 1
+        ORDER BY cc.id LIMIT 1) AS phone
+     FROM customer c
+     WHERE c.is_archived = 0
+       AND NOT EXISTS (
+         SELECT 1 FROM selection s
+         WHERE s.customer_id = c.id AND s.exhibition_id = ?
+       )
+       AND (? = '' OR c.business_name LIKE ?
+         OR COALESCE((SELECT cc.name FROM customer_contact cc
+           WHERE cc.customer_id = c.id AND cc.is_primary = 1 LIMIT 1), '') LIKE ?
+         OR COALESCE((SELECT cc.phone_1 FROM customer_contact cc
+           WHERE cc.customer_id = c.id AND cc.is_primary = 1 LIMIT 1), '') LIKE ?)
+     ORDER BY c.business_name COLLATE NOCASE
+     LIMIT 100`,
+    [exhibitionId, term, pattern, pattern, pattern],
+  );
+}
+
+export async function addCustomerToSelectionExhibition(
+  exhibitionId: number,
+  customerId: number,
+) {
+  const db = await getDatabase();
+  const exists = await db.select<{ id: number }[]>(
+    `SELECT id FROM customer WHERE id = ? AND is_archived = 0`,
+    [customerId],
+  );
+  if (!exists.length) throw new Error('Customer not found or archived.');
+  await db.execute(
+    `INSERT OR IGNORE INTO selection(customer_id, exhibition_id) VALUES(?, ?)`,
+    [customerId, exhibitionId],
   );
 }
 

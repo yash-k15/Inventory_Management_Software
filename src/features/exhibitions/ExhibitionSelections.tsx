@@ -5,12 +5,16 @@ import {
   addSelectionItem,
   getSelectionCustomers,
   getSelectionItems,
+  searchAvailableSelectionCustomers,
+  addCustomerToSelectionExhibition,
+  type AvailableSelectionCustomer,
   removeSelectionItem,
   searchSelectionInventory,
   type SelectionCandidate,
   type SelectionCustomer,
   type SelectionRow,
 } from './selection.queries';
+import { createExhibitionCustomer } from './exhibition.customers.queries';
 import './ExhibitionSelections.css';
 function weight(n: number | null) {
   return n == null ? '—' : `${(n / 1000).toFixed(3)} g`;
@@ -61,6 +65,14 @@ export default function ExhibitionSelections({
     [items, setItems] = useState<SelectionRow[]>([]),
     [results, setResults] = useState<SelectionCandidate[]>([]);
   const [customerSearch, setCustomerSearch] = useState(''),
+    [addCustomerOpen, setAddCustomerOpen] = useState(false),
+    [customerMode, setCustomerMode] = useState<'existing' | 'new'>('existing'),
+    [availableCustomers, setAvailableCustomers] = useState<AvailableSelectionCustomer[]>([]),
+    [availableSearch, setAvailableSearch] = useState(''),
+    [newBusinessName, setNewBusinessName] = useState(''),
+    [newContactName, setNewContactName] = useState(''),
+    [newPhone, setNewPhone] = useState(''),
+    [newCity, setNewCity] = useState(''),
     [search, setSearch] = useState(''),
     [barcode, setBarcode] = useState(''),
     [scanning, setScanning] = useState(false),
@@ -155,6 +167,63 @@ export default function ExhibitionSelections({
       dead = true;
     };
   }, [exhibitionId, search]);
+  useEffect(() => {
+    if (!addCustomerOpen || customerMode !== 'existing') return;
+    let dead = false;
+    void searchAvailableSelectionCustomers(exhibitionId, availableSearch)
+      .then((rows) => { if (!dead) setAvailableCustomers(rows); })
+      .catch((e) => {
+        if (!dead) setFeedback({ error: true, text: e instanceof Error ? e.message : 'Unable to search customers.' });
+      });
+    return () => { dead = true; };
+  }, [addCustomerOpen, customerMode, exhibitionId, availableSearch]);
+
+  async function attachExistingCustomer(c: AvailableSelectionCustomer) {
+    setSaving(true);
+    try {
+      await addCustomerToSelectionExhibition(exhibitionId, c.id);
+      setAddCustomerOpen(false);
+      setAvailableSearch('');
+      setCustomerSearch('');
+      setSelectedId(c.id);
+      setFeedback({ error: false, text: `${c.businessName} added to this exhibition.` });
+      const rows = await getSelectionCustomers(exhibitionId, '');
+      setCustomers(rows);
+      await onRefreshExhibition();
+    } catch (e) {
+      setFeedback({ error: true, text: e instanceof Error ? e.message : 'Unable to add customer.' });
+    } finally { setSaving(false); }
+  }
+
+  async function createAndAttachCustomer(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!newBusinessName.trim() || saving) return;
+    setSaving(true);
+    try {
+      const customerId = await createExhibitionCustomer({
+        businessName: newBusinessName.trim(),
+        contactName: newContactName.trim(),
+        phone: newPhone.trim(),
+        city: newCity.trim(),
+      });
+      const createdCustomerId = customerId as unknown as number;
+      if (!Number.isInteger(createdCustomerId) || createdCustomerId <= 0) {
+        throw new Error('Customer was created, but its ID was not returned. Refresh and add the customer from Existing customer.');
+      }
+      await addCustomerToSelectionExhibition(exhibitionId, createdCustomerId);
+      setAddCustomerOpen(false);
+      setCustomerMode('existing');
+      setNewBusinessName(''); setNewContactName(''); setNewPhone(''); setNewCity('');
+      setCustomerSearch('');
+      setSelectedId(createdCustomerId);
+      setCustomers(await getSelectionCustomers(exhibitionId, ''));
+      setFeedback({ error: false, text: 'Customer created and added to this exhibition.' });
+      await onRefreshExhibition();
+    } catch (e) {
+      setFeedback({ error: true, text: e instanceof Error ? e.message : 'Unable to create customer.' });
+    } finally { setSaving(false); }
+  }
+
   useEffect(() => {
     if (scanning) scanRef.current?.focus();
   }, [scanning]);
@@ -322,6 +391,11 @@ export default function ExhibitionSelections({
             ))}
           </div>
         )}
+        <footer className='selection-customer-footer'>
+          <button type='button' className='selection-button selection-button--primary selection-add-customer' onClick={() => { setCustomerMode('existing'); setAvailableSearch(''); setAddCustomerOpen(true); }}>
+            + Add Customer
+          </button>
+        </footer>
       </aside>
       <div className='selection-main-panel'>
         {!customer ? (
@@ -363,7 +437,7 @@ export default function ExhibitionSelections({
                 </button>
               </div>
             )}
-            <section className='selection-scan-card'>
+            <section className='selection-scan-card selection-section-card'>
               <div className='selection-scan-heading'>
                 <div>
                   <h3>Quick add</h3>
@@ -498,7 +572,7 @@ export default function ExhibitionSelections({
                 </div>
               )}
             </section>
-            <section className='selection-items-section'>
+            <section className='selection-items-section selection-section-card'>
               <div className='selection-items-heading'>
                 <h3>Selected items</h3>
                 <span>{active.length} active</span>
@@ -561,6 +635,37 @@ export default function ExhibitionSelections({
           </>
         )}
       </div>
+      {addCustomerOpen && (
+        <div className='selection-modal-backdrop' onMouseDown={(e) => { if (e.target === e.currentTarget) setAddCustomerOpen(false); }}>
+          <section className='selection-customer-modal' role='dialog' aria-modal='true' aria-labelledby='selection-add-customer-title'>
+            <header className='selection-modal-header'>
+              <div><span className='selection-eyebrow'>EXHIBITION CUSTOMERS</span><h2 id='selection-add-customer-title'>Add customer</h2><p>Add an existing customer or create a new record.</p></div>
+              <button type='button' className='selection-modal-close' onClick={() => setAddCustomerOpen(false)} aria-label='Close'>×</button>
+            </header>
+            <div className='selection-modal-tabs'>
+              <button type='button' className={customerMode === 'existing' ? 'is-active' : ''} onClick={() => setCustomerMode('existing')}>Existing customer</button>
+              <button type='button' className={customerMode === 'new' ? 'is-active' : ''} onClick={() => setCustomerMode('new')}>New customer</button>
+            </div>
+            {customerMode === 'existing' ? (
+              <div className='selection-existing-customer'>
+                <label className='selection-search'><span>⌕</span><input autoFocus value={availableSearch} onChange={(e) => setAvailableSearch(e.target.value)} placeholder='Search by business, contact, or phone…' /></label>
+                <div className='selection-existing-results'>
+                  {availableCustomers.length === 0 ? <p className='selection-muted'>{availableSearch.trim() ? 'No matching customers available.' : 'All existing customers are already added to this exhibition.'}</p> :
+                    availableCustomers.map((c) => <div className='selection-existing-row' key={c.id}><div className='selection-customer-avatar'>{c.businessName.slice(0,1).toUpperCase()}</div><div className='selection-customer-copy'><strong>{c.businessName}</strong><small>{[c.contactName, c.phone].filter(Boolean).join(' · ') || 'No contact details'}</small></div><button type='button' className='selection-button' disabled={saving} onClick={() => void attachExistingCustomer(c)}>Add</button></div>)}
+                </div>
+              </div>
+            ) : (
+              <form className='selection-new-customer-form' onSubmit={createAndAttachCustomer}>
+                <label>Business name <span>*</span><input autoFocus required value={newBusinessName} onChange={(e) => setNewBusinessName(e.target.value)} /></label>
+                <label>Contact name<input value={newContactName} onChange={(e) => setNewContactName(e.target.value)} /></label>
+                <label>Phone number<input value={newPhone} onChange={(e) => setNewPhone(e.target.value)} /></label>
+                <label>City<input value={newCity} onChange={(e) => setNewCity(e.target.value)} /></label>
+                <footer><button type='button' className='selection-button' onClick={() => setAddCustomerOpen(false)}>Cancel</button><button type='submit' className='selection-button selection-button--primary' disabled={!newBusinessName.trim() || saving}>{saving ? 'Saving…' : 'Create & add customer'}</button></footer>
+              </form>
+            )}
+          </section>
+        </div>
+      )}
     </section>
   );
 }

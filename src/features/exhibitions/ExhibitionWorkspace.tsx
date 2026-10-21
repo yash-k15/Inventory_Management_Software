@@ -436,23 +436,6 @@ function Overview({
           )}
         </section>
       </div>
-
-      <div className='exhibition-overview-actions'>
-        <button
-          type='button'
-          className='exhibition-overview-primary'
-          onClick={() => onOpenTab('selections')}
-        >
-          Open selections
-        </button>
-        <button
-          type='button'
-          className='exhibition-overview-secondary'
-          onClick={() => onOpenTab('inventory')}
-        >
-          Register items
-        </button>
-      </div>
     </div>
   );
 }

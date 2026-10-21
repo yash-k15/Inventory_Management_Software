@@ -896,6 +896,9 @@ export default function ExhibitionWorkspace({
             exhibitionEnded={
               exhibition.endDate < new Date().toLocaleDateString('en-CA')
             }
+            exhibitionUpcoming={
+              exhibition.startDate > new Date().toLocaleDateString('en-CA')
+            }
           />
         ) : activeTab === 'selections' ? (
           <ExhibitionSelections

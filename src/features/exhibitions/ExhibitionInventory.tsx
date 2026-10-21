@@ -1,114 +1,258 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import { appDataDir, join } from '@tauri-apps/api/path';
-import type { FormEvent } from 'react';
+import './ExhibitionInventory.css';
 import type { ExhibitionInventoryRow } from './exhibition.queries';
 import {
   getExhibitionInventory,
-  registerExhibitionItemByBarcode,
   registerExhibitionItems,
   unregisterExhibitionItem,
 } from './exhibition.queries';
 
 type Notice = { kind: 'success' | 'warning' | 'error'; text: string };
 const EMPTY_FILTERS = { search: '', categoryId: null as number | null, registeredOnly: false };
+type InventoryTab = 'available' | 'registered';
+type SortKey = 'itemNumber' | 'categoryName' | 'grossWeightMilli' | 'netWeightMilli' | 'diamondDetails' | 'stoneDetails' | 'selectionCount';
+type SortState = { key: SortKey; direction: 'asc' | 'desc' };
 
 function formatWeight(value: number | null) {
   return value == null ? '—' : `${(value / 1000).toFixed(3)} g`;
 }
 
-export default function ExhibitionInventory({ exhibitionId, exhibitionEnded }: { exhibitionId: number; exhibitionEnded: boolean }) {
+function parseDetailWeights(details: string | null): Map<string, number> {
+  const totals = new Map<string, number>();
+  if (!details) return totals;
+  for (const line of details.split(/\r?\n/)) {
+    const match = line.match(/·\s*([\d,.]+)\s*(ct|g|mg)\b/i);
+    if (!match) continue;
+    const amount = Number(match[1].replace(/,/g, ''));
+    const unit = match[2].toLowerCase();
+    if (Number.isFinite(amount)) totals.set(unit, (totals.get(unit) ?? 0) + amount);
+  }
+  return totals;
+}
+
+function formatDetailTotals(rows: ExhibitionInventoryRow[], field: 'diamondDetails' | 'stoneDetails', defaultUnit: string) {
+  const totals = new Map<string, number>();
+  for (const row of rows) {
+    for (const [unit, amount] of parseDetailWeights(row[field])) {
+      totals.set(unit, (totals.get(unit) ?? 0) + amount);
+    }
+  }
+  if (!totals.size) return '—';
+  return [...totals.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([unit, amount]) => `${amount.toFixed(3)} ${unit || defaultUnit}`)
+    .join(' · ');
+}
+
+export default function ExhibitionInventory({ exhibitionId, exhibitionEnded, exhibitionUpcoming = false }: { exhibitionId: number; exhibitionEnded: boolean; exhibitionUpcoming?: boolean }) {
   const [items, setItems] = useState<ExhibitionInventoryRow[]>([]);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState<Notice | null>(null);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [modalSearch, setModalSearch] = useState('');
-  const [modalCategory, setModalCategory] = useState<number | null>(null);
-  const [selectedIds, setSelectedIds] = useState<number[]>([]);
-  const [scanValue, setScanValue] = useState('');
+  const [activeTab, setActiveTab] = useState<InventoryTab>('available');
+  const [availableCategoryId, setAvailableCategoryId] = useState<number | null>(null);
+  const [registeredCategoryId, setRegisteredCategoryId] = useState<number | null>(null);
+  const [availableSelectedIds, setAvailableSelectedIds] = useState<number[]>([]);
+  const [registeredSelectedIds, setRegisteredSelectedIds] = useState<number[]>([]);
   const [busy, setBusy] = useState(false);
-  const scanRef = useRef<HTMLInputElement>(null);
+  const [sort, setSort] = useState<SortState>({ key: 'itemNumber', direction: 'asc' });
 
   const loadItems = useCallback(async () => {
     setLoading(true);
     try {
-      const rows = await getExhibitionInventory(exhibitionId, filters);
+      // Fetch the complete inventory so category chips and counts remain stable while searching.
+      const rows = await getExhibitionInventory(exhibitionId, EMPTY_FILTERS);
       setItems(rows);
     } catch (error) {
       setNotice({ kind: 'error', text: error instanceof Error ? error.message : 'Unable to load exhibition inventory.' });
     } finally { setLoading(false); }
-  }, [exhibitionId, filters]);
+  }, [exhibitionId]);
 
   useEffect(() => { void loadItems(); }, [loadItems]);
 
-  const categories = useMemo(() => {
+  const availableItems = useMemo(() => items.filter((item) => !item.isRegistered), [items]);
+  const registeredItems = useMemo(() => items.filter((item) => Boolean(item.isRegistered)), [items]);
+  const matchesSearch = useCallback((item: ExhibitionInventoryRow) => {
+    const query = filters.search.trim().toLocaleLowerCase();
+    if (!query) return true;
+    return [item.itemNumber, item.name, item.categoryName, item.igiCertificateNumber, item.huid, item.diamondDetails, item.stoneDetails]
+      .some((value) => value?.toLocaleLowerCase().includes(query));
+  }, [filters.search]);
+  const categoriesFor = (source: ExhibitionInventoryRow[]) => {
     const map = new Map<number, { id: number; name: string; count: number }>();
-    for (const item of items) {
+    for (const item of source) {
       const current = map.get(item.categoryId) ?? { id: item.categoryId, name: item.categoryName, count: 0 };
-      current.count += item.isRegistered;
+      current.count += 1;
       map.set(item.categoryId, current);
     }
     return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
-  }, [items]);
+  };
+  const availableCategories = useMemo(() => categoriesFor(availableItems), [availableItems]);
+  const registeredCategories = useMemo(() => categoriesFor(registeredItems), [registeredItems]);
+  const visibleAvailableItems = useMemo(() => availableItems.filter((item) => matchesSearch(item) && (availableCategoryId === null || item.categoryId === availableCategoryId)), [availableItems, availableCategoryId, matchesSearch]);
+  const visibleRegisteredItems = useMemo(() => registeredItems.filter((item) => matchesSearch(item) && (registeredCategoryId === null || item.categoryId === registeredCategoryId)), [registeredItems, registeredCategoryId, matchesSearch]);
 
-  const modalItems = useMemo(() => items.filter((item) => {
-    const search = modalSearch.trim().toLowerCase();
-    return !item.isRegistered && (!modalCategory || item.categoryId === modalCategory) &&
-      (!search || `${item.itemNumber} ${item.name ?? ''} ${item.categoryName} ${item.igiCertificateNumber ?? ''} ${item.huid ?? ''}`.toLowerCase().includes(search));
-  }), [items, modalSearch, modalCategory]);
-
-  async function handleScan(event?: FormEvent) {
-    event?.preventDefault();
-    if (!scanValue.trim() || busy || exhibitionEnded) return;
-    setBusy(true);
-    try {
-      const result = await registerExhibitionItemByBarcode(exhibitionId, scanValue);
-      if (result === 'registered') setNotice({ kind: 'success', text: `${scanValue.trim()} registered for this exhibition.` });
-      else if (result === 'already-registered') setNotice({ kind: 'warning', text: `${scanValue.trim()} is already registered.` });
-      else setNotice({ kind: 'error', text: `No inventory item found for barcode “${scanValue.trim()}”.` });
-      setScanValue('');
-      await loadItems();
-      scanRef.current?.focus();
-    } catch (error) { setNotice({ kind: 'error', text: error instanceof Error ? error.message : 'Barcode registration failed.' }); }
-    finally { setBusy(false); }
+  function toggleSelected(id: number, checked: boolean, registered: boolean) {
+    const setter = registered ? setRegisteredSelectedIds : setAvailableSelectedIds;
+    setter((ids) => checked ? (ids.includes(id) ? ids : [...ids, id]) : ids.filter((value) => value !== id));
   }
 
-  async function handleRegisterSelected() {
-    if (!selectedIds.length || busy) return;
+  async function handleRegister(ids: number[]) {
+    const eligibleIds = ids.filter((id) => availableItems.some((item) => item.id === id));
+    if (!eligibleIds.length || busy || exhibitionEnded) return;
     setBusy(true);
     try {
-      const added = await registerExhibitionItems(exhibitionId, selectedIds);
+      const added = await registerExhibitionItems(exhibitionId, eligibleIds);
       setNotice({ kind: 'success', text: `${added} item${added === 1 ? '' : 's'} registered for this exhibition.` });
-      setModalOpen(false); setSelectedIds([]); setModalSearch(''); await loadItems();
+      setAvailableSelectedIds([]);
+      await loadItems();
     } catch (error) { setNotice({ kind: 'error', text: error instanceof Error ? error.message : 'Unable to register selected items.' }); }
     finally { setBusy(false); }
   }
 
-  async function handleUnregister(item: ExhibitionInventoryRow) {
-    if (busy || exhibitionEnded) return;
-    if (!window.confirm(`Remove ${item.itemNumber} from this exhibition? This does not delete the inventory item.`)) return;
+  async function handleUnregisterMany(ids: number[]) {
+    const eligibleItems = registeredItems.filter((item) => ids.includes(item.id));
+    if (!eligibleItems.length || busy || !exhibitionUpcoming || exhibitionEnded) return;
+
+    const removableItems = eligibleItems.filter((item) => item.selectionCount === 0);
+    const protectedCount = eligibleItems.length - removableItems.length;
+    if (!removableItems.length) {
+      setNotice({ kind: 'warning', text: 'Items with active customer selections cannot be removed. Remove those selections first.' });
+      return;
+    }
+
+    const confirmation = window.confirm(
+      `Remove ${removableItems.length} item${removableItems.length === 1 ? '' : 's'} from this exhibition?${protectedCount ? ` ${protectedCount} item${protectedCount === 1 ? '' : 's'} with active selections will be kept.` : ''}`
+    );
+    if (!confirmation) return;
+
     setBusy(true);
-    try { await unregisterExhibitionItem(exhibitionId, item.id); setNotice({ kind: 'success', text: `${item.itemNumber} removed from this exhibition.` }); await loadItems(); }
-    catch (error) { setNotice({ kind: 'error', text: error instanceof Error ? error.message : 'Unable to remove registration.' }); }
-    finally { setBusy(false); }
+    try {
+      let removed = 0;
+      let failed = 0;
+      for (const item of removableItems) {
+        try {
+          await unregisterExhibitionItem(exhibitionId, item.id);
+          removed += 1;
+        } catch {
+          failed += 1;
+        }
+      }
+      setRegisteredSelectedIds([]);
+      await loadItems();
+      if (failed) {
+        setNotice({ kind: 'warning', text: `${removed} item${removed === 1 ? '' : 's'} removed. ${failed} could not be removed.` });
+      } else {
+        setNotice({ kind: 'success', text: `${removed} item${removed === 1 ? '' : 's'} removed from this exhibition.` });
+      }
+    } catch (error) {
+      setNotice({ kind: 'error', text: error instanceof Error ? error.message : 'Unable to remove items from this exhibition.' });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const currentItems = activeTab === 'available' ? visibleAvailableItems : visibleRegisteredItems;
+
+  const sortedItems = useMemo(() => {
+    const valueFor = (item: ExhibitionInventoryRow, key: SortKey): string | number => {
+      if (key === 'diamondDetails' || key === 'stoneDetails') {
+        const unitTotals = parseDetailWeights(item[key]);
+        if (!unitTotals.size) return '';
+        // Normalize all supported units to grams for a meaningful numeric sort.
+        return [...unitTotals.entries()].reduce((sum, [unit, amount]) => {
+          if (unit === 'ct') return sum + amount * 0.2;
+          if (unit === 'mg') return sum + amount / 1000;
+          return sum + amount;
+        }, 0);
+      }
+      const value = item[key];
+      if (value == null) return '';
+      return typeof value === 'number' ? value : value.toLocaleLowerCase();
+    };
+    return [...currentItems].sort((a, b) => {
+      const left = valueFor(a, sort.key);
+      const right = valueFor(b, sort.key);
+      let result = typeof left === 'number' && typeof right === 'number'
+        ? left - right
+        : String(left).localeCompare(String(right), undefined, { numeric: true, sensitivity: 'base' });
+      if (left === '' && right !== '') result = 1;
+      else if (right === '' && left !== '') result = -1;
+      return sort.direction === 'asc' ? result : -result;
+    });
+  }, [currentItems, sort]);
+
+  function changeSort(key: SortKey) {
+    setSort((current) => current.key === key
+      ? { key, direction: current.direction === 'asc' ? 'desc' : 'asc' }
+      : { key, direction: 'asc' });
+  }
+
+  function sortHeading(label: string, key: SortKey) {
+    return <button type='button' className='exhibition-inventory-sort-button' onClick={() => changeSort(key)} aria-label={`Sort by ${label}`}>
+      {label}<span aria-hidden='true'>{sort.key === key ? (sort.direction === 'asc' ? ' ↑' : ' ↓') : ' ↕'}</span>
+    </button>;
+  }
+
+  function renderInventoryTable(rows: ExhibitionInventoryRow[], registered: boolean) {
+    const selected = registered ? registeredSelectedIds : availableSelectedIds;
+    const selectable = rows.filter((item) => !registered || item.selectionCount === 0);
+    const selectedVisibleCount = rows.filter((item) => selected.includes(item.id)).length;
+    const selectedVisibleIds = rows.filter((item) => selected.includes(item.id)).map((item) => item.id);
+    const allSelected = selectable.length > 0 && selectable.every((item) => selected.includes(item.id));
+    const grossTotal = rows.reduce((sum, item) => sum + (item.grossWeightMilli ?? 0), 0);
+    const netTotal = rows.reduce((sum, item) => sum + (item.netWeightMilli ?? 0), 0);
+    const hasGrossWeight = rows.some((item) => item.grossWeightMilli != null);
+    const hasNetWeight = rows.some((item) => item.netWeightMilli != null);
+    const categoryId = registered ? registeredCategoryId : availableCategoryId;
+    const categories = registered ? registeredCategories : availableCategories;
+    return <>
+      <div className='exhibition-inventory-list-controls'>
+        <div className='exhibition-inventory-category-chips'>
+          <button type='button' className={categoryId === null ? 'is-active' : ''} onClick={() => (registered ? setRegisteredCategoryId : setAvailableCategoryId)(null)}>All <span>{registered ? registeredItems.length : availableItems.length}</span></button>
+          {categories.map((category) => <button type='button' key={category.id} className={categoryId === category.id ? 'is-active' : ''} onClick={() => (registered ? setRegisteredCategoryId : setAvailableCategoryId)(category.id)}>{category.name} <span>{category.count}</span></button>)}
+        </div>
+        <label className='exhibition-inventory-search exhibition-inventory-search--inline'><span aria-hidden='true'>⌕</span><input value={filters.search} onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))} placeholder='Search inventory…' aria-label='Search inventory' /></label>
+      </div>
+      {loading ? <div className='exhibition-inventory-empty'>Loading inventory…</div> : !rows.length ? <div className='exhibition-inventory-empty'><p>{registered ? 'No registered items match your search.' : 'No available inventory items match your search.'}</p></div> : <div className='exhibition-inventory-table-scroll'><table className='exhibition-inventory-table'>
+        <thead><tr>
+          <th className='exhibition-inventory-check-column'><input aria-label='Select all visible items' type='checkbox' checked={allSelected} disabled={!selectable.length || busy || exhibitionEnded} onChange={(event) => { const setter = registered ? setRegisteredSelectedIds : setAvailableSelectedIds; setter((ids) => event.target.checked ? [...new Set([...ids, ...selectable.map((item) => item.id)])] : ids.filter((id) => !selectable.some((item) => item.id === id))); }} /></th>
+          <th>{sortHeading('Item', 'itemNumber')}</th><th>{sortHeading('Category', 'categoryName')}</th>
+          <th>{sortHeading('Gold weight', 'grossWeightMilli')}</th><th>{sortHeading('Net weight', 'netWeightMilli')}</th>
+          <th>{sortHeading('Diamonds', 'diamondDetails')}</th><th>{sortHeading('Other stones', 'stoneDetails')}</th>
+          {registered && <th>{sortHeading('Selections', 'selectionCount')}</th>}
+        </tr></thead>
+        <tbody>{sortedItems.map((item) => <tr key={item.id}>
+          <td className='exhibition-inventory-check-column'><input type='checkbox' aria-label={`Select ${item.itemNumber}`} checked={selected.includes(item.id)} disabled={busy || exhibitionEnded || (registered && item.selectionCount > 0)} title={registered && item.selectionCount > 0 ? 'Remove active customer selections first' : undefined} onChange={(event) => toggleSelected(item.id, event.target.checked, registered)} /></td>
+          <td><div className='exhibition-inventory-item-cell'>{item.imagePath ? <InventoryImage path={item.imagePath} /> : <span className='exhibition-inventory-item-image exhibition-inventory-item-image--empty'>◇</span>}<span className='exhibition-inventory-item-copy'><strong className='exhibition-inventory-item-number'>{item.itemNumber}</strong>{item.name && <span className='exhibition-inventory-item-name'>{item.name}</span>}{Boolean(item.isArchived) && <span className='exhibition-inventory-archived'>Archived</span>}</span></div></td>
+          <td>{item.categoryName}</td><td>{formatWeight(item.grossWeightMilli)}</td><td>{formatWeight(item.netWeightMilli)}</td>
+          <td><span className='exhibition-inventory-details'>{item.diamondDetails ?? '—'}</span></td><td><span className='exhibition-inventory-details'>{item.stoneDetails ?? '—'}</span></td>
+          {registered && <td><span className='exhibition-inventory-selection-label'>{item.selectionCount ? `${item.selectionCount} active` : 'None'}</span></td>}
+        </tr>)}</tbody>
+        <tfoot><tr className='exhibition-inventory-totals-row'><td></td><td colSpan={2}>Totals ({rows.length} items)</td><td>{hasGrossWeight ? formatWeight(grossTotal) : '—'}</td><td>{hasNetWeight ? formatWeight(netTotal) : '—'}</td><td>{formatDetailTotals(rows, 'diamondDetails', 'ct')}</td><td>{formatDetailTotals(rows, 'stoneDetails', 'ct')}</td>{registered && <td>—</td>}</tr></tfoot>
+      </table></div>}
+      <footer className='exhibition-inventory-table-footer'>{rows.length} {registered ? 'registered items' : 'available items'}{selected.length ? ` · ${selected.length} selected` : ''}</footer>
+      <div className='exhibition-inventory-bulk-actions'>
+        <label className='exhibition-inventory-select-visible'><input type='checkbox' checked={allSelected} disabled={!selectable.length || busy || exhibitionEnded} onChange={(event) => { const setter = registered ? setRegisteredSelectedIds : setAvailableSelectedIds; setter((ids) => event.target.checked ? [...new Set([...ids, ...selectable.map((item) => item.id)])] : ids.filter((id) => !selectable.some((item) => item.id === id))); }} /> Select all visible</label>
+        <div className='exhibition-inventory-bulk-buttons'>
+          {registered ? <><button type='button' className='exhibition-overview-secondary' disabled={!exhibitionUpcoming || busy || exhibitionEnded || !selectedVisibleCount} title={exhibitionEnded ? 'Registered inventory is frozen after the exhibition ends.' : exhibitionUpcoming ? 'Items with active customer selections cannot be removed.' : 'Items cannot be removed while the exhibition is active.'} onClick={() => void handleUnregisterMany(selectedVisibleIds)}>Remove selected ({selectedVisibleCount})</button><button type='button' className='exhibition-overview-primary' disabled={!exhibitionUpcoming || busy || exhibitionEnded || !selectable.length} title={exhibitionEnded ? 'Registered inventory is frozen after the exhibition ends.' : exhibitionUpcoming ? 'Items with active customer selections cannot be removed.' : 'Items cannot be removed while the exhibition is active.'} onClick={() => void handleUnregisterMany(selectable.map((item) => item.id))}>Remove all</button></> : <><button type='button' className='exhibition-overview-secondary' disabled={!selectedVisibleCount || busy || exhibitionEnded} onClick={() => void handleRegister(selectedVisibleIds)}>Add selected ({selectedVisibleCount})</button><button type='button' className='exhibition-overview-primary' disabled={!rows.length || busy || exhibitionEnded} onClick={() => void handleRegister(rows.map((item) => item.id))}>Add all</button></>}
+        </div>
+      </div>
+    </>;
   }
 
   return <section className='exhibition-inventory'>
-    <div className='exhibition-inventory-toolbar'>
-      <label className='exhibition-inventory-search'><span aria-hidden='true'>⌕</span><input value={filters.search} onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))} placeholder='Search item number, name, certificate…' aria-label='Search inventory' /></label>
-      <select value={filters.categoryId ?? ''} onChange={(e) => setFilters((f) => ({ ...f, categoryId: e.target.value ? Number(e.target.value) : null }))} aria-label='Filter category'><option value=''>All categories</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
-      <button type='button' className='exhibition-overview-primary' onClick={() => { setModalOpen(true); setSelectedIds([]); }} disabled={exhibitionEnded}>＋ Register inventory</button>
-    </div>
-    <form className='exhibition-inventory-quick-register' onSubmit={handleScan}><strong>Quick barcode registration</strong><input ref={scanRef} className='exhibition-inventory-barcode' value={scanValue} onChange={(e) => setScanValue(e.target.value)} placeholder='Scan or enter item number' disabled={exhibitionEnded || busy} /><button type='submit' className='exhibition-overview-secondary' disabled={exhibitionEnded || busy || !scanValue.trim()}>{busy ? 'Working…' : 'Register'}</button></form>
     {exhibitionEnded && <p className='exhibition-inventory-frozen'>This exhibition has ended. Its registered inventory is frozen.</p>}
     {notice && <div className={`exhibition-inventory-notice exhibition-inventory-notice--${notice.kind}`} role='status'><span>{notice.text}</span><button type='button' aria-label='Dismiss message' onClick={() => setNotice(null)}>×</button></div>}
-    <div className='exhibition-inventory-table-card'>
-      <div className='exhibition-inventory-category-chips'><button type='button' className={!filters.categoryId ? 'is-active' : ''} onClick={() => setFilters((f) => ({ ...f, categoryId: null }))}>All <span>{items.filter((i) => i.isRegistered).length}</span></button>{categories.map((c) => <button type='button' key={c.id} className={filters.categoryId === c.id ? 'is-active' : ''} onClick={() => setFilters((f) => ({ ...f, categoryId: f.categoryId === c.id ? null : c.id }))}>{c.name} <span>{c.count}</span></button>)}</div>
-      {loading ? <div className='exhibition-inventory-empty'>Loading inventory…</div> : !items.length ? <div className='exhibition-inventory-empty'><p>No inventory items match your search.</p></div> : <div className='exhibition-inventory-table-scroll'><table className='exhibition-inventory-table'><thead><tr><th>Item</th><th>Category</th><th>Gold weight</th><th>Diamonds</th><th>Other stones</th><th>Certification</th><th>Selections</th><th>Exhibition</th></tr></thead><tbody>{items.map((item) => <tr key={item.id}><td><div className='exhibition-inventory-item-cell'>{item.imagePath ? <InventoryImage path={item.imagePath} /> : <span className='exhibition-inventory-item-image exhibition-inventory-item-image--empty'>◇</span>}<span className='exhibition-inventory-item-copy'><strong className='exhibition-inventory-item-number'>{item.itemNumber}</strong>{item.name && <span className='exhibition-inventory-item-name'>{item.name}</span>}{Boolean(item.isArchived) && <span className='exhibition-inventory-archived'>Archived</span>}</span></div></td><td>{item.categoryName}</td><td><span className='exhibition-inventory-details'>{formatWeight(item.grossWeightMilli)}{item.netWeightMilli != null ? `\nNet ${formatWeight(item.netWeightMilli)}` : ''}</span></td><td><span className='exhibition-inventory-details'>{item.diamondDetails ?? '—'}</span></td><td><span className='exhibition-inventory-details'>{item.stoneDetails ?? '—'}</span></td><td>{item.igiCertificateNumber ? <span className='exhibition-inventory-cert-ok'>IGI · {item.igiCertificateNumber}</span> : <span className='exhibition-inventory-cert-missing'>{item.huid ? `HUID · ${item.huid}` : '—'}</span>}</td><td><span className='exhibition-inventory-selection-label'>{item.selectionCount ? `${item.selectionCount} active` : 'None'}</span></td><td>{item.isRegistered ? <button type='button' className='exhibition-inventory-remove' disabled={exhibitionEnded || busy || item.selectionCount > 0} title={item.selectionCount ? 'Remove active customer selections first' : 'Remove registration'} onClick={() => void handleUnregister(item)}>Remove</button> : <span className='exhibition-inventory-cert-missing'>Not registered</span>}</td></tr>)}</tbody></table></div>}
-      <footer className='exhibition-inventory-table-footer'>{items.filter((i) => i.isRegistered).length} registered · {items.length} matching inventory items</footer>
+    <div className='exhibition-inventory-tabs' role='tablist' aria-label='Exhibition inventory lists'>
+      <button type='button' role='tab' aria-selected={activeTab === 'available'} className={activeTab === 'available' ? 'is-active' : ''} onClick={() => setActiveTab('available')}>Inventory <span>{availableItems.length}</span></button>
+      <button type='button' role='tab' aria-selected={activeTab === 'registered'} className={activeTab === 'registered' ? 'is-active' : ''} onClick={() => setActiveTab('registered')}>Registered Inventory <span>{registeredItems.length}</span></button>
     </div>
-    {modalOpen && <div className='exhibition-register-backdrop' role='presentation' onMouseDown={(e) => { if (e.target === e.currentTarget) setModalOpen(false); }}><section className='exhibition-register-modal' role='dialog' aria-modal='true' aria-labelledby='register-modal-title'><header className='exhibition-register-header'><div><h2 id='register-modal-title'>Register inventory</h2><p>Select existing inventory items to make them available at this exhibition.</p></div><button type='button' aria-label='Close' onClick={() => setModalOpen(false)}>×</button></header><form className='exhibition-register-scan' onSubmit={async (e) => { e.preventDefault(); const value = scanValue.trim(); if (!value) return; setBusy(true); try { const result = await registerExhibitionItemByBarcode(exhibitionId, value); setNotice(result === 'registered' ? { kind: 'success', text: `${value} registered.` } : result === 'already-registered' ? { kind: 'warning', text: `${value} is already registered.` } : { kind: 'error', text: `No inventory item found for ${value}.` }); setScanValue(''); await loadItems(); } catch (error) { setNotice({ kind: 'error', text: error instanceof Error ? error.message : 'Scan failed.' }); } finally { setBusy(false); } }}><strong><span /> Scan barcode</strong><input value={scanValue} onChange={(e) => setScanValue(e.target.value)} placeholder='Scan or enter item number' /><button type='submit' disabled={busy || !scanValue.trim()}>Scan</button></form><div className='exhibition-register-search-row'><label className='exhibition-inventory-search'><span aria-hidden='true'>⌕</span><input value={modalSearch} onChange={(e) => setModalSearch(e.target.value)} placeholder='Search available inventory' /></label><select value={modalCategory ?? ''} onChange={(e) => setModalCategory(e.target.value ? Number(e.target.value) : null)}><option value=''>All categories</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div><div className='exhibition-register-table-wrap'><table className='exhibition-register-table'><thead><tr><th></th><th>Item</th><th>Category</th><th>Weight</th></tr></thead><tbody>{modalItems.map((item) => <tr key={item.id}><td><input type='checkbox' checked={selectedIds.includes(item.id)} onChange={(e) => setSelectedIds((ids) => e.target.checked ? [...ids, item.id] : ids.filter((id) => id !== item.id))} /></td><td><strong>{item.itemNumber}</strong>{item.name && <div>{item.name}</div>}</td><td>{item.categoryName}</td><td>{formatWeight(item.grossWeightMilli)}</td></tr>)}{!modalItems.length && <tr><td colSpan={4} className='exhibition-register-no-results'>No unregistered inventory items found.</td></tr>}</tbody></table></div><footer className='exhibition-register-footer'><span>{selectedIds.length} selected</span><div><button type='button' className='exhibition-overview-secondary' onClick={() => setModalOpen(false)}>Cancel</button><button type='button' className='exhibition-overview-primary' disabled={!selectedIds.length || busy} onClick={() => void handleRegisterSelected()}>{busy ? 'Registering…' : `Register ${selectedIds.length || ''} item${selectedIds.length === 1 ? '' : 's'}`}</button></div></footer></section></div>}
+    <div className='exhibition-inventory-table-card'>
+      {renderInventoryTable(sortedItems, activeTab === 'registered')}
+    </div>
   </section>;
 }
 

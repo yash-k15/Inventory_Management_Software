@@ -1,0 +1,605 @@
+/* Exhibition inventory styles are intentionally isolated from the workspace stylesheet. */
+.exhibition-inventory {
+  --inventory-ink    : #332b26;
+  --inventory-muted  : #81766d;
+  --inventory-border : #e8ddd2;
+  --inventory-surface: #fff;
+  --inventory-wash   : #f8f4ef;
+  --inventory-accent : #9a7548;
+  color              : var(--inventory-ink);
+  min-width          : 0;
+}
+
+.exhibition-inventory,
+.exhibition-inventory * {
+  box-sizing: border-box;
+}
+
+.exhibition-inventory .exhibition-inventory-toolbar {
+  display        : flex;
+  align-items    : center;
+  justify-content: space-between;
+  gap            : 16px;
+}
+
+.exhibition-inventory .exhibition-inventory-search {
+  display      : flex;
+  align-items  : center;
+  gap          : 10px;
+  width        : min(100%, 520px);
+  min-height   : 42px;
+  padding      : 0 13px;
+  border       : 1px solid var(--inventory-border);
+  border-radius: 10px;
+  background   : var(--inventory-surface);
+  color        : var(--inventory-muted);
+}
+
+.exhibition-inventory .exhibition-inventory-search>span {
+  font-size  : 22px;
+  line-height: 1;
+}
+
+.exhibition-inventory .exhibition-inventory-search input {
+  width     : 100%;
+  min-width : 0;
+  border    : 0;
+  outline   : 0;
+  background: transparent;
+  color     : var(--inventory-ink);
+  font      : inherit;
+  font-size : 14px;
+}
+
+.exhibition-inventory .exhibition-inventory-search input::placeholder {
+  color: #a3988e;
+}
+
+.exhibition-inventory .exhibition-inventory-frozen {
+  margin       : 0 0 16px;
+  padding      : 11px 14px;
+  border       : 1px solid #ead8b8;
+  border-radius: 9px;
+  background   : #fff8e9;
+  color        : #795b2d;
+  font-size    : 13px;
+}
+
+.exhibition-inventory .exhibition-inventory-notice {
+  display        : flex;
+  align-items    : flex-start;
+  justify-content: space-between;
+  gap            : 12px;
+  margin         : 0 0 16px;
+  padding        : 11px 14px;
+  border         : 1px solid var(--inventory-border);
+  border-radius  : 9px;
+  font-size      : 13px;
+}
+
+.exhibition-inventory .exhibition-inventory-notice--success {
+  border-color: #cce4d3;
+  background  : #f0f8f2;
+  color       : #28663d;
+}
+
+.exhibition-inventory .exhibition-inventory-notice--warning {
+  border-color: #ead8b8;
+  background  : #fff8e9;
+  color       : #795b2d;
+}
+
+.exhibition-inventory .exhibition-inventory-notice--error {
+  border-color: #efceca;
+  background  : #fff3f1;
+  color       : #9a3830;
+}
+
+.exhibition-inventory .exhibition-inventory-notice button {
+  flex       : 0 0 auto;
+  border     : 0;
+  background : transparent;
+  color      : inherit;
+  cursor     : pointer;
+  font-size  : 19px;
+  line-height: 1;
+}
+
+.exhibition-inventory .exhibition-inventory-tabs {
+  display      : flex;
+  align-items  : stretch;
+  gap          : 8px;
+  border-bottom: 1px solid var(--inventory-border);
+}
+
+.exhibition-inventory .exhibition-inventory-tabs>button {
+  display        : inline-flex;
+  align-items    : center;
+  justify-content: center;
+  gap            : 9px;
+  min-height     : 46px;
+  padding        : 0 16px 12px;
+  border         : 0;
+  border-bottom  : 2px solid transparent;
+  background     : transparent;
+  color          : var(--inventory-muted);
+  cursor         : pointer;
+  font           : inherit;
+  font-size      : 14px;
+  font-weight    : 650;
+  white-space    : nowrap;
+}
+
+.exhibition-inventory .exhibition-inventory-tabs>button.is-active {
+  border-bottom-color: var(--inventory-accent);
+  color              : var(--inventory-ink);
+}
+
+.exhibition-inventory .exhibition-inventory-tabs>button>span {
+  display        : inline-flex;
+  align-items    : center;
+  justify-content: center;
+  min-width      : 25px;
+  height         : 23px;
+  padding        : 0 7px;
+  border-radius  : 20px;
+  background     : #f0e6d9;
+  color          : #745b3e;
+  font-size      : 12px;
+  font-weight    : 700;
+}
+
+.exhibition-inventory .exhibition-inventory-table-card {
+  overflow     : hidden;
+  border       : 1px solid var(--inventory-border);
+  border-radius: 12px;
+  background   : var(--inventory-surface);
+}
+
+.exhibition-inventory .exhibition-inventory-list-controls {
+  display      : flex;
+  align-items  : center;
+  gap          : 16px;
+  padding      : 14px 18px;
+  border-bottom: 1px solid #f0e8df;
+}
+
+.exhibition-inventory .exhibition-inventory-category-chips {
+  display    : flex;
+  flex       : 1 1 auto;
+  flex-wrap  : wrap;
+  align-items: center;
+  gap        : 8px;
+  min-width  : 0;
+}
+
+.exhibition-inventory .exhibition-inventory-search--inline {
+  flex         : 0 0 260px;
+  width        : 260px;
+  min-height   : 38px;
+  border-radius: 8px;
+}
+
+.exhibition-inventory .exhibition-inventory-search--inline input {
+  font-size: 13px;
+}
+
+.exhibition-inventory .exhibition-inventory-category-chips>button {
+  display      : inline-flex;
+  align-items  : center;
+  gap          : 7px;
+  min-height   : 31px;
+  padding      : 5px 11px;
+  border       : 1px solid var(--inventory-border);
+  border-radius: 20px;
+  background   : #fff;
+  color        : #65594f;
+  cursor       : pointer;
+  font         : inherit;
+  font-size    : 12px;
+  font-weight  : 600;
+}
+
+.exhibition-inventory .exhibition-inventory-category-chips>button.is-active {
+  border-color: #c9ad8b;
+  background  : #f5ece1;
+  color       : #674b2d;
+}
+
+.exhibition-inventory .exhibition-inventory-category-chips>button>span {
+  color      : #968577;
+  font-size  : 11px;
+  font-weight: 700;
+}
+
+.exhibition-inventory .exhibition-inventory-category-chips>button.is-active span {
+  color: #674b2d;
+}
+
+.exhibition-inventory .exhibition-inventory-table-scroll {
+  width     : 100%;
+  overflow-x: auto;
+}
+
+.exhibition-inventory table.exhibition-inventory-table {
+  width          : 100%;
+  border-collapse: separate;
+  border-spacing : 0;
+  text-align     : left;
+  font-size      : 13px;
+}
+
+.exhibition-inventory .exhibition-inventory-table th {
+  padding       : 12px 13px;
+  border-bottom : 1px solid var(--inventory-border);
+  background    : #faf7f3;
+  color         : #817468;
+  font-size     : 10px;
+  font-weight   : 750;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+  white-space   : nowrap;
+}
+
+.exhibition-inventory .exhibition-inventory-table td {
+  padding       : 12px 13px;
+  border-bottom : 1px solid #f1eae3;
+  color         : #51473f;
+  vertical-align: middle;
+}
+
+.exhibition-inventory .exhibition-inventory-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.exhibition-inventory .exhibition-inventory-table tbody tr:hover {
+  background: #fdfbf8;
+}
+
+.exhibition-inventory .exhibition-inventory-check-column {
+  width     : 42px;
+  min-width : 42px;
+  text-align: center;
+}
+
+.exhibition-inventory .exhibition-inventory-check-column input,
+.exhibition-inventory .exhibition-inventory-select-visible input {
+  width         : 15px;
+  height        : 15px;
+  margin        : 0;
+  accent-color  : var(--inventory-accent);
+  cursor        : pointer;
+  vertical-align: middle;
+}
+
+.exhibition-inventory input:disabled {
+  cursor: not-allowed;
+}
+
+.exhibition-inventory .exhibition-inventory-item-cell {
+  display    : flex;
+  align-items: center;
+  gap        : 10px;
+  min-width  : 155px;
+}
+
+.exhibition-inventory .exhibition-inventory-item-image {
+  display        : inline-flex;
+  flex           : 0 0 42px;
+  align-items    : center;
+  justify-content: center;
+  width          : 42px;
+  height         : 42px;
+  border-radius  : 7px;
+  background     : #f5f0e9;
+  object-fit     : cover;
+}
+
+.exhibition-inventory .exhibition-inventory-item-image--empty {
+  color    : #b7a48e;
+  font-size: 23px;
+}
+
+.exhibition-inventory .exhibition-inventory-item-copy {
+  display       : flex;
+  flex-direction: column;
+  align-items   : flex-start;
+  gap           : 3px;
+  min-width     : 0;
+}
+
+.exhibition-inventory .exhibition-inventory-item-number {
+  color      : var(--inventory-ink);
+  font-size  : 13px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.exhibition-inventory .exhibition-inventory-item-name {
+  max-width    : 180px;
+  overflow     : hidden;
+  color        : var(--inventory-muted);
+  font-size    : 11px;
+  text-overflow: ellipsis;
+  white-space  : nowrap;
+}
+
+.exhibition-inventory .exhibition-inventory-archived {
+  padding      : 2px 6px;
+  border-radius: 4px;
+  background   : #f3e8d4;
+  color        : #85602d;
+  font-size    : 10px;
+  font-weight  : 700;
+}
+
+.exhibition-inventory .exhibition-inventory-details {
+  display    : inline-block;
+  color      : #65594f;
+  line-height: 1.55;
+  white-space: pre-line;
+}
+
+.exhibition-inventory .exhibition-inventory-cert-ok,
+.exhibition-inventory .exhibition-inventory-cert-missing {
+  display    : inline-block;
+  font-size  : 11px;
+  white-space: nowrap;
+}
+
+.exhibition-inventory .exhibition-inventory-cert-ok {
+  color: #34734a;
+}
+
+.exhibition-inventory .exhibition-inventory-cert-missing {
+  color: #978a7d;
+}
+
+.exhibition-inventory .exhibition-inventory-selection-label {
+  display      : inline-block;
+  padding      : 4px 7px;
+  border-radius: 6px;
+  background   : #f4eee7;
+  color        : #766452;
+  font-size    : 11px;
+  white-space  : nowrap;
+}
+
+.exhibition-inventory .exhibition-inventory-empty {
+  padding   : 38px 20px;
+  color     : var(--inventory-muted);
+  text-align: center;
+  font-size : 13px;
+}
+
+.exhibition-inventory .exhibition-inventory-empty p {
+  margin: 0;
+}
+
+.exhibition-inventory .exhibition-inventory-table-footer {
+  padding   : 11px 17px;
+  border-top: 1px solid #f0e8df;
+  color     : var(--inventory-muted);
+  font-size : 11px;
+}
+
+.exhibition-inventory .exhibition-inventory-bulk-actions {
+  display        : flex;
+  align-items    : center;
+  justify-content: space-between;
+  gap            : 14px;
+  padding        : 13px 17px;
+  border-top     : 1px solid var(--inventory-border);
+  background     : #fcfaf7;
+}
+
+.exhibition-inventory .exhibition-inventory-select-visible {
+  display    : inline-flex;
+  align-items: center;
+  gap        : 8px;
+  color      : #6f6257;
+  font-size  : 12px;
+  cursor     : pointer;
+  white-space: nowrap;
+}
+
+.exhibition-inventory .exhibition-inventory-bulk-buttons {
+  display        : flex;
+  align-items    : center;
+  justify-content: flex-end;
+  flex-wrap      : wrap;
+  gap            : 8px;
+}
+
+.exhibition-inventory .exhibition-inventory-bulk-buttons button {
+  min-height   : 34px;
+  padding      : 7px 12px;
+  border       : 1px solid #d8c9b9;
+  border-radius: 7px;
+  background   : #fff;
+  color        : #49382b;
+  cursor       : pointer;
+  font         : inherit;
+  font-size    : 12px;
+  font-weight  : 650;
+}
+
+.exhibition-inventory .exhibition-inventory-bulk-buttons button:hover:not(:disabled) {
+  background  : #4a382b;
+  border-color: #4a382b;
+  color       : #fff;
+}
+
+.exhibition-inventory .exhibition-inventory-bulk-buttons button:disabled {
+  opacity: .45;
+  cursor : not-allowed;
+}
+
+.exhibition-inventory .exhibition-inventory-bulk-buttons button.exhibition-overview-primary {
+  border-color: #211d19;
+  background  : #211d19;
+  color       : #fff;
+}
+
+.exhibition-inventory .exhibition-inventory-bulk-buttons button.exhibition-overview-primary:hover:not(:disabled) {
+  border-color: #4a382b;
+  background  : #4a382b;
+  color       : #fff;
+}
+
+.exhibition-inventory .exhibition-inventory-bulk-buttons button:disabled:hover {
+  border-color: #d8c9b9;
+  background  : #fff;
+  color       : #49382b;
+}
+
+@media (max-width: 900px) {
+  .exhibition-inventory .exhibition-inventory-table {
+    min-width: 980px;
+  }
+}
+
+@media (max-width: 600px) {
+  .exhibition-inventory .exhibition-inventory-toolbar {
+    align-items: stretch;
+  }
+
+  .exhibition-inventory .exhibition-inventory-search {
+    width: 100%;
+  }
+
+  .exhibition-inventory .exhibition-inventory-tabs {
+    gap: 0;
+  }
+
+  .exhibition-inventory .exhibition-inventory-tabs>button {
+    flex         : 1;
+    gap          : 6px;
+    padding-right: 8px;
+    padding-left : 8px;
+    font-size    : 12px;
+  }
+
+  .exhibition-inventory .exhibition-inventory-list-controls {
+    align-items   : stretch;
+    flex-direction: column-reverse;
+    gap           : 12px;
+    padding       : 12px;
+  }
+
+  .exhibition-inventory .exhibition-inventory-search--inline {
+    flex : 0 0 auto;
+    width: 100%;
+  }
+
+  .exhibition-inventory .exhibition-inventory-bulk-actions {
+    align-items   : flex-start;
+    flex-direction: column;
+  }
+
+  .exhibition-inventory .exhibition-inventory-bulk-buttons {
+    width          : 100%;
+    justify-content: flex-start;
+  }
+}
+
+/* Inventory-specific tab treatment and controls layout. */
+.exhibition-inventory .exhibition-inventory-tabs {
+  display      : inline-flex;
+  width        : fit-content;
+  max-width    : 100%;
+  gap          : 5px;
+  padding      : 5px;
+  border       : 1px solid var(--inventory-border);
+  border-radius: 11px;
+  background   : #eee6dc;
+}
+
+.exhibition-inventory .exhibition-inventory-tabs>button {
+  min-height   : 38px;
+  padding      : 0 15px;
+  border       : 1px solid transparent;
+  border-radius: 7px;
+  background   : transparent;
+  color        : #75695e;
+}
+
+.exhibition-inventory .exhibition-inventory-tabs>button.is-active {
+  border-color: #e5d7c7;
+  background  : #fff;
+  color       : var(--inventory-ink);
+  box-shadow  : 0 1px 2px rgb(51 43 38 / 7%);
+}
+
+.exhibition-inventory .exhibition-inventory-tabs>button>span {
+  background: #e9ddce;
+}
+
+.exhibition-inventory .exhibition-inventory-list-controls {
+  align-items   : stretch;
+  flex-direction: column;
+  gap           : 14px;
+}
+
+.exhibition-inventory .exhibition-inventory-category-chips {
+  flex : 0 0 auto;
+  width: 100%;
+}
+
+.exhibition-inventory .exhibition-inventory-search--inline {
+  flex : 0 0 auto;
+  width: min(100%, 440px);
+}
+
+.exhibition-inventory .exhibition-inventory-sort-button {
+  display       : inline-flex;
+  align-items   : center;
+  gap           : 4px;
+  padding       : 0;
+  border        : 0;
+  background    : transparent;
+  color         : inherit;
+  cursor        : pointer;
+  font          : inherit;
+  font-weight   : inherit;
+  letter-spacing: inherit;
+  text-align    : left;
+  text-transform: inherit;
+  white-space   : nowrap;
+}
+
+.exhibition-inventory .exhibition-inventory-sort-button:hover {
+  color: var(--inventory-ink);
+}
+
+.exhibition-inventory .exhibition-inventory-sort-button span {
+  color    : var(--inventory-accent);
+  font-size: 12px;
+}
+
+.exhibition-inventory .exhibition-inventory-totals-row td {
+  padding-top   : 13px;
+  padding-bottom: 13px;
+  border-top    : 2px solid #ded0c0;
+  border-bottom : 0;
+  background    : #f8f3ed;
+  color         : #493b2f;
+  font-weight   : 750;
+  white-space   : nowrap;
+}
+
+@media (max-width: 600px) {
+  .exhibition-inventory .exhibition-inventory-tabs {
+    display: flex;
+    width  : 100%;
+  }
+
+  .exhibition-inventory .exhibition-inventory-tabs>button {
+    flex       : 1;
+    white-space: normal;
+  }
+
+  .exhibition-inventory .exhibition-inventory-search--inline {
+    width: 100%;
+  }
+}

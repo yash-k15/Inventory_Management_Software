@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { createExhibitionCustomer, getExhibitionCustomers, type ExhibitionCustomerRow } from './exhibition.customers.queries';
+import { getExhibitionCustomers, type ExhibitionCustomerRow } from './exhibition.customers.queries';
+import CustomerPickerModal from './CustomerPickerModal';
 import './ExhibitionCustomers.css';
 
 type Filter = 'all' | 'with' | 'without';
@@ -12,34 +13,15 @@ export default function ExhibitionCustomers({ exhibitionId, onOpenSelection }: {
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState<Notice>(null);
   const [addOpen, setAddOpen] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [businessName, setBusinessName] = useState('');
-  const [contactName, setContactName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [city, setCity] = useState('');
 
-  async function load() {
-    setLoading(true);
-    try { setCustomers(await getExhibitionCustomers(exhibitionId, search)); }
-    catch (error) { setNotice({ error: true, text: error instanceof Error ? error.message : 'Unable to load exhibition customers.' }); }
-    finally { setLoading(false); }
-  }
   useEffect(() => { let alive = true; setLoading(true); void getExhibitionCustomers(exhibitionId, search).then((rows) => { if (alive) setCustomers(rows); }).catch((error) => { if (alive) setNotice({ error: true, text: error instanceof Error ? error.message : 'Unable to load exhibition customers.' }); }).finally(() => { if (alive) setLoading(false); }); return () => { alive = false; }; }, [exhibitionId, search]);
 
   const counts = useMemo(() => ({ all: customers.length, with: customers.filter(c => c.activeItemCount > 0).length, without: customers.filter(c => c.activeItemCount === 0).length }), [customers]);
   const visible = customers.filter(c => filter === 'all' || (filter === 'with' ? c.activeItemCount > 0 : c.activeItemCount === 0));
 
-  async function saveCustomer(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!businessName.trim() || saving) return;
-    setSaving(true);
-    try {
-      await createExhibitionCustomer({ businessName, contactName, phone, city });
-      setAddOpen(false); setBusinessName(''); setContactName(''); setPhone(''); setCity('');
-      setNotice({ error: false, text: 'Customer added.' });
-      await load();
-    } catch (error) { setNotice({ error: true, text: error instanceof Error ? error.message : 'Unable to add customer.' }); }
-    finally { setSaving(false); }
+  async function handleCustomerAdded(customer: { id: number; businessName: string }) {
+    setCustomers(await getExhibitionCustomers(exhibitionId, search));
+    setNotice({ error: false, text: `${customer.businessName} added to this exhibition.` });
   }
 
   return <section className='exhibition-customers'>
@@ -62,14 +44,7 @@ export default function ExhibitionCustomers({ exhibitionId, onOpenSelection }: {
       </table></div>
       <footer className='exhibition-customers-footer'>Showing {visible.length} of {customers.length} {customers.length===1?'attendee':'attendees'}. “Open selection” goes to the Selections tab with this customer chosen.</footer>
     </div>
-    {addOpen && <div className='exhibition-customers-backdrop' onMouseDown={e => { if (e.target===e.currentTarget) setAddOpen(false); }}><form className='exhibition-customers-modal' role='dialog' aria-modal='true' aria-labelledby='exhibition-add-customer-title' onSubmit={saveCustomer}>
-      <header><div><h2 id='exhibition-add-customer-title'>Add customer</h2><p>Create a customer record for this exhibition.</p></div><button type='button' onClick={() => setAddOpen(false)} aria-label='Close'>×</button></header>
-      <label>Business name <span>*</span><input autoFocus required value={businessName} onChange={e=>setBusinessName(e.target.value)} /></label>
-      <label>Contact name<input value={contactName} onChange={e=>setContactName(e.target.value)} /></label>
-      <label>Phone number<input value={phone} onChange={e=>setPhone(e.target.value)} /></label>
-      <label>City<input value={city} onChange={e=>setCity(e.target.value)} /></label>
-      <footer><button type='button' className='exhibition-overview-secondary' onClick={() => setAddOpen(false)}>Cancel</button><button type='submit' className='exhibition-overview-primary' disabled={!businessName.trim()||saving}>{saving?'Saving…':'Add customer'}</button></footer>
-    </form></div>}
+    {addOpen && <CustomerPickerModal exhibitionId={exhibitionId} onClose={() => setAddOpen(false)} onAdded={async (customer) => { await handleCustomerAdded(customer); setAddOpen(false); }} />}
   </section>;
 }
 

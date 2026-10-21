@@ -98,10 +98,6 @@ function Overview({
   exhibition: Exhibition;
   onOpenTab: (tab: WorkspaceTab) => void;
 }) {
-  const customersWithoutSelections = Math.max(
-    0,
-    exhibition.customersAttended - exhibition.customersWithSelections,
-  );
   const categoryTotal = exhibition.categories.reduce(
     (total, category) => total + category.itemCount,
     0,
@@ -183,17 +179,17 @@ function Overview({
         </article>
         <article className='exhibition-overview-metric'>
           <span className='exhibition-overview-metric-label'>
-            With selections
+            Total selections
           </span>
-          <strong>{exhibition.customersWithSelections}</strong>
-          <p>{customersWithoutSelections} attended, none yet</p>
+          <strong>{exhibition.totalSelections}</strong>
+          <p>Active selections across all customers</p>
         </article>
         <article className='exhibition-overview-metric'>
           <span className='exhibition-overview-metric-label'>
-            Active selections
+            Unique selections
           </span>
-          <strong>{exhibition.totalSelections}</strong>
-          <p>Selections are not sales</p>
+          <strong>{exhibition.distinctSelectedItems}</strong>
+          <p>Distinct pieces selected, counted once</p>
         </article>
       </section>
 

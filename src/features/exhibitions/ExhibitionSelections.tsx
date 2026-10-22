@@ -5,6 +5,8 @@ import {
   addSelectionItem,
   getSelectionCustomers,
   getSelectionItems,
+  getSelectionOrders,
+  type SelectionOrderSummary,
   removeSelectionItem,
   searchSelectionInventory,
   type SelectionCandidate,
@@ -12,6 +14,7 @@ import {
   type SelectionRow,
 } from './selection.queries';
 import CustomerPickerModal from './CustomerPickerModal';
+import CreateOrderModal from '../orders/CreateOrderModal';
 import './ExhibitionSelections.css';
 function weight(n: number | null) {
   return n == null ? '—' : `${(n / 1000).toFixed(3)}`;
@@ -80,6 +83,11 @@ export default function ExhibitionSelections({
   onRefreshExhibition: () => Promise<void>;
   initialCustomerId?: number | null;
 }) {
+  const [activeTab, setActiveTab] = useState<'items' | 'orders'>('items');
+  const [selectedForOrder, setSelectedForOrder] = useState<number[]>([]);
+  const [createOrderOpen, setCreateOrderOpen] = useState(false);
+  const [orders, setOrders] = useState<SelectionOrderSummary[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
   const [customers, setCustomers] = useState<SelectionCustomer[]>([]),
     [selectedId, setSelectedId] = useState<number | null>(null),
     [items, setItems] = useState<SelectionRow[]>([]),
@@ -214,6 +222,28 @@ export default function ExhibitionSelections({
         }),
       );
   }, [selectedId, customers]);
+  useEffect(() => {
+    let dead = false;
+    const c = customers.find((row) => row.id === selectedId);
+    if (!c) {
+      setOrders([]);
+      return () => { dead = true; };
+    }
+    setOrdersLoading(true);
+    void getSelectionOrders(exhibitionId, c.id)
+      .then((rows) => { if (!dead) setOrders(rows); })
+      .catch((e) => {
+        if (!dead) setFeedback({ error: true, text: e instanceof Error ? e.message : 'Unable to load orders.' });
+      })
+      .finally(() => { if (!dead) setOrdersLoading(false); });
+    return () => { dead = true; };
+  }, [exhibitionId, selectedId, customers, items]);
+
+  useEffect(() => {
+    setSelectedForOrder([]);
+    setActiveTab('items');
+  }, [selectedId, exhibitionId]);
+
   useEffect(() => {
     let dead = false;
     void searchSelectionInventory(exhibitionId, search)
@@ -603,10 +633,27 @@ export default function ExhibitionSelections({
             </section>
             <section className='selection-items-section selection-section-card'>
               <div className='selection-items-heading'>
-                <h3>Selected items</h3>
-                <span>{active.length} active</span>
+                <div className='selection-tabs' role='tablist' aria-label='Customer exhibition records'>
+                  <button type='button' role='tab' aria-selected={activeTab === 'items'} className={activeTab === 'items' ? 'is-active' : ''} onClick={() => setActiveTab('items')}>Selected items <span>{active.length}</span></button>
+                  <button type='button' role='tab' aria-selected={activeTab === 'orders'} className={activeTab === 'orders' ? 'is-active' : ''} onClick={() => setActiveTab('orders')}>Orders <span>{orders.length}</span></button>
+                </div>
+                {activeTab === 'items' && <div className='selection-order-actions'>
+                  <span>{selectedForOrder.length} selected for order</span>
+                  <button type='button' className='selection-button selection-button--primary' disabled={!selectedForOrder.length || selectedForOrder.some(id => active.find(item => item.id === id)?.locked === 1)} onClick={() => setCreateOrderOpen(true)}>Create order</button>
+                </div>}
               </div>
-              {active.length === 0 ? (
+              {activeTab === 'orders' ? (
+                ordersLoading ? <p className='selection-muted'>Loading orders…</p> : orders.length === 0 ? <div className='selection-no-items'><p>No orders for this customer in this exhibition.</p><span>Orders created from this selection will appear here.</span></div> : (
+                  <div className='selection-orders-list'>
+                    {orders.map(order => <article className='selection-order-card' key={order.id}>
+                      <div><strong>{order.orderNumber}</strong><small>{new Date(order.createdAt.replace(' ', 'T')).toLocaleDateString('en-IN')}</small></div>
+                      <span className={`selection-order-status status-${order.status.toLowerCase().replace(/\s+/g, '-')}`}>{order.status}</span>
+                      <span>{order.itemCount} item{order.itemCount === 1 ? '' : 's'}</span>
+                      <strong>{new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(order.totalPaise / 100)}</strong>
+                    </article>)}
+                  </div>
+                )
+              ) : active.length === 0 ? (
                 <div className='selection-no-items'>
                   <p>No items selected yet.</p>
                   <span>
@@ -618,6 +665,7 @@ export default function ExhibitionSelections({
                   <table className='selection-items-table'>
                     <thead>
                       <tr>
+                        <th aria-label='Select for order' />
                         {(
                           [
                             ['item', 'Item'],
@@ -660,12 +708,16 @@ export default function ExhibitionSelections({
                             </button>
                           </th>
                         ))}
+                        <th>Order status</th>
                         <th aria-label='Actions' />
                       </tr>
                     </thead>
                     <tbody>
                       {sortedActive.map((i) => (
                         <tr key={i.id}>
+                          <td className='selection-order-checkbox-cell'>
+                            <input type='checkbox' aria-label={`Include ${i.itemNumber} in order`} checked={selectedForOrder.includes(i.id)} disabled={i.locked === 1 || i.inventoryItemId == null} onChange={(event) => setSelectedForOrder(current => event.target.checked ? [...current, i.id] : current.filter(id => id !== i.id))} />
+                          </td>
                           <td>
                             <div className='selection-table-item'>
                               <Thumbnail
@@ -715,6 +767,9 @@ export default function ExhibitionSelections({
                                 ))
                               : '—'}
                           </td>
+                          <td className='selection-order-status-cell'>
+                            {i.locked ? <span className='selection-locked-badge'>Ordered</span> : <span className='selection-not-ordered-badge'>Not ordered</span>}
+                          </td>
                           <td className='selection-action-cell'>
                             {i.locked ? (
                               <span className='selection-locked-badge'>
@@ -735,11 +790,12 @@ export default function ExhibitionSelections({
                     </tbody>
                     <tfoot>
                       <tr>
-                        <th colSpan={1}>Totals ({active.length} items)</th>
+                        <th colSpan={2}>Totals ({active.length} items)</th>
                         <th>{weight(totals.gross)} g</th>
                         <th>{totals.net ? `${weight(totals.net)} g` : '—'}</th>
                         <th>{detailTotals(active, 'diamonds')}</th>
                         <th>{detailTotals(active, 'stones')}</th>
+                        <th />
                         <th />
                       </tr>
                     </tfoot>
@@ -761,6 +817,22 @@ export default function ExhibitionSelections({
           </>
         )}
       </div>
+      {createOrderOpen && customer && (
+        <CreateOrderModal
+          initialCustomerId={customer.id}
+          initialExhibitionId={exhibitionId}
+          initialItems={active.filter(item => selectedForOrder.includes(item.id) && item.inventoryItemId != null).map(item => ({ inventoryItemId: item.inventoryItemId as number, selectionItemId: item.id, itemNumber: item.itemNumber }))}
+          onClose={() => setCreateOrderOpen(false)}
+          onCreated={async () => {
+            setCreateOrderOpen(false);
+            setSelectedForOrder([]);
+            setActiveTab('orders');
+            await reload();
+            setOrders(await getSelectionOrders(exhibitionId, customer.id));
+            setFeedback({ error: false, text: 'Order created successfully.' });
+          }}
+        />
+      )}
       {addCustomerOpen && (
         <CustomerPickerModal
           exhibitionId={exhibitionId}

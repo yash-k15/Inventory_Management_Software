@@ -10,6 +10,8 @@ pub struct NewOrderItem {
     agreed_price_paise: i64,
     item_snapshot: String,
     pricing_breakdown: String,
+    #[serde(default)]
+    selection_item_id: Option<i64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -18,6 +20,8 @@ pub struct CreateOrderInput {
     customer_id: i64,
     exhibition_id: Option<i64>,
     notes: String,
+    #[serde(default)]
+    final_total_paise: Option<i64>,
     items: Vec<NewOrderItem>,
 }
 
@@ -31,6 +35,9 @@ pub fn create_confirmed_order(
     }
     if input.items.is_empty() {
         return Err("Add at least one jewelry item.".to_string());
+    }
+    if input.final_total_paise.is_some_and(|value| value < 0) {
+        return Err("Enter a valid final order total.".to_string());
     }
 
     let mut seen = std::collections::HashSet::new();
@@ -47,7 +54,6 @@ pub fn create_confirmed_order(
             .map_err(|_| "The pricing details are invalid. Please try again.".to_string())?;
     }
 
-    // The SQL plugin resolves sqlite:<filename> relative to AppConfig.
     let db_filename = if cfg!(debug_assertions) {
         "inventory-dev.db"
     } else {
@@ -96,6 +102,28 @@ pub fn create_confirmed_order(
     }
 
     for item in &input.items {
+        if let Some(selection_item_id) = item.selection_item_id {
+            let valid_selection: bool = transaction
+                .query_row(
+                    "SELECT EXISTS(
+                       SELECT 1
+                       FROM selection_item si
+                       JOIN selection s ON s.id = si.selection_id
+                       WHERE si.id = ?1
+                         AND si.inventory_item_id = ?2
+                         AND si.status = 'active'
+                         AND s.customer_id = ?3
+                         AND s.exhibition_id = ?4
+                     )",
+                    params![selection_item_id, item.inventory_item_id, input.customer_id, input.exhibition_id],
+                    |row| row.get(0),
+                )
+                .map_err(|e| format!("Could not validate the selected item: {e}"))?;
+            if !valid_selection {
+                return Err("One of the selected items no longer belongs to this customer's exhibition selection.".to_string());
+            }
+        }
+
         let item_number: Option<String> = transaction
             .query_row(
                 "SELECT item_number FROM item WHERE id = ?1 AND is_archived = 0",
@@ -113,15 +141,20 @@ pub fn create_confirmed_order(
                  FROM customer_order_item coi
                  JOIN customer_order co ON co.id = coi.order_id
                  WHERE co.status <> 'Cancelled'
+                   AND co.customer_id = ?1
+                   AND co.exhibition_id IS ?2
                    AND (
                      coi.selection_item_id IN (
                        SELECT si.id FROM selection_item si
-                       WHERE si.inventory_item_id = ?1
+                       JOIN selection s ON s.id = si.selection_id
+                       WHERE si.inventory_item_id = ?3
+                         AND s.customer_id = co.customer_id
+                         AND s.exhibition_id IS co.exhibition_id
                      )
-                     OR CAST(json_extract(coi.item_snapshot, '$.inventory_item_id') AS INTEGER) = ?1
+                     OR (coi.selection_item_id IS NULL AND CAST(json_extract(coi.item_snapshot, '$.inventory_item_id') AS INTEGER) = ?3)
                    )
                  ORDER BY co.id DESC LIMIT 1",
-                [item.inventory_item_id],
+                params![input.customer_id, input.exhibition_id, item.inventory_item_id],
                 |row| row.get(0),
             )
             .optional()
@@ -133,9 +166,9 @@ pub fn create_confirmed_order(
 
     transaction
         .execute(
-            "INSERT INTO customer_order (customer_id, customer_name_snapshot, exhibition_id, status)
-             VALUES (?1, ?2, ?3, 'Confirmed')",
-            params![input.customer_id, customer_name, input.exhibition_id],
+            "INSERT INTO customer_order (customer_id, customer_name_snapshot, exhibition_id, status, final_total_paise)
+             VALUES (?1, ?2, ?3, 'Confirmed', ?4)",
+            params![input.customer_id, customer_name, input.exhibition_id, input.final_total_paise],
         )
         .map_err(|e| format!("Could not create the order: {e}"))?;
     let order_id = transaction.last_insert_rowid();
@@ -145,9 +178,10 @@ pub fn create_confirmed_order(
             .execute(
                 "INSERT INTO customer_order_item
                  (order_id, selection_item_id, item_snapshot, pricing_breakdown, agreed_price_paise)
-                 VALUES (?1, NULL, ?2, ?3, ?4)",
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
                 params![
                     order_id,
+                    item.selection_item_id,
                     item.item_snapshot,
                     item.pricing_breakdown,
                     item.agreed_price_paise

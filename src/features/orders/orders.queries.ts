@@ -79,11 +79,15 @@ export async function getOrders(filters: OrdersFilters): Promise<OrderRow[]> {
          WHERE coi.order_id = co.id
        ) AS itemCount,
        co.created_at AS orderDate,
-       COALESCE((
-         SELECT SUM(coi.agreed_price_paise)
-         FROM customer_order_item coi
-         WHERE coi.order_id = co.id
-       ), 0) AS totalValuePaise,
+       COALESCE(
+         co.final_total_paise,
+         (
+           SELECT SUM(coi.agreed_price_paise)
+           FROM customer_order_item coi
+           WHERE coi.order_id = co.id
+         ),
+         0
+       ) AS totalValuePaise,
        co.status
      FROM customer_order co
      LEFT JOIN customer c ON c.id = co.customer_id
@@ -123,15 +127,15 @@ export async function getOrdersSummary(): Promise<OrdersSummary> {
          WHERE status = 'Confirmed'
        ) AS confirmedCount,
        (
-         SELECT COALESCE(SUM(item_total), 0)
+         SELECT COALESCE(SUM(order_total), 0)
          FROM (
            SELECT
              co.id,
-             SUM(coi.agreed_price_paise) AS item_total
+             COALESCE(co.final_total_paise, SUM(coi.agreed_price_paise), 0) AS order_total
            FROM customer_order co
-           JOIN customer_order_item coi ON coi.order_id = co.id
+           LEFT JOIN customer_order_item coi ON coi.order_id = co.id
            WHERE co.status = 'Confirmed'
-           GROUP BY co.id
+           GROUP BY co.id, co.final_total_paise
          )
        ) AS confirmedValuePaise,
        (
@@ -205,7 +209,6 @@ export async function getOrderFilterOptions(): Promise<OrderFilterOptions> {
   return { customers, exhibitions };
 }
 
-
 export interface OrderDetailItem {
   id: number;
   itemNumber: string;
@@ -241,7 +244,8 @@ export async function getOrderDetails(orderId: number): Promise<OrderDetails | n
     contactName: string | null; phone: string | null; city: string | null;
     exhibitionId: number | null; exhibitionName: string | null;
     exhibitionStartDate: string | null; exhibitionEndDate: string | null;
-    status: OrderStatus; createdAt: string; confirmedAt: string | null; notes: string | null;
+    status: OrderStatus; createdAt: string; confirmedAt: string | null;
+    notes: string | null; finalTotalPaise: number | null;
   }[]>(`
     SELECT
       co.id,
@@ -256,6 +260,7 @@ export async function getOrderDetails(orderId: number): Promise<OrderDetails | n
       e.end_date AS exhibitionEndDate,
       co.status,
       co.created_at AS createdAt,
+      co.final_total_paise AS finalTotalPaise,
       (SELECT osh.changed_at FROM order_status_history osh WHERE osh.order_id = co.id AND osh.status = 'Confirmed' ORDER BY osh.changed_at LIMIT 1) AS confirmedAt,
       (SELECT osh.notes FROM order_status_history osh WHERE osh.order_id = co.id AND osh.notes IS NOT NULL AND trim(osh.notes) <> '' ORDER BY osh.changed_at DESC, osh.id DESC LIMIT 1) AS notes
     FROM customer_order co
@@ -287,5 +292,11 @@ export async function getOrderDetails(orderId: number): Promise<OrderDetails | n
       agreedPricePaise: row.agreedPricePaise,
     };
   });
-  return { ...header, items, totalValuePaise: items.reduce((sum, item) => sum + item.agreedPricePaise, 0) };
+  return {
+    ...header,
+    items,
+    totalValuePaise:
+      header.finalTotalPaise ??
+      items.reduce((sum, item) => sum + item.agreedPricePaise, 0),
+  };
 }

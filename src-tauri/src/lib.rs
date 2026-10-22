@@ -4,7 +4,7 @@ use tauri_plugin_sql::{Migration, MigrationKind};
 #[tauri::command]
 fn greet(name: &str) -> String {
     format!(
-        "Hello, {}! You've been greeted from the Rust backend!",
+        "Hello, {}! You've been greeted from the Tauri application!",
         name
     )
 }
@@ -47,87 +47,24 @@ pub fn run() {
     let orders_safeguards = include_str!("../../src/db/migrations/011_orders_safeguards.sql");
     let activity_log = include_str!("../../src/db/migrations/012_activity_log.sql");
     let activity_operation_id = include_str!("../../src/db/migrations/013_activity_operation_id.sql");
+    let order_final_total = include_str!("../../src/db/migrations/014_order_final_total.sql");
 
     let migrations = || {
         vec![
-            Migration {
-                version: 1,
-                description: "initial database schema",
-                sql: initial_schema,
-                kind: MigrationKind::Up,
-            },
-            Migration {
-                version: 2,
-                description: "initial jewelry categories",
-                sql: initial_categories,
-                kind: MigrationKind::Up,
-            },
-            Migration {
-                version: 3,
-                description: "initial jewelry reference data",
-                sql: jewelry_reference_data,
-                kind: MigrationKind::Up,
-            },
-            Migration {
-                version: 4,
-                description: "add IGI certificate number",
-                sql: igi_certificate_number,
-                kind: MigrationKind::Up,
-            },
-            Migration {
-                version: 5,
-                description: "remove redundant certification boolean",
-                sql: remove_is_certified,
-                kind: MigrationKind::Up,
-            },
-            Migration {
-                version: 6,
-                description: "add gold types to inventory items",
-                sql: include_str!("../../src/db/migrations/006_gold_type.sql"),
-                kind: MigrationKind::Up,
-            },
-            Migration {
-                version: 7,
-                description: "add net weight to inventory items",
-                sql: net_weight,
-                kind: MigrationKind::Up,
-            },
-            Migration {
-                version: 8,
-                description: "add optional customer contact details",
-                sql: customer_contact_details,
-                kind: MigrationKind::Up,
-            },
-            Migration {
-                version: 9,
-                description: "initialize pricing settings defaults",
-                sql: settings_defaults,
-                kind: MigrationKind::Up,
-            },
-            Migration {
-                version: 10,
-                description: "support multi-item and direct orders",
-                sql: orders_migration,
-                kind: MigrationKind::Up,
-            },
-            Migration {
-                version: 11,
-                description: "add order integrity safeguards",
-                sql: orders_safeguards,
-                kind: MigrationKind::Up,
-            },
-            Migration {
-                version: 12,
-                description: "add inventory and selection activity log",
-                sql: activity_log,
-                kind: MigrationKind::Up,
-            },
-            Migration {
-                version: 13,
-                description: "add operation id to activity log",
-                sql: activity_operation_id,
-                kind: MigrationKind::Up,
-            },
+            Migration { version: 1, description: "initial database schema", sql: initial_schema, kind: MigrationKind::Up },
+            Migration { version: 2, description: "initial jewelry categories", sql: initial_categories, kind: MigrationKind::Up },
+            Migration { version: 3, description: "initial jewelry reference data", sql: jewelry_reference_data, kind: MigrationKind::Up },
+            Migration { version: 4, description: "add IGI certificate number", sql: igi_certificate_number, kind: MigrationKind::Up },
+            Migration { version: 5, description: "remove redundant certification boolean", sql: remove_is_certified, kind: MigrationKind::Up },
+            Migration { version: 6, description: "add gold types to inventory items", sql: include_str!("../../src/db/migrations/006_gold_type.sql"), kind: MigrationKind::Up },
+            Migration { version: 7, description: "add net weight to inventory items", sql: net_weight, kind: MigrationKind::Up },
+            Migration { version: 8, description: "add optional customer contact details", sql: customer_contact_details, kind: MigrationKind::Up },
+            Migration { version: 9, description: "initialize pricing settings defaults", sql: settings_defaults, kind: MigrationKind::Up },
+            Migration { version: 10, description: "support multi-item and direct orders", sql: orders_migration, kind: MigrationKind::Up },
+            Migration { version: 11, description: "add order integrity safeguards", sql: orders_safeguards, kind: MigrationKind::Up },
+            Migration { version: 12, description: "add inventory and selection activity log", sql: activity_log, kind: MigrationKind::Up },
+            Migration { version: 13, description: "add operation id to activity log", sql: activity_operation_id, kind: MigrationKind::Up },
+            Migration { version: 14, description: "support final order total overrides", sql: order_final_total, kind: MigrationKind::Up },
         ]
     };
 

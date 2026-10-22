@@ -206,8 +206,13 @@ export async function getSelectionItems(selectionId: number) {
            SELECT 1
            FROM customer_order_item coi
            JOIN customer_order co ON co.id = coi.order_id
-           WHERE coi.selection_item_id = si.id
-             AND co.status <> 'Cancelled'
+           WHERE co.status <> 'Cancelled'
+             AND co.customer_id = (SELECT customer_id FROM selection WHERE id = si.selection_id)
+             AND co.exhibition_id = (SELECT exhibition_id FROM selection WHERE id = si.selection_id)
+             AND (
+               coi.selection_item_id = si.id
+               OR (coi.selection_item_id IS NULL AND CAST(json_extract(coi.item_snapshot, '$.inventory_item_id') AS INTEGER) = si.inventory_item_id)
+             )
          ) THEN 1
          ELSE 0
        END AS locked
@@ -450,8 +455,13 @@ export async function removeSelectionItem(selectionItemId: number) {
            SELECT 1
            FROM customer_order_item coi
            JOIN customer_order co ON co.id = coi.order_id
-           WHERE coi.selection_item_id = si.id
-             AND co.status <> 'Cancelled'
+           WHERE co.status <> 'Cancelled'
+             AND co.customer_id = (SELECT customer_id FROM selection WHERE id = si.selection_id)
+             AND co.exhibition_id = (SELECT exhibition_id FROM selection WHERE id = si.selection_id)
+             AND (
+               coi.selection_item_id = si.id
+               OR (coi.selection_item_id IS NULL AND CAST(json_extract(coi.item_snapshot, '$.inventory_item_id') AS INTEGER) = si.inventory_item_id)
+             )
          ) THEN 1
          ELSE 0
        END AS locked,
@@ -502,4 +512,47 @@ export async function removeSelectionItem(selectionItemId: number) {
       itemNumbers: [row.itemNumber],
     });
   }
+}
+
+
+export interface SelectionOrderSummary {
+  id: number;
+  orderNumber: string;
+  status: string;
+  createdAt: string;
+  itemCount: number;
+  totalPaise: number;
+}
+
+export async function getSelectionOrders(
+  exhibitionId: number,
+  customerId: number,
+): Promise<SelectionOrderSummary[]> {
+  const db = await getDatabase();
+  return db.select<SelectionOrderSummary[]>(`
+    SELECT
+      co.id,
+      'ORD-' || printf('%04d', co.id) AS orderNumber,
+      co.status,
+      co.created_at AS createdAt,
+      COUNT(coi.id) AS itemCount,
+      COALESCE(SUM(coi.agreed_price_paise), 0) AS totalPaise
+    FROM customer_order co
+    LEFT JOIN customer_order_item coi ON coi.order_id = co.id
+    WHERE co.customer_id = ?
+      AND (
+        co.exhibition_id = ?
+        OR EXISTS (
+          SELECT 1
+          FROM customer_order_item linked_coi
+          JOIN selection_item linked_si ON linked_si.id = linked_coi.selection_item_id
+          JOIN selection linked_s ON linked_s.id = linked_si.selection_id
+          WHERE linked_coi.order_id = co.id
+            AND linked_s.customer_id = co.customer_id
+            AND linked_s.exhibition_id = ?
+        )
+      )
+    GROUP BY co.id
+    ORDER BY co.created_at DESC, co.id DESC
+  `, [customerId, exhibitionId, exhibitionId]);
 }

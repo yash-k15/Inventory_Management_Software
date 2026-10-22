@@ -22,7 +22,9 @@ export interface CreateOrderInventoryItem {
   categoryName: string;
   name: string | null;
   grossWeightMilli: number | null;
+  netWeightMilli: number | null;
   diamondDetails: string;
+  stoneDetails: string;
   isArchived: number;
   existingOrderNumber: string | null;
 }
@@ -92,15 +94,29 @@ export async function searchCreateOrderInventory(
         c.name AS categoryName,
         i.name,
         i.gross_weight_milli AS grossWeightMilli,
+        i.net_weight_milli AS netWeightMilli,
         COALESCE((
           SELECT group_concat(
-            ds.name || ' · ' || printf('%.3f', d.weight_milli / 1000.0) || ' ct',
-            ', '
+            COALESCE(ds.code, ds.name) || ': ' ||
+            printf('%.3f', d.weight_milli / 1000.0) || ' ct' ||
+            CASE WHEN d.pieces IS NOT NULL THEN ' (' || d.pieces || ' pcs)' ELSE '' END,
+            char(10)
           )
           FROM item_diamond d
           JOIN diamond_shape ds ON ds.id = d.shape_id
           WHERE d.item_id = i.id
         ), '') AS diamondDetails,
+        COALESCE((
+          SELECT group_concat(
+            COALESCE(st.tag_label, st.name) || ': ' ||
+            printf('%.3f', s.weight_milli / 1000.0) || ' ct' ||
+            CASE WHEN s.pieces IS NOT NULL THEN ' (' || s.pieces || ' pcs)' ELSE '' END,
+            char(10)
+          )
+          FROM item_stone s
+          JOIN stone_type st ON st.id = s.stone_type_id
+          WHERE s.item_id = i.id
+        ), '') AS stoneDetails,
         i.is_archived AS isArchived,
         (
           SELECT 'ORD-' || printf('%04d', co.id)
@@ -131,10 +147,73 @@ export async function searchCreateOrderInventory(
   );
 }
 
+
+export interface OrderPricingContext {
+  rates: {
+    goldRatePaisePerGram: number;
+    wastageMode: 'percent' | 'per_g';
+    wastagePercentBp: number;
+    wastagePaisePerGram: number;
+    certificationPaisePerCarat: number;
+    gstRateBp: number;
+    diamondRatesPaisePerCarat: Record<string, number>;
+    stoneRatesPaisePerUnit: Record<string, number>;
+  };
+  items: Array<{
+    inventoryItemId: number;
+    itemNumber: string;
+    grossWeightMilli: number | null;
+    netWeightMilli: number | null;
+    purityPercentBp: number;
+    purityName: string | null;
+    certified: boolean;
+    diamonds: Array<{ shapeId: number; shape: string; combinationId: number | null; quality: string | null; weightMilliCarats: number }>;
+    stones: Array<{ stoneTypeId: number; stone: string; weightUnit: 'ct' | 'g'; weightMilli: number }>;
+  }>;
+}
+
+export async function getOrderPricingContext(itemIds: number[]): Promise<OrderPricingContext> {
+  const db = await getDatabase();
+  const rateRows = await db.select<{ rateKey: string; value: number }[]>(
+    `SELECT rate_key AS rateKey, value FROM global_rate`,
+  );
+  const settings = await db.select<{ key: string; value: string | null }[]>(
+    `SELECT key, value FROM app_setting WHERE key IN ('wastage_mode', 'gst_rate_bp')`,
+  );
+  const combinations = await db.select<{ id: number; shapeId: number; rate: number }[]>(
+    `SELECT id, shape_id AS shapeId, rate_per_ct_paise AS rate FROM diamond_combination WHERE is_archived = 0`,
+  );
+  const shapes = await db.select<{ id: number; rate: number }[]>(
+    `SELECT id, COALESCE((SELECT rate_per_ct_paise FROM diamond_combination dc WHERE dc.shape_id = diamond_shape.id AND dc.is_archived = 0 ORDER BY dc.id LIMIT 1), 0) AS rate FROM diamond_shape WHERE is_archived = 0`,
+  );
+  const stoneRates = await db.select<{ id: number; rate: number }[]>(
+    `SELECT id, rate_paise_per_unit AS rate FROM stone_type WHERE is_archived = 0`,
+  );
+  const rateMap = Object.fromEntries(rateRows.map((r) => [r.rateKey, Number(r.value) || 0]));
+  const settingMap = Object.fromEntries(settings.map((r) => [r.key, r.value ?? '']));
+  const ids = [...new Set(itemIds)].filter((id) => Number.isInteger(id) && id > 0);
+  const items: OrderPricingContext['items'] = [];
+  if (ids.length) {
+    const marks = ids.map(() => '?').join(',');
+    const base = await db.select<Array<{ id: number; itemNumber: string; grossWeightMilli: number | null; netWeightMilli: number | null; purityPercentBp: number; purityName: string | null; certified: number }>>(
+      `SELECT i.id, i.item_number AS itemNumber, i.gross_weight_milli AS grossWeightMilli, i.net_weight_milli AS netWeightMilli, COALESCE(p.percent_bp, 10000) AS purityPercentBp, p.name AS purityName, CASE WHEN TRIM(COALESCE(i.igi_certificate_number, '')) <> '' THEN 1 ELSE 0 END AS certified FROM item i LEFT JOIN purity p ON p.id = i.purity_id WHERE i.id IN (${marks})`, ids,
+    );
+    const diamonds = await db.select<Array<{ itemId: number; shapeId: number; shape: string; combinationId: number | null; quality: string | null; weightMilliCarats: number }>>(
+      `SELECT d.item_id AS itemId, d.shape_id AS shapeId, ds.name AS shape, d.combination_id AS combinationId, dc.quality, d.weight_milli AS weightMilliCarats FROM item_diamond d JOIN diamond_shape ds ON ds.id=d.shape_id LEFT JOIN diamond_combination dc ON dc.id=d.combination_id WHERE d.item_id IN (${marks})`, ids,
+    );
+    const stones = await db.select<Array<{ itemId: number; stoneTypeId: number; stone: string; weightUnit: 'ct'|'g'; weightMilli: number }>>(
+      `SELECT s.item_id AS itemId, s.stone_type_id AS stoneTypeId, st.name AS stone, st.weight_unit AS weightUnit, s.weight_milli AS weightMilli FROM item_stone s JOIN stone_type st ON st.id=s.stone_type_id WHERE s.item_id IN (${marks})`, ids,
+    );
+    for (const row of base) items.push({ ...row, inventoryItemId: row.id, certified: Boolean(row.certified), diamonds: diamonds.filter((d) => d.itemId === row.id).map(({itemId: _id, ...d}) => d), stones: stones.filter((st) => st.itemId === row.id).map(({itemId: _id, ...st}) => st) });
+  }
+  return { rates: { goldRatePaisePerGram: rateMap.gold_per_g_paise || 0, wastageMode: settingMap.wastage_mode === 'per_g' ? 'per_g' : 'percent', wastagePercentBp: rateMap.wastage_percent_bp || 0, wastagePaisePerGram: rateMap.wastage_per_g_paise || 0, certificationPaisePerCarat: rateMap.certification_per_ct_paise || 0, gstRateBp: Number(settingMap.gst_rate_bp || 300), diamondRatesPaisePerCarat: Object.fromEntries([...combinations.map((r) => [String(r.id), Number(r.rate) || 0]), ...shapes.map((r) => [String(r.id), Number(r.rate) || 0])]), stoneRatesPaisePerUnit: Object.fromEntries(stoneRates.map((r) => [String(r.id), Number(r.rate) || 0])) }, items };
+}
+
 export async function createConfirmedOrder(input: {
   customerId: number;
   exhibitionId: number | null;
   notes: string;
+  pricingMethod?: 'direct' | 'global' | 'custom_all' | 'custom_individual';
   items: NewOrderItem[];
 }): Promise<number> {
   if (!input.customerId) {
@@ -357,10 +436,12 @@ export async function createConfirmedOrder(input: {
         agreedPricePaise: item.price,
         itemSnapshot: JSON.stringify(item.snapshot),
         pricingBreakdown: JSON.stringify({
-          source: 'direct_order',
+          source: input.pricingMethod ?? 'direct',
           inventory_item_id: item.inventoryItemId,
           pricing_note:
-            'Final negotiated selling price entered when creating the order.',
+            input.pricingMethod && input.pricingMethod !== 'direct'
+              ? 'Pricing method selected during order creation. Final agreed item price was entered and saved; automatic rate calculation is not yet applied.'
+              : 'Final negotiated selling price entered when creating the order.',
         }),
       })),
     },

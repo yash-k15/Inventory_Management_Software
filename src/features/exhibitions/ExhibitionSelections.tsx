@@ -14,7 +14,30 @@ import {
 import CustomerPickerModal from './CustomerPickerModal';
 import './ExhibitionSelections.css';
 function weight(n: number | null) {
-  return n == null ? '—' : `${(n / 1000).toFixed(3)} g`;
+  return n == null ? '—' : `${(n / 1000).toFixed(3)}`;
+}
+
+function detailLines(details: SelectionRow['diamonds']) {
+  return details.map(
+    (detail) =>
+      `${detail.label}: ${weight(detail.weight_milli)}${detail.pieces == null ? '' : ` (${detail.pieces} pcs)`}`,
+  );
+}
+
+function detailTotals(items: SelectionRow[], key: 'diamonds' | 'stones') {
+  const total = items
+    .flatMap((item) => item[key])
+    .reduce(
+      (sum, detail) => ({
+        weight: sum.weight + (detail.weight_milli ?? 0),
+        pieces: sum.pieces + (detail.pieces ?? 0),
+        hasPieces: sum.hasPieces || detail.pieces != null,
+      }),
+      { weight: 0, pieces: 0, hasPieces: false },
+    );
+  return total.weight || total.pieces
+    ? `${weight(total.weight)}${total.hasPieces ? ` (${total.pieces} pcs)` : ''}`
+    : '—';
 }
 function Thumbnail({ path, alt }: { path: string | null; alt: string }) {
   const [src, setSrc] = useState<string | null>(null);
@@ -72,12 +95,64 @@ export default function ExhibitionSelections({
     [feedback, setFeedback] = useState<{ error: boolean; text: string } | null>(
       null,
     );
+  const [sort, setSort] = useState<{
+    key: 'item' | 'gross' | 'net' | 'diamonds' | 'stones' | 'added';
+    direction: 'asc' | 'desc';
+  }>({ key: 'added', direction: 'desc' });
   const scanRef = useRef<HTMLInputElement>(null),
     customer = customers.find((c) => c.id === selectedId) ?? null,
     active = useMemo(() => items.filter((i) => i.status === 'active'), [items]),
     removed = useMemo(
       () => items.filter((i) => i.status === 'removed'),
       [items],
+    ),
+    sortedActive = useMemo(
+      () =>
+        [...active].sort((a, b) => {
+          const dir = sort.direction === 'asc' ? 1 : -1;
+          const val = (item: SelectionRow) => {
+            switch (sort.key) {
+              case 'item':
+                return `${item.itemNumber} ${item.categoryName} ${item.name ?? ''}`.toLowerCase();
+              case 'gross':
+                return item.grossWeightMilli ?? -1;
+              case 'net':
+                return item.netWeightMilli ?? -1;
+              case 'diamonds':
+                return item.diamonds.reduce(
+                  (n, d) => n + (d.weight_milli ?? 0),
+                  0,
+                );
+              case 'stones':
+                return item.stones.reduce(
+                  (n, d) => n + (d.weight_milli ?? 0),
+                  0,
+                );
+              case 'added':
+                return item.addedAt;
+            }
+          };
+          const av = val(a),
+            bv = val(b);
+          return (
+            (typeof av === 'number' && typeof bv === 'number'
+              ? av - bv
+              : String(av).localeCompare(String(bv), 'en', { numeric: true })) *
+            dir
+          );
+        }),
+      [active, sort],
+    ),
+    totals = useMemo(
+      () =>
+        active.reduce(
+          (sum, item) => ({
+            gross: sum.gross + (item.grossWeightMilli ?? 0),
+            net: sum.net + (item.netWeightMilli ?? 0),
+          }),
+          { gross: 0, net: 0 },
+        ),
+      [active],
     );
   async function reload() {
     const rows = await getSelectionCustomers(exhibitionId, customerSearch);
@@ -157,12 +232,20 @@ export default function ExhibitionSelections({
       dead = true;
     };
   }, [exhibitionId, search]);
-  async function handleCustomerAdded(c: { id: number; businessName: string; contactName: string | null; phone: string | null }) {
+  async function handleCustomerAdded(c: {
+    id: number;
+    businessName: string;
+    contactName: string | null;
+    phone: string | null;
+  }) {
     setAddCustomerOpen(false);
     setCustomerSearch('');
     setSelectedId(c.id);
     setCustomers(await getSelectionCustomers(exhibitionId, ''));
-    setFeedback({ error: false, text: `${c.businessName} added to this exhibition.` });
+    setFeedback({
+      error: false,
+      text: `${c.businessName} added to this exhibition.`,
+    });
     await onRefreshExhibition();
   }
 
@@ -334,7 +417,11 @@ export default function ExhibitionSelections({
           </div>
         )}
         <footer className='selection-customer-footer'>
-          <button type='button' className='selection-button selection-button--primary selection-add-customer' onClick={() => setAddCustomerOpen(true)}>
+          <button
+            type='button'
+            className='selection-button selection-button--primary selection-add-customer'
+            onClick={() => setAddCustomerOpen(true)}
+          >
             + Add Customer
           </button>
         </footer>
@@ -527,39 +614,136 @@ export default function ExhibitionSelections({
                   </span>
                 </div>
               ) : (
-                <div className='selection-item-list'>
-                  {active.map((i) => (
-                    <article className='selection-item-card' key={i.id}>
-                      <Thumbnail path={i.imagePath} alt={i.itemNumber} />
-                      <div className='selection-item-copy'>
-                        <strong>{i.itemNumber}</strong>
-                        <span>
-                          {i.categoryName}
-                          {i.name ? ` · ${i.name}` : ''}
-                        </span>
-                        <small>
-                          {weight(i.grossWeightMilli)}
-                          {i.purityName ? ` · ${i.purityName}` : ''} · Added{' '}
-                          {new Date(
-                            i.addedAt.replace(' ', 'T'),
-                          ).toLocaleDateString('en-IN')}
-                        </small>
-                      </div>
-                      {i.locked ? (
-                        <span className='selection-locked-badge'>
-                          Ordered · locked
-                        </span>
-                      ) : (
-                        <button
-                          type='button'
-                          className='selection-remove-button'
-                          onClick={() => void remove(i)}
-                        >
-                          Remove
-                        </button>
-                      )}
-                    </article>
-                  ))}
+                <div className='selection-table-wrap'>
+                  <table className='selection-items-table'>
+                    <thead>
+                      <tr>
+                        {(
+                          [
+                            ['item', 'Item'],
+                            ['gross', 'Gross wt'],
+                            ['net', 'Net wt'],
+                            ['diamonds', 'Diamond details'],
+                            ['stones', 'Stone details'],
+                          ] as const
+                        ).map(([key, label]) => (
+                          <th
+                            key={key}
+                            aria-sort={
+                              sort.key === key
+                                ? sort.direction === 'asc'
+                                  ? 'ascending'
+                                  : 'descending'
+                                : 'none'
+                            }
+                          >
+                            <button
+                              type='button'
+                              className='selection-sort-button'
+                              onClick={() =>
+                                setSort((current) => ({
+                                  key,
+                                  direction:
+                                    current.key === key &&
+                                    current.direction === 'asc'
+                                      ? 'desc'
+                                      : 'asc',
+                                }))
+                              }
+                            >
+                              {label}
+                              {sort.key === key
+                                ? sort.direction === 'asc'
+                                  ? ' ↑'
+                                  : ' ↓'
+                                : ' ↕'}
+                            </button>
+                          </th>
+                        ))}
+                        <th aria-label='Actions' />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sortedActive.map((i) => (
+                        <tr key={i.id}>
+                          <td>
+                            <div className='selection-table-item'>
+                              <Thumbnail
+                                path={i.imagePath}
+                                alt={i.itemNumber}
+                              />
+                              <div className='selection-item-copy'>
+                                <strong>{i.itemNumber}</strong>
+                                <span>
+                                  {i.categoryName}
+                                  {i.name ? ` · ${i.name}` : ''}
+                                </span>
+                                <small>
+                                  Added{' '}
+                                  {new Date(
+                                    i.addedAt.replace(' ', 'T'),
+                                  ).toLocaleDateString('en-IN')}
+                                </small>
+                              </div>
+                            </div>
+                          </td>
+                          <td className='selection-weight-cell'>
+                            {i.grossWeightMilli == null
+                              ? '—'
+                              : `${weight(i.grossWeightMilli)} g`}
+                          </td>
+                          <td className='selection-weight-cell'>
+                            {i.netWeightMilli == null
+                              ? '—'
+                              : `${weight(i.netWeightMilli)} g`}
+                          </td>
+                          <td className='selection-details-cell'>
+                            {detailLines(i.diamonds).length
+                              ? detailLines(i.diamonds).map((line, index) => (
+                                  <div key={`${i.id}-diamond-${index}`}>
+                                    {line}
+                                  </div>
+                                ))
+                              : '—'}
+                          </td>
+                          <td className='selection-details-cell'>
+                            {detailLines(i.stones).length
+                              ? detailLines(i.stones).map((line, index) => (
+                                  <div key={`${i.id}-stone-${index}`}>
+                                    {line}
+                                  </div>
+                                ))
+                              : '—'}
+                          </td>
+                          <td className='selection-action-cell'>
+                            {i.locked ? (
+                              <span className='selection-locked-badge'>
+                                Ordered · locked
+                              </span>
+                            ) : (
+                              <button
+                                type='button'
+                                className='selection-remove-button'
+                                onClick={() => void remove(i)}
+                              >
+                                Remove
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr>
+                        <th colSpan={1}>Totals ({active.length} items)</th>
+                        <th>{weight(totals.gross)} g</th>
+                        <th>{totals.net ? `${weight(totals.net)} g` : '—'}</th>
+                        <th>{detailTotals(active, 'diamonds')}</th>
+                        <th>{detailTotals(active, 'stones')}</th>
+                        <th />
+                      </tr>
+                    </tfoot>
+                  </table>
                 </div>
               )}
               {removed.length > 0 && (

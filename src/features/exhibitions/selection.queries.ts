@@ -10,6 +10,12 @@ export interface SelectionCustomer {
   activeItemCount: number;
 }
 
+export interface SelectionDetail {
+  label: string;
+  pieces: number | null;
+  weight_milli: number | null;
+}
+
 export interface SelectionRow {
   id: number;
   inventoryItemId: number | null;
@@ -18,7 +24,10 @@ export interface SelectionRow {
   name: string | null;
   imagePath: string | null;
   grossWeightMilli: number | null;
+  netWeightMilli: number | null;
   purityName: string | null;
+  diamonds: SelectionDetail[];
+  stones: SelectionDetail[];
   status: 'active' | 'removed';
   addedAt: string;
   locked: number;
@@ -150,7 +159,11 @@ export async function addCustomerToSelectionExhibition(
 export async function getSelectionItems(selectionId: number) {
   const db = await getDatabase();
 
-  return db.select<SelectionRow[]>(
+  const rows = await db.select<(Omit<SelectionRow, 'diamonds' | 'stones'> & {
+    diamondsJson: string | null;
+    stonesJson: string | null;
+    netWeightMilli: number | null;
+  })[]>(
     `SELECT
        si.id,
        si.inventory_item_id AS inventoryItemId,
@@ -159,7 +172,33 @@ export async function getSelectionItems(selectionId: number) {
        json_extract(si.snapshot_data, '$.name') AS name,
        json_extract(si.snapshot_data, '$.image_path') AS imagePath,
        json_extract(si.snapshot_data, '$.gross_weight_milli') AS grossWeightMilli,
+       COALESCE(
+         json_extract(si.snapshot_data, '$.net_weight_milli'),
+         (SELECT i.net_weight_milli FROM item i WHERE i.id = si.inventory_item_id)
+       ) AS netWeightMilli,
        json_extract(si.snapshot_data, '$.purity') AS purityName,
+       COALESCE(
+         json_extract(si.snapshot_data, '$.diamonds'),
+         (SELECT json_group_array(json_object(
+           'label', COALESCE(ds.code, ds.name),
+           'pieces', d.pieces,
+           'weight_milli', d.weight_milli
+         ))
+         FROM item_diamond d
+         JOIN diamond_shape ds ON ds.id = d.shape_id
+         WHERE d.item_id = si.inventory_item_id)
+       ) AS diamondsJson,
+       COALESCE(
+         json_extract(si.snapshot_data, '$.stones'),
+         (SELECT json_group_array(json_object(
+           'label', COALESCE(st.tag_label, st.name),
+           'pieces', s.pieces,
+           'weight_milli', s.weight_milli
+         ))
+         FROM item_stone s
+         JOIN stone_type st ON st.id = s.stone_type_id
+         WHERE s.item_id = si.inventory_item_id)
+       ) AS stonesJson,
        si.status,
        si.added_at AS addedAt,
        CASE
@@ -180,6 +219,31 @@ export async function getSelectionItems(selectionId: number) {
        si.id DESC`,
     [selectionId],
   );
+
+  return rows.map((row) => {
+    const parseDetails = (value: string | null): SelectionDetail[] => {
+      if (!value) return [];
+      try {
+        const parsed: unknown = JSON.parse(value);
+        if (!Array.isArray(parsed)) return [];
+        return parsed.map((detail: any) => ({
+          label: String(detail.label ?? detail.shape ?? detail.stone ?? '—'),
+          pieces: detail.pieces == null ? null : Number(detail.pieces),
+          weight_milli:
+            detail.weight_milli == null ? null : Number(detail.weight_milli),
+        }));
+      } catch {
+        return [];
+      }
+    };
+
+    const { diamondsJson, stonesJson, ...rest } = row;
+    return {
+      ...rest,
+      diamonds: parseDetails(diamondsJson),
+      stones: parseDetails(stonesJson),
+    };
+  });
 }
 
 export async function searchSelectionInventory(
@@ -233,6 +297,7 @@ export async function addSelectionItem(
        i.name,
        i.image_path AS imagePath,
        i.gross_weight_milli AS grossWeightMilli,
+       i.net_weight_milli AS netWeightMilli,
        p.name AS purityName,
        i.igi_certificate_number AS igiCertificateNumber,
        i.huid,
@@ -287,8 +352,7 @@ export async function addSelectionItem(
 
   const diamonds = await db.select<any[]>(
     `SELECT
-       ds.name AS shape,
-       d.combination_id AS combination_id,
+       COALESCE(ds.code, ds.name) AS label,
        d.pieces,
        d.weight_milli AS weight_milli
      FROM item_diamond d
@@ -300,7 +364,7 @@ export async function addSelectionItem(
 
   const stones = await db.select<any[]>(
     `SELECT
-       st.name AS stone,
+       COALESCE(st.tag_label, st.name) AS label,
        s.pieces,
        s.weight_milli AS weight_milli
      FROM item_stone s
@@ -322,6 +386,7 @@ export async function addSelectionItem(
     category: item.categoryName,
     name: item.name,
     gross_weight_milli: item.grossWeightMilli,
+    net_weight_milli: item.netWeightMilli,
     purity: item.purityName,
     diamonds,
     stones,

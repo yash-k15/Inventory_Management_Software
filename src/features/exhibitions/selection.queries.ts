@@ -211,7 +211,6 @@ export async function getSelectionItems(selectionId: number) {
              AND co.exhibition_id = (SELECT exhibition_id FROM selection WHERE id = si.selection_id)
              AND (
                coi.selection_item_id = si.id
-               OR (coi.selection_item_id IS NULL AND CAST(json_extract(coi.item_snapshot, '$.inventory_item_id') AS INTEGER) = si.inventory_item_id)
              )
          ) THEN 1
          ELSE 0
@@ -460,7 +459,6 @@ export async function removeSelectionItem(selectionItemId: number) {
              AND co.exhibition_id = (SELECT exhibition_id FROM selection WHERE id = si.selection_id)
              AND (
                coi.selection_item_id = si.id
-               OR (coi.selection_item_id IS NULL AND CAST(json_extract(coi.item_snapshot, '$.inventory_item_id') AS INTEGER) = si.inventory_item_id)
              )
          ) THEN 1
          ELSE 0

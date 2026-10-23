@@ -25,13 +25,14 @@ export interface CreateOrderInventoryItem {
   netWeightMilli: number | null;
   diamondDetails: string;
   stoneDetails: string;
+  imagePath: string | null;
   isArchived: number;
-  existingOrderNumber: string | null;
 }
 
 export interface NewOrderItem {
   inventoryItemId: number;
   agreedPricePaise: number;
+  selectionItemId?: number | null;
 }
 
 export async function getCreateOrderCustomers(): Promise<
@@ -117,23 +118,8 @@ export async function searchCreateOrderInventory(
           JOIN stone_type st ON st.id = s.stone_type_id
           WHERE s.item_id = i.id
         ), '') AS stoneDetails,
-        i.is_archived AS isArchived,
-        (
-          SELECT 'ORD-' || printf('%04d', co.id)
-          FROM customer_order_item coi
-          JOIN customer_order co ON co.id = coi.order_id
-          WHERE co.status <> 'Cancelled'
-            AND (
-              coi.selection_item_id IN (
-                SELECT si.id
-                FROM selection_item si
-                WHERE si.inventory_item_id = i.id
-              )
-              OR CAST(json_extract(coi.item_snapshot, '$.inventory_item_id') AS INTEGER) = i.id
-            )
-          ORDER BY co.id DESC
-          LIMIT 1
-        ) AS existingOrderNumber
+        i.image_path AS imagePath,
+        i.is_archived AS isArchived
       FROM item i
       JOIN category c ON c.id = i.category_id
       WHERE
@@ -213,6 +199,7 @@ export async function createConfirmedOrder(input: {
   customerId: number;
   exhibitionId: number | null;
   notes: string;
+  finalTotalPaise: number;
   pricingMethod?: 'direct' | 'global' | 'custom_all' | 'custom_individual';
   items: NewOrderItem[];
 }): Promise<number> {
@@ -310,29 +297,28 @@ export async function createConfirmedOrder(input: {
     throw new Error('One or more items are no longer available.');
   }
 
-  for (const item of currentItems) {
+  // Only an exact exhibition selection can make an item a duplicate.
+  // Direct orders (selectionItemId = null) and other customers/exhibitions remain allowed.
+  for (const item of input.items) {
+    if (item.selectionItemId == null) continue;
+
     const existing = await db.select<{ orderNumber: string }[]>(
       `
         SELECT 'ORD-' || printf('%04d', co.id) AS orderNumber
         FROM customer_order_item coi
         JOIN customer_order co ON co.id = coi.order_id
         WHERE co.status <> 'Cancelled'
-          AND (
-            coi.selection_item_id IN (
-              SELECT si.id
-              FROM selection_item si
-              WHERE si.inventory_item_id = ?
-            )
-            OR CAST(json_extract(coi.item_snapshot, '$.inventory_item_id') AS INTEGER) = ?
-          )
+          AND coi.selection_item_id = ?
+        ORDER BY co.id DESC
         LIMIT 1
       `,
-      [item.id, item.id],
+      [item.selectionItemId],
     );
 
     if (existing.length) {
+      const inventoryItem = currentItems.find((current) => current.id === item.inventoryItemId);
       throw new Error(
-        `${item.itemNumber} already belongs to ${existing[0].orderNumber}.`,
+        `${inventoryItem?.itemNumber ?? 'This item'} was already ordered from this exhibition selection in ${existing[0].orderNumber}.`,
       );
     }
   }
@@ -431,9 +417,11 @@ export async function createConfirmedOrder(input: {
       customerId: input.customerId,
       exhibitionId: input.exhibitionId,
       notes: input.notes.trim(),
+      finalTotalPaise: input.finalTotalPaise,
       items: orderItems.map((item) => ({
         inventoryItemId: item.inventoryItemId,
         agreedPricePaise: item.price,
+        selectionItemId: input.items.find((source) => source.inventoryItemId === item.inventoryItemId)?.selectionItemId ?? null,
         itemSnapshot: JSON.stringify(item.snapshot),
         pricingBreakdown: JSON.stringify({
           source: input.pricingMethod ?? 'direct',

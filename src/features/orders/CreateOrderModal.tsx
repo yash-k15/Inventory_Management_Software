@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { convertFileSrc, invoke } from '@tauri-apps/api/core';
+import { appDataDir, join } from '@tauri-apps/api/path';
 import {
   createConfirmedOrder,
   getCreateOrderCustomers,
@@ -11,7 +13,11 @@ import {
   type CreateOrderInventoryItem,
 } from './createOrder.queries';
 import './CreateOrderModal.css';
-import { calculateItemPrice, type PricingRates, type PricingItem } from './orderPricing';
+import {
+  calculateItemPrice,
+  type PricingRates,
+  type PricingItem,
+} from './orderPricing';
 
 interface Props {
   onClose: () => void;
@@ -25,7 +31,10 @@ interface Props {
   }[];
 }
 
-type CustomItemOverrides = Partial<PricingRates> & { purityPercentBp?: number; extraCostPaise?: number };
+type CustomItemOverrides = Partial<PricingRates> & {
+  purityPercentBp?: number;
+  extraCostPaise?: number;
+};
 
 type CustomRateDraft = {
   goldRate: string;
@@ -115,6 +124,47 @@ function formatDetailTotal(
   return hasDetails ? `${totalCarats.toFixed(3)} ct (${totalPieces} pcs)` : '—';
 }
 
+function ItemThumbnail({
+  path,
+  alt,
+}: {
+  path: string | null | undefined;
+  alt: string;
+}) {
+  const [src, setSrc] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setSrc(null);
+    if (!path) return;
+
+    void (async () => {
+      try {
+        const imagePath = await join(await appDataDir(), path);
+        await invoke('allow_image_preview', { path: imagePath });
+        if (!cancelled) setSrc(convertFileSrc(imagePath));
+      } catch (imageError) {
+        console.error('Could not load jewelry thumbnail:', imageError);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [path]);
+
+  return src ? (
+    <img className='create-order-item-thumbnail' src={src} alt={alt} />
+  ) : (
+    <span
+      className='create-order-item-thumbnail create-order-item-thumbnail--empty'
+      aria-hidden='true'
+    >
+      ◇
+    </span>
+  );
+}
+
 function getInitials(value: string) {
   return value
     .split(/\s+/)
@@ -152,15 +202,35 @@ export default function CreateOrderModal({
   const [error, setError] = useState<string | null>(null);
   const [exhibitionDropdownOpen, setExhibitionDropdownOpen] = useState(false);
   const [step, setStep] = useState<1 | 2 | 3 | 4>(initialItems.length ? 2 : 1);
-  const [pricingContext, setPricingContext] = useState<OrderPricingContext | null>(null);
+  const [reviewReady, setReviewReady] = useState(false);
+
+  // Prevent an immediate submission while the Pricing step transitions to Full Review.
+  useEffect(() => {
+    if (step !== 4) {
+      setReviewReady(false);
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => setReviewReady(true), 600);
+    return () => window.clearTimeout(timeoutId);
+  }, [step]);
+  const [pricingContext, setPricingContext] =
+    useState<OrderPricingContext | null>(null);
   const [customizeSelected, setCustomizeSelected] = useState<number[]>([]);
   const [showCustomRates, setShowCustomRates] = useState(false);
-  const [customRatesByItem, setCustomRatesByItem] = useState<Record<number, CustomItemOverrides>>({});
-  const [customRateDraft, setCustomRateDraft] = useState<CustomRateDraft | null>(null);
+  const [customRatesByItem, setCustomRatesByItem] = useState<
+    Record<number, CustomItemOverrides>
+  >({});
+  const [customRateDraft, setCustomRateDraft] =
+    useState<CustomRateDraft | null>(null);
   const [customRateDirty, setCustomRateDirty] = useState<string[]>([]);
-  const [customRateHasMixedValues, setCustomRateHasMixedValues] = useState(false);
+  const [customRateHasMixedValues, setCustomRateHasMixedValues] =
+    useState(false);
 
-  function effectiveRatesForItem(itemId: number, baseRates = pricingContext?.rates): PricingRates | null {
+  function effectiveRatesForItem(
+    itemId: number,
+    baseRates = pricingContext?.rates,
+  ): PricingRates | null {
     if (!baseRates) return null;
     const override = customRatesByItem[itemId];
     return {
@@ -179,29 +249,67 @@ export default function CreateOrderModal({
 
   function openCustomRates() {
     if (!pricingContext || !customizeSelected.length) return;
-    const ids = customizeSelected.filter((id) => selectedItems.some((item) => item.item.id === id));
+    const ids = customizeSelected.filter((id) =>
+      selectedItems.some((item) => item.item.id === id),
+    );
     if (!ids.length) return;
-    const sources = ids.map((id) => pricingContext.items.find((item) => item.inventoryItemId === id)).filter((source): source is NonNullable<typeof source> => source !== undefined);
-    const effective = ids.map((id) => effectiveRatesForItem(id)).filter(Boolean) as PricingRates[];
-    const common = (values: (string | number)[]) => values.every((value) => String(value) === String(values[0])) ? String(values[0] ?? '') : '';
+    const sources = ids
+      .map((id) =>
+        pricingContext.items.find((item) => item.inventoryItemId === id),
+      )
+      .filter(
+        (source): source is NonNullable<typeof source> => source !== undefined,
+      );
+    const effective = ids
+      .map((id) => effectiveRatesForItem(id))
+      .filter(Boolean) as PricingRates[];
+    const common = (values: (string | number)[]) =>
+      values.every((value) => String(value) === String(values[0]))
+        ? String(values[0] ?? '')
+        : '';
     const diamondKeySet = new Set<string>();
     const stoneKeySet = new Set<string>();
     sources.forEach((source) => {
-      source.diamonds.forEach((diamond) => diamondKeySet.add(String(diamond.combinationId ?? diamond.shapeId)));
-      source.stones.forEach((stone) => stoneKeySet.add(String(stone.stoneTypeId)));
+      source.diamonds.forEach((diamond) =>
+        diamondKeySet.add(String(diamond.combinationId ?? diamond.shapeId)),
+      );
+      source.stones.forEach((stone) =>
+        stoneKeySet.add(String(stone.stoneTypeId)),
+      );
     });
     const diamondKeys = [...diamondKeySet];
     const stoneKeys = [...stoneKeySet];
     const purityByItem: Record<number, string> = {};
     ids.forEach((id) => {
-      const source = pricingContext.items.find((item) => item.inventoryItemId === id);
-      purityByItem[id] = (((customRatesByItem[id]?.purityPercentBp ?? source?.purityPercentBp ?? 10000) / 100)).toString();
+      const source = pricingContext.items.find(
+        (item) => item.inventoryItemId === id,
+      );
+      purityByItem[id] = (
+        (customRatesByItem[id]?.purityPercentBp ??
+          source?.purityPercentBp ??
+          10000) / 100
+      ).toString();
     });
     const diamondRates: Record<string, string> = {};
-    diamondKeys.forEach((key) => diamondRates[key] = common(effective.map((rates) => rates.diamondRatesPaisePerCarat[key] ?? 0).map((value) => value / 100)));
+    diamondKeys.forEach(
+      (key) =>
+        (diamondRates[key] = common(
+          effective
+            .map((rates) => rates.diamondRatesPaisePerCarat[key] ?? 0)
+            .map((value) => value / 100),
+        )),
+    );
     const stoneRates: Record<string, string> = {};
-    stoneKeys.forEach((key) => stoneRates[key] = common(effective.map((rates) => rates.stoneRatesPaisePerUnit[key] ?? 0).map((value) => value / 100)));
-    const hasMixed = (values: unknown[]) => values.some((value) => String(value) !== String(values[0]));
+    stoneKeys.forEach(
+      (key) =>
+        (stoneRates[key] = common(
+          effective
+            .map((rates) => rates.stoneRatesPaisePerUnit[key] ?? 0)
+            .map((value) => value / 100),
+        )),
+    );
+    const hasMixed = (values: unknown[]) =>
+      values.some((value) => String(value) !== String(values[0]));
     const hasMixedValues =
       hasMixed(effective.map((rates) => rates.goldRatePaisePerGram)) ||
       hasMixed(effective.map((rates) => rates.wastageMode)) ||
@@ -210,78 +318,167 @@ export default function CreateOrderModal({
       hasMixed(effective.map((rates) => rates.certificationPaisePerCarat)) ||
       hasMixed(effective.map((rates) => rates.gstRateBp)) ||
       hasMixed(ids.map((id) => customRatesByItem[id]?.extraCostPaise ?? 0)) ||
-      diamondKeys.some((key) => hasMixed(effective.map((rates) => rates.diamondRatesPaisePerCarat[key] ?? 0))) ||
-      stoneKeys.some((key) => hasMixed(effective.map((rates) => rates.stoneRatesPaisePerUnit[key] ?? 0)));
+      diamondKeys.some((key) =>
+        hasMixed(
+          effective.map((rates) => rates.diamondRatesPaisePerCarat[key] ?? 0),
+        ),
+      ) ||
+      stoneKeys.some((key) =>
+        hasMixed(
+          effective.map((rates) => rates.stoneRatesPaisePerUnit[key] ?? 0),
+        ),
+      );
     setCustomRateHasMixedValues(hasMixedValues);
     setCustomRateDraft({
-      goldRate: common(effective.map((rates) => rates.goldRatePaisePerGram / 100)),
-      wastageMode: effective[0]?.wastageMode || pricingContext.rates.wastageMode,
-      wastagePercent: common(effective.map((rates) => rates.wastagePercentBp / 100)),
-      wastagePerGram: common(effective.map((rates) => rates.wastagePaisePerGram / 100)),
-      certification: common(effective.map((rates) => rates.certificationPaisePerCarat / 100)),
+      goldRate: common(
+        effective.map((rates) => rates.goldRatePaisePerGram / 100),
+      ),
+      wastageMode:
+        effective[0]?.wastageMode || pricingContext.rates.wastageMode,
+      wastagePercent: common(
+        effective.map((rates) => rates.wastagePercentBp / 100),
+      ),
+      wastagePerGram: common(
+        effective.map((rates) => rates.wastagePaisePerGram / 100),
+      ),
+      certification: common(
+        effective.map((rates) => rates.certificationPaisePerCarat / 100),
+      ),
       gst: common(effective.map((rates) => rates.gstRateBp / 100)),
       diamondRates,
       stoneRates,
       purityByItem,
-      extraCost: common(ids.map((id) => (customRatesByItem[id]?.extraCostPaise ?? 0) / 100)),
+      extraCost: common(
+        ids.map((id) => (customRatesByItem[id]?.extraCostPaise ?? 0) / 100),
+      ),
     });
     setCustomRateDirty([]);
     setShowCustomRates(true);
   }
 
   function changeCustomDraft(key: string, value: string) {
-    if (key !== 'wastageMode' && value !== '' && (!/^\d*\.?\d*$/.test(value) || Number(value) < 0)) return;
-    setCustomRateDraft((current) => current ? ({ ...current, [key]: value } as CustomRateDraft) : current);
-    setCustomRateDirty((current) => current.includes(key) ? current : [...current, key]);
+    if (
+      key !== 'wastageMode' &&
+      value !== '' &&
+      (!/^\d*\.?\d*$/.test(value) || Number(value) < 0)
+    )
+      return;
+    setCustomRateDraft((current) =>
+      current ? ({ ...current, [key]: value } as CustomRateDraft) : current,
+    );
+    setCustomRateDirty((current) =>
+      current.includes(key) ? current : [...current, key],
+    );
   }
 
   function applyCustomRates() {
-    if (!pricingContext || !customRateDraft || !customizeSelected.length) return;
-    const nextOverrides: Record<number, CustomItemOverrides> = { ...customRatesByItem };
-    const parseAmount = (value: string) => { const parsed = Number(value || 0); return Number.isFinite(parsed) ? Math.round(parsed * 100) : 0; };
-    const parsePercent = (value: string) => { const parsed = Number(value || 0); return Number.isFinite(parsed) ? Math.round(parsed * 100) : 0; };
+    if (!pricingContext || !customRateDraft || !customizeSelected.length)
+      return;
+    const nextOverrides: Record<number, CustomItemOverrides> = {
+      ...customRatesByItem,
+    };
+    const parseAmount = (value: string) => {
+      const parsed = Number(value || 0);
+      return Number.isFinite(parsed) ? Math.round(parsed * 100) : 0;
+    };
+    const parsePercent = (value: string) => {
+      const parsed = Number(value || 0);
+      return Number.isFinite(parsed) ? Math.round(parsed * 100) : 0;
+    };
     for (const id of customizeSelected) {
       const current: CustomItemOverrides = { ...(nextOverrides[id] || {}) };
       for (const dirty of customRateDirty) {
-        if (dirty === 'goldRate') current.goldRatePaisePerGram = parseAmount(customRateDraft.goldRate);
-        else if (dirty === 'wastageMode') current.wastageMode = customRateDraft.wastageMode;
-        else if (dirty === 'wastagePercent') current.wastagePercentBp = parsePercent(customRateDraft.wastagePercent);
-        else if (dirty === 'wastagePerGram') current.wastagePaisePerGram = parseAmount(customRateDraft.wastagePerGram);
-        else if (dirty === 'certification') current.certificationPaisePerCarat = parseAmount(customRateDraft.certification);
-        else if (dirty === 'gst') current.gstRateBp = parsePercent(customRateDraft.gst);
+        if (dirty === 'goldRate')
+          current.goldRatePaisePerGram = parseAmount(customRateDraft.goldRate);
+        else if (dirty === 'wastageMode')
+          current.wastageMode = customRateDraft.wastageMode;
+        else if (dirty === 'wastagePercent')
+          current.wastagePercentBp = parsePercent(
+            customRateDraft.wastagePercent,
+          );
+        else if (dirty === 'wastagePerGram')
+          current.wastagePaisePerGram = parseAmount(
+            customRateDraft.wastagePerGram,
+          );
+        else if (dirty === 'certification')
+          current.certificationPaisePerCarat = parseAmount(
+            customRateDraft.certification,
+          );
+        else if (dirty === 'gst')
+          current.gstRateBp = parsePercent(customRateDraft.gst);
         else if (dirty.startsWith('diamond:')) {
           const key = dirty.slice('diamond:'.length);
-          current.diamondRatesPaisePerCarat = { ...(current.diamondRatesPaisePerCarat || {}), [key]: parseAmount(customRateDraft.diamondRates[key] ?? '') };
+          current.diamondRatesPaisePerCarat = {
+            ...(current.diamondRatesPaisePerCarat || {}),
+            [key]: parseAmount(customRateDraft.diamondRates[key] ?? ''),
+          };
         } else if (dirty.startsWith('stone:')) {
           const key = dirty.slice('stone:'.length);
-          current.stoneRatesPaisePerUnit = { ...(current.stoneRatesPaisePerUnit || {}), [key]: parseAmount(customRateDraft.stoneRates[key] ?? '') };
-        } else if (dirty === 'extraCost') current.extraCostPaise = parseAmount(customRateDraft.extraCost);
+          current.stoneRatesPaisePerUnit = {
+            ...(current.stoneRatesPaisePerUnit || {}),
+            [key]: parseAmount(customRateDraft.stoneRates[key] ?? ''),
+          };
+        } else if (dirty === 'extraCost')
+          current.extraCostPaise = parseAmount(customRateDraft.extraCost);
         else if (dirty.startsWith('purity:')) {
           const purityKey = dirty.slice('purity:'.length);
-          const source = pricingContext.items.find((item) => item.inventoryItemId === id);
-          const sourcePurityKey = (source?.purityName || 'Purity not specified').trim() || 'Purity not specified';
-          if (sourcePurityKey === purityKey) current.purityPercentBp = parsePercent(customRateDraft.purityByItem[id] ?? '');
+          const source = pricingContext.items.find(
+            (item) => item.inventoryItemId === id,
+          );
+          const sourcePurityKey =
+            (source?.purityName || 'Purity not specified').trim() ||
+            'Purity not specified';
+          if (sourcePurityKey === purityKey)
+            current.purityPercentBp = parsePercent(
+              customRateDraft.purityByItem[id] ?? '',
+            );
         }
       }
       nextOverrides[id] = current;
     }
     setCustomRatesByItem(nextOverrides);
-    setSelectedItems((current) => current.map((selected) => {
-      if (!customizeSelected.includes(selected.item.id) || selected.directPrice) return selected;
-      const source = pricingContext.items.find((item) => item.inventoryItemId === selected.item.id);
-      if (!source) return selected;
-      const override = nextOverrides[selected.item.id] || {};
-      const rates = {
-        ...pricingContext.rates,
-        ...override,
-        diamondRatesPaisePerCarat: { ...pricingContext.rates.diamondRatesPaisePerCarat, ...(override.diamondRatesPaisePerCarat || {}) },
-        stoneRatesPaisePerUnit: { ...pricingContext.rates.stoneRatesPaisePerUnit, ...(override.stoneRatesPaisePerUnit || {}) },
-      } as PricingRates;
-      const pricingItem = { ...source, purityPercentBp: override.purityPercentBp ?? source.purityPercentBp } as PricingItem;
-      const breakdown = calculateItemPrice(pricingItem, rates, 'custom_individual');
-      const totalPaise = breakdown.calculated_total_paise + (override.extraCostPaise || 0);
-      return { ...selected, price: (totalPaise / 100).toFixed(2), pricingSource: 'custom' };
-    }));
+    setSelectedItems((current) =>
+      current.map((selected) => {
+        if (
+          !customizeSelected.includes(selected.item.id) ||
+          selected.directPrice
+        )
+          return selected;
+        const source = pricingContext.items.find(
+          (item) => item.inventoryItemId === selected.item.id,
+        );
+        if (!source) return selected;
+        const override = nextOverrides[selected.item.id] || {};
+        const rates = {
+          ...pricingContext.rates,
+          ...override,
+          diamondRatesPaisePerCarat: {
+            ...pricingContext.rates.diamondRatesPaisePerCarat,
+            ...(override.diamondRatesPaisePerCarat || {}),
+          },
+          stoneRatesPaisePerUnit: {
+            ...pricingContext.rates.stoneRatesPaisePerUnit,
+            ...(override.stoneRatesPaisePerUnit || {}),
+          },
+        } as PricingRates;
+        const pricingItem = {
+          ...source,
+          purityPercentBp: override.purityPercentBp ?? source.purityPercentBp,
+        } as PricingItem;
+        const breakdown = calculateItemPrice(
+          pricingItem,
+          rates,
+          'custom_individual',
+        );
+        const totalPaise =
+          breakdown.calculated_total_paise + (override.extraCostPaise || 0);
+        return {
+          ...selected,
+          price: (totalPaise / 100).toFixed(2),
+          pricingSource: 'custom',
+        };
+      }),
+    );
     setShowCustomRates(false);
   }
 
@@ -363,29 +560,60 @@ export default function CreateOrderModal({
   useEffect(() => {
     let cancelled = false;
     const ids = selectedItems.map((selected) => selected.item.id);
-    if (!ids.length) { setPricingContext(null); return; }
-    void getOrderPricingContext(ids).then((context) => {
-      if (cancelled) return;
-      setPricingContext(context);
-      const defaultRates = context.rates;
-      setSelectedItems((current) => current.map((selected) => {
-        if (selected.directPrice) return selected;
-        const source = context.items.find((item) => item.inventoryItemId === selected.item.id);
-        if (!source) return selected;
-        const override = customRatesByItem[selected.item.id];
-        const rates = {
-          ...defaultRates,
-          ...(override || {}),
-          diamondRatesPaisePerCarat: { ...defaultRates.diamondRatesPaisePerCarat, ...(override?.diamondRatesPaisePerCarat || {}) },
-          stoneRatesPaisePerUnit: { ...defaultRates.stoneRatesPaisePerUnit, ...(override?.stoneRatesPaisePerUnit || {}) },
-        } as PricingRates;
-        const pricingItem = { ...source, purityPercentBp: override?.purityPercentBp ?? source.purityPercentBp } as PricingItem;
-        const breakdown = calculateItemPrice(pricingItem, rates, override ? 'custom_individual' : 'global');
-        const totalPaise = breakdown.calculated_total_paise + (override?.extraCostPaise || 0);
-        return { ...selected, price: (totalPaise / 100).toFixed(2), pricingSource: override ? 'custom' : 'global' };
-      }));
-    }).catch((err) => console.error('Could not load pricing rates', err));
-    return () => { cancelled = true; };
+    if (!ids.length) {
+      setPricingContext(null);
+      return;
+    }
+    void getOrderPricingContext(ids)
+      .then((context) => {
+        if (cancelled) return;
+        setPricingContext(context);
+        const defaultRates = context.rates;
+        setSelectedItems((current) =>
+          current.map((selected) => {
+            if (selected.directPrice) return selected;
+            const source = context.items.find(
+              (item) => item.inventoryItemId === selected.item.id,
+            );
+            if (!source) return selected;
+            const override = customRatesByItem[selected.item.id];
+            const rates = {
+              ...defaultRates,
+              ...(override || {}),
+              diamondRatesPaisePerCarat: {
+                ...defaultRates.diamondRatesPaisePerCarat,
+                ...(override?.diamondRatesPaisePerCarat || {}),
+              },
+              stoneRatesPaisePerUnit: {
+                ...defaultRates.stoneRatesPaisePerUnit,
+                ...(override?.stoneRatesPaisePerUnit || {}),
+              },
+            } as PricingRates;
+            const pricingItem = {
+              ...source,
+              purityPercentBp:
+                override?.purityPercentBp ?? source.purityPercentBp,
+            } as PricingItem;
+            const breakdown = calculateItemPrice(
+              pricingItem,
+              rates,
+              override ? 'custom_individual' : 'global',
+            );
+            const totalPaise =
+              breakdown.calculated_total_paise +
+              (override?.extraCostPaise || 0);
+            return {
+              ...selected,
+              price: (totalPaise / 100).toFixed(2),
+              pricingSource: override ? 'custom' : 'global',
+            };
+          }),
+        );
+      })
+      .catch((err) => console.error('Could not load pricing rates', err));
+    return () => {
+      cancelled = true;
+    };
   }, [selectedItems.map((selected) => selected.item.id).join(',')]);
 
   useEffect(() => {
@@ -425,9 +653,10 @@ export default function CreateOrderModal({
     (total, selected) => total + Math.round(Number(selected.price || 0) * 100),
     0,
   );
-  const finalTotalPaise = roundOffFinalTotal.trim() !== ''
-    ? Math.max(0, Math.round(Number(roundOffFinalTotal) * 100))
-    : totalPaise;
+  const finalTotalPaise =
+    roundOffFinalTotal.trim() !== ''
+      ? Math.max(0, Math.round(Number(roundOffFinalTotal) * 100))
+      : totalPaise;
 
   async function searchInventory(value: string) {
     setInventorySearch(value);
@@ -442,13 +671,15 @@ export default function CreateOrderModal({
   function addItem(item: CreateOrderInventoryItem) {
     if (
       item.isArchived ||
-      item.existingOrderNumber ||
       selectedItems.some((selected) => selected.item.id === item.id)
     ) {
       return;
     }
 
-    setSelectedItems((current) => [...current, { item, price: '', directPrice: false, pricingSource: 'global' }]);
+    setSelectedItems((current) => [
+      ...current,
+      { item, price: '', directPrice: false, pricingSource: 'global' },
+    ]);
     setError(null);
   }
 
@@ -459,7 +690,9 @@ export default function CreateOrderModal({
 
     setSelectedItems((current) =>
       current.map((selected) =>
-        selected.item.id === itemId ? { ...selected, price, directPrice: true, pricingSource: 'direct' } : selected,
+        selected.item.id === itemId
+          ? { ...selected, price, directPrice: true, pricingSource: 'direct' }
+          : selected,
       ),
     );
   }
@@ -472,7 +705,11 @@ export default function CreateOrderModal({
     );
     if (!source) return;
 
-    const breakdown = calculateItemPrice(source as PricingItem, pricingContext.rates, 'global');
+    const breakdown = calculateItemPrice(
+      source as PricingItem,
+      pricingContext.rates,
+      'global',
+    );
 
     setSelectedItems((current) =>
       current.map((selected) =>
@@ -505,12 +742,20 @@ export default function CreateOrderModal({
       return;
     }
     if (step === 3) {
-      if (selectedItems.some((selected) => selected.price.trim() === '' || !Number.isFinite(Number(selected.price)))) {
+      if (
+        selectedItems.some(
+          (selected) =>
+            selected.price.trim() === '' ||
+            !Number.isFinite(Number(selected.price)),
+        )
+      ) {
         setError('Enter the final selling price for every selected item.');
         return;
       }
     }
-    setStep((current) => current < 4 ? ((current + 1) as 1 | 2 | 3 | 4) : current);
+    setStep((current) =>
+      current < 4 ? ((current + 1) as 1 | 2 | 3 | 4) : current,
+    );
   }
 
   async function submitOrder(event: React.FormEvent<HTMLFormElement>) {
@@ -519,6 +764,8 @@ export default function CreateOrderModal({
       continueToNextStep();
       return;
     }
+    // Ignore submit attempts until Full Review has been visible briefly.
+    if (!reviewReady) return;
     setError(null);
 
     if (!selectedCustomerId) {
@@ -551,6 +798,7 @@ export default function CreateOrderModal({
           ? Number(selectedExhibitionId)
           : null,
         notes,
+        finalTotalPaise,
         items: selectedItems.map((selected) => ({
           inventoryItemId: selected.item.id,
           agreedPricePaise: Math.round(Number(selected.price) * 100),
@@ -874,19 +1122,11 @@ export default function CreateOrderModal({
                             (selected) => selected.item.id === item.id,
                           );
                           const disabled =
-                            Boolean(item.isArchived) ||
-                            (!initialItems.length &&
-                              Boolean(item.existingOrderNumber)) ||
-                            alreadySelected;
+                            Boolean(item.isArchived) || alreadySelected;
 
                           let badge = 'Add';
                           if (item.isArchived) badge = 'Archived';
-                          else if (
-                            !initialItems.length &&
-                            item.existingOrderNumber
-                          ) {
-                            badge = `In ${item.existingOrderNumber}`;
-                          } else if (alreadySelected) badge = 'Already added';
+                          else if (alreadySelected) badge = 'Already added';
 
                           return (
                             <div
@@ -1032,9 +1272,15 @@ export default function CreateOrderModal({
 
                     {selectedItems.map(({ item }) => (
                       <div className='create-order-selected-row' key={item.id}>
-                        <div className='create-order-selected-name'>
-                          <strong>{item.itemNumber}</strong>
-                          <span>{item.categoryName}</span>
+                        <div className='create-order-item-identity create-order-selected-name'>
+                          <ItemThumbnail
+                            path={item.imagePath}
+                            alt={item.itemNumber}
+                          />
+                          <span>
+                            <strong>{item.itemNumber}</strong>
+                            <small>{item.categoryName}</small>
+                          </span>
                         </div>
                         <span>{formatWeight(item.grossWeightMilli)}</span>
                         <span>{formatWeight(item.netWeightMilli)}</span>
@@ -1104,19 +1350,42 @@ export default function CreateOrderModal({
             {step === 3 && (
               <section className='create-order-section create-order-review-section'>
                 <div className='create-order-custom-toolbar'>
-                  <p className='create-order-pricing-help'>Global rates are applied automatically. Custom rates are saved per item.</p>
+                  <p className='create-order-pricing-help'>
+                    Global rates are applied automatically. Custom rates are
+                    saved per item.
+                  </p>
                   <button
                     type='button'
                     className='create-order-custom-button'
                     disabled={!customizeSelected.length || !pricingContext}
                     onClick={openCustomRates}
                   >
-                    Apply custom prices{customizeSelected.length ? ` (${customizeSelected.length})` : ''}
+                    Apply custom prices
+                    {customizeSelected.length
+                      ? ` (${customizeSelected.length})`
+                      : ''}
                   </button>
                 </div>
                 <div className='create-order-review-items create-order-price-review-table'>
                   <div className='create-order-review-heading'>
-                    <span className='create-order-price-review-item-heading'><input type='checkbox' aria-label='Select all items for custom pricing' checked={selectedItems.length > 0 && customizeSelected.length === selectedItems.length} onChange={(event) => setCustomizeSelected(event.target.checked ? selectedItems.map((item) => item.item.id) : [])} /> Item</span>
+                    <span className='create-order-price-review-item-heading'>
+                      <input
+                        type='checkbox'
+                        aria-label='Select all items for custom pricing'
+                        checked={
+                          selectedItems.length > 0 &&
+                          customizeSelected.length === selectedItems.length
+                        }
+                        onChange={(event) =>
+                          setCustomizeSelected(
+                            event.target.checked
+                              ? selectedItems.map((item) => item.item.id)
+                              : [],
+                          )
+                        }
+                      />{' '}
+                      Item
+                    </span>
                     <span>Gross wt.</span>
                     <span>Net wt.</span>
                     <span>Diamonds</span>
@@ -1126,18 +1395,54 @@ export default function CreateOrderModal({
                   {selectedItems.map(({ item, price, pricingSource }) => (
                     <div className='create-order-review-row' key={item.id}>
                       <div className='create-order-price-review-item'>
-                        <input type='checkbox' checked={customizeSelected.includes(item.id)} onChange={(event) => setCustomizeSelected((current) => event.target.checked ? [...current, item.id] : current.filter((id) => id !== item.id))} aria-label={`Select ${item.itemNumber} for custom pricing`} />
-                        <span><strong>{item.itemNumber}</strong><small>{item.categoryName}</small></span>
+                        <input
+                          type='checkbox'
+                          checked={customizeSelected.includes(item.id)}
+                          onChange={(event) =>
+                            setCustomizeSelected((current) =>
+                              event.target.checked
+                                ? [...current, item.id]
+                                : current.filter((id) => id !== item.id),
+                            )
+                          }
+                          aria-label={`Select ${item.itemNumber} for custom pricing`}
+                        />
+                        <ItemThumbnail
+                          path={item.imagePath}
+                          alt={item.itemNumber}
+                        />
+                        <span className='create-order-item-identity-copy'>
+                          <strong>{item.itemNumber}</strong>
+                          <small>{item.categoryName}</small>
+                        </span>
                       </div>
                       <span>{formatWeight(item.grossWeightMilli)}</span>
                       <span>{formatWeight(item.netWeightMilli)}</span>
-                      <span className='create-order-price-review-detail'>{formatDetailLines(item.diamondDetails)}</span>
-                      <span className='create-order-price-review-detail'>{formatDetailLines(item.stoneDetails)}</span>
+                      <span className='create-order-price-review-detail'>
+                        {formatDetailLines(item.diamondDetails)}
+                      </span>
+                      <span className='create-order-price-review-detail'>
+                        {formatDetailLines(item.stoneDetails)}
+                      </span>
                       <div className='create-order-price-review-price'>
-                        <input inputMode='decimal' value={price} onChange={(event) => updatePrice(item.id, event.target.value)} placeholder='0.00' aria-label={`Final selling price for ${item.itemNumber}`} required />
+                        <input
+                          inputMode='decimal'
+                          value={price}
+                          onChange={(event) =>
+                            updatePrice(item.id, event.target.value)
+                          }
+                          placeholder='0.00'
+                          aria-label={`Final selling price for ${item.itemNumber}`}
+                          required
+                        />
                         <small>
-                          {pricingSource === 'direct' ? 'Calculated directly. ' : pricingSource === 'custom' ? 'Calculated using custom rates. ' : 'Calculated using global rates.'}
-                          {(pricingSource === 'direct' || pricingSource === 'custom') && (
+                          {pricingSource === 'direct'
+                            ? 'Calculated directly. '
+                            : pricingSource === 'custom'
+                              ? 'Calculated using custom rates. '
+                              : 'Calculated using global rates.'}
+                          {(pricingSource === 'direct' ||
+                            pricingSource === 'custom') && (
                             <button
                               type='button'
                               className='create-order-reset-pricing'
@@ -1156,7 +1461,9 @@ export default function CreateOrderModal({
                   <strong>{formatMoney(totalPaise)}</strong>
                 </div>
                 <div className='create-order-round-off'>
-                  <label htmlFor='create-order-round-off-final-total'>Round off final total (₹)</label>
+                  <label htmlFor='create-order-round-off-final-total'>
+                    Round off final total (₹)
+                  </label>
                   <input
                     id='create-order-round-off-final-total'
                     type='text'
@@ -1168,10 +1475,14 @@ export default function CreateOrderModal({
                         setRoundOffFinalTotal(value);
                       }
                     }}
-                    placeholder={formatMoney(totalPaise).replace(/[₹,]/g, '').trim()}
+                    placeholder={formatMoney(totalPaise)
+                      .replace(/[₹,]/g, '')
+                      .trim()}
                     aria-describedby='create-order-round-off-help'
                   />
-                  <small id='create-order-round-off-help'>Leave empty to use the calculated order value.</small>
+                  <small id='create-order-round-off-help'>
+                    Leave empty to use the calculated order value.
+                  </small>
                 </div>
                 <div className='create-order-review-total create-order-review-final-total'>
                   <span>Final order total</span>
@@ -1183,14 +1494,112 @@ export default function CreateOrderModal({
             {step === 4 && (
               <section className='create-order-section create-order-review-section'>
                 <h3>Full review</h3>
-                <div className='create-order-review-customer'><span>Customer</span><strong>{selectedCustomer?.businessName || 'Not selected'}</strong></div>
-                <div className='create-order-review-customer'><span>Exhibition</span><strong>{selectedExhibitionId ? exhibitions.find((exhibition) => String(exhibition.id) === selectedExhibitionId)?.name || 'Selected exhibition' : 'Direct order'}</strong></div>
-                <div className='create-order-review-customer'><span>Pricing</span><strong>Global rates with item-level overrides where applicable</strong></div>
-                <div className='create-order-review-items'><div className='create-order-review-heading'><span>Jewelry item</span><span>Gross wt.</span><span>Final price (₹)</span></div>
-                {selectedItems.map(({ item, price }) => <div className='create-order-review-row' key={item.id}><div><strong>{item.itemNumber}</strong><small>{item.categoryName}</small></div><span>{formatWeight(item.grossWeightMilli)}</span><strong>{formatMoney(Math.round(Number(price || 0) * 100))}</strong></div>)}
+                <div className='create-order-review-customer'>
+                  <span>Customer</span>
+                  <strong>
+                    {selectedCustomer?.businessName || 'Not selected'}
+                  </strong>
                 </div>
-                <div className='create-order-review-total'><span>Final order total</span><strong>{formatMoney(finalTotalPaise)}</strong></div>
-                <div className='create-order-review-customer'><span>Notes</span><strong>{notes.trim() || '—'}</strong></div>
+                <div className='create-order-review-customer'>
+                  <span>Exhibition</span>
+                  <strong>
+                    {selectedExhibitionId
+                      ? exhibitions.find(
+                          (exhibition) =>
+                            String(exhibition.id) === selectedExhibitionId,
+                        )?.name || 'Selected exhibition'
+                      : 'Direct order'}
+                  </strong>
+                </div>
+                <div className='create-order-review-items'>
+                  <div className='create-order-review-heading'>
+                    <span>Item</span>
+                    <span>Gross wt.</span>
+                    <span>Net wt.</span>
+                    <span>Diamonds</span>
+                    <span>Stones</span>
+                    <span>Final price</span>
+                  </div>
+                  {selectedItems.map(({ item, price }) => (
+                    <div className='create-order-review-row' key={item.id}>
+                      <div className='create-order-item-identity create-order-review-item-name'>
+                        <ItemThumbnail
+                          path={item.imagePath}
+                          alt={item.itemNumber}
+                        />
+                        <span>
+                          <strong>{item.itemNumber}</strong>
+                          <small>{item.categoryName}</small>
+                        </span>
+                      </div>
+                      <span>{formatWeight(item.grossWeightMilli)}</span>
+                      <span>{formatWeight(item.netWeightMilli)}</span>
+                      <span className='create-order-review-detail'>
+                        {formatDetailLines(item.diamondDetails)}
+                      </span>
+                      <span className='create-order-review-detail'>
+                        {formatDetailLines(item.stoneDetails)}
+                      </span>
+                      <strong>
+                        {formatMoney(Math.round(Number(price || 0) * 100))}
+                      </strong>
+                    </div>
+                  ))}
+                  <div className='create-order-review-row create-order-review-table-total'>
+                    <strong>Totals</strong>
+                    <strong>
+                      {formatWeight(
+                        selectedItems.some(
+                          ({ item }) => item.grossWeightMilli !== null,
+                        )
+                          ? selectedItems.reduce(
+                              (sum, { item }) =>
+                                sum + (item.grossWeightMilli ?? 0),
+                              0,
+                            )
+                          : null,
+                      )}
+                    </strong>
+                    <strong>
+                      {formatWeight(
+                        selectedItems.some(
+                          ({ item }) => item.netWeightMilli !== null,
+                        )
+                          ? selectedItems.reduce(
+                              (sum, { item }) =>
+                                sum + (item.netWeightMilli ?? 0),
+                              0,
+                            )
+                          : null,
+                      )}
+                    </strong>
+                    <strong>
+                      {formatDetailTotal(selectedItems, 'diamondDetails')}
+                    </strong>
+                    <strong>
+                      {formatDetailTotal(selectedItems, 'stoneDetails')}
+                    </strong>
+                    <strong>{formatMoney(totalPaise)}</strong>
+                  </div>
+                </div>
+                <div className='create-order-review-total'>
+                  <span>Final order total</span>
+                  <strong>{formatMoney(finalTotalPaise)}</strong>
+                </div>
+                <label
+                  className='create-order-review-notes-label'
+                  htmlFor='create-order-review-notes'
+                >
+                  Notes
+                </label>
+                <textarea
+                  id='create-order-review-notes'
+                  className='create-order-review-notes'
+                  value={notes}
+                  onChange={(event) => setNotes(event.target.value)}
+                  rows={3}
+                  placeholder='Add any notes for this order…'
+                />
               </section>
             )}
           </div>
@@ -1258,7 +1667,7 @@ export default function CreateOrderModal({
                 <button
                   type='submit'
                   className='create-order-submit-button'
-                  disabled={saving || loading}
+                  disabled={saving || loading || !reviewReady}
                 >
                   {saving ? 'Creating…' : 'Create confirmed order'}
                 </button>
@@ -1268,55 +1677,392 @@ export default function CreateOrderModal({
         )}
       </form>
       {showCustomRates && customRateDraft && pricingContext && (
-        <div className='create-order-custom-backdrop' role='presentation' onMouseDown={(event) => { if (event.target === event.currentTarget) setShowCustomRates(false); }}>
-          <section className='create-order-custom-modal' role='dialog' aria-modal='true' aria-labelledby='create-order-custom-title'>
+        <div
+          className='create-order-custom-backdrop'
+          role='presentation'
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setShowCustomRates(false);
+          }}
+        >
+          <section
+            className='create-order-custom-modal'
+            role='dialog'
+            aria-modal='true'
+            aria-labelledby='create-order-custom-title'
+          >
             <header className='create-order-custom-modal-header'>
               <div>
                 <h2 id='create-order-custom-title'>Custom price rules</h2>
-                <p>Changes apply only to the {customizeSelected.length} selected item{customizeSelected.length === 1 ? '' : 's'}. Existing overrides are preserved unless you edit a field.</p>
+                <p>
+                  Changes apply only to the {customizeSelected.length} selected
+                  item{customizeSelected.length === 1 ? '' : 's'}. Existing
+                  overrides are preserved unless you edit a field.
+                </p>
               </div>
-              <button type='button' className='create-order-custom-close' onClick={() => setShowCustomRates(false)} aria-label='Close custom price rules'>×</button>
+              <button
+                type='button'
+                className='create-order-custom-close'
+                onClick={() => setShowCustomRates(false)}
+                aria-label='Close custom price rules'
+              >
+                ×
+              </button>
             </header>
             <div className='create-order-custom-modal-body'>
-              {customRateHasMixedValues && <div className='create-order-custom-mixed-notice' role='status'><span className='create-order-custom-mixed-icon' aria-hidden='true'>i</span><div><strong>Some selected items have different pricing values.</strong><p>If you want to override these values with one common value, enter it below. Leave a field unchanged to preserve each item's existing value.</p></div></div>}
+              {customRateHasMixedValues && (
+                <div className='create-order-custom-mixed-notice' role='status'>
+                  <span
+                    className='create-order-custom-mixed-icon'
+                    aria-hidden='true'
+                  >
+                    i
+                  </span>
+                  <div>
+                    <strong>
+                      Some selected items have different pricing values.
+                    </strong>
+                    <p>
+                      If you want to override these values with one common
+                      value, enter it below. Leave a field unchanged to preserve
+                      each item's existing value.
+                    </p>
+                  </div>
+                </div>
+              )}
               <section className='create-order-custom-section'>
                 <h3>Gold pricing</h3>
                 <div className='create-order-custom-grid create-order-custom-grid-two'>
-                  <label className='create-order-custom-field'><span>Gold rate</span><div className='create-order-settings-input'><span>₹/g</span><input inputMode='decimal' value={customRateDraft.goldRate} placeholder='Different values' onChange={(e) => changeCustomDraft('goldRate', e.target.value)} /></div></label>
-                  <div className='create-order-custom-field'><span>Gold purity by item</span><div className='create-order-purity-list'>{(() => { const groups = new Map<string, number[]>(); customizeSelected.forEach((id) => { const source = pricingContext.items.find((item) => item.inventoryItemId === id); const key = (source?.purityName || 'Purity not specified').trim() || 'Purity not specified'; groups.set(key, [...(groups.get(key) || []), id]); }); return [...groups.entries()].map(([purity, ids]) => { const values = ids.map((id) => customRateDraft.purityByItem[id] ?? ''); const first = values[0] ?? ''; const same = values.every((value) => value === first); const fieldKey = `purity:${purity}`; return <div className='create-order-purity-row create-order-purity-group' key={purity}><div className='create-order-purity-value'>{purity}</div><label className='create-order-settings-input'><input aria-label={`${purity} purity percentage`} inputMode='decimal' value={same ? first : ''} placeholder={same ? '' : 'Different values'} onChange={(event) => { const value = event.target.value; setCustomRateDraft((current) => { if (!current) return current; const nextPurityByItem = { ...current.purityByItem }; ids.forEach((id) => { nextPurityByItem[id] = value; }); return { ...current, purityByItem: nextPurityByItem }; }); setCustomRateDirty((current) => current.includes(fieldKey) ? current : [...current, fieldKey]); }} /><span>%</span></label></div>; }); })()}</div></div>
+                  <label className='create-order-custom-field'>
+                    <span>Gold rate</span>
+                    <div className='create-order-settings-input'>
+                      <span>₹/g</span>
+                      <input
+                        inputMode='decimal'
+                        value={customRateDraft.goldRate}
+                        placeholder='Different values'
+                        onChange={(e) =>
+                          changeCustomDraft('goldRate', e.target.value)
+                        }
+                      />
+                    </div>
+                  </label>
+                  <div className='create-order-custom-field'>
+                    <span>Gold purity by item</span>
+                    <div className='create-order-purity-list'>
+                      {(() => {
+                        const groups = new Map<string, number[]>();
+                        customizeSelected.forEach((id) => {
+                          const source = pricingContext.items.find(
+                            (item) => item.inventoryItemId === id,
+                          );
+                          const key =
+                            (
+                              source?.purityName || 'Purity not specified'
+                            ).trim() || 'Purity not specified';
+                          groups.set(key, [...(groups.get(key) || []), id]);
+                        });
+                        return [...groups.entries()].map(([purity, ids]) => {
+                          const values = ids.map(
+                            (id) => customRateDraft.purityByItem[id] ?? '',
+                          );
+                          const first = values[0] ?? '';
+                          const same = values.every((value) => value === first);
+                          const fieldKey = `purity:${purity}`;
+                          return (
+                            <div
+                              className='create-order-purity-row create-order-purity-group'
+                              key={purity}
+                            >
+                              <div className='create-order-purity-value'>
+                                {purity}
+                              </div>
+                              <label className='create-order-settings-input'>
+                                <input
+                                  aria-label={`${purity} purity percentage`}
+                                  inputMode='decimal'
+                                  value={same ? first : ''}
+                                  placeholder={same ? '' : 'Different values'}
+                                  onChange={(event) => {
+                                    const value = event.target.value;
+                                    setCustomRateDraft((current) => {
+                                      if (!current) return current;
+                                      const nextPurityByItem = {
+                                        ...current.purityByItem,
+                                      };
+                                      ids.forEach((id) => {
+                                        nextPurityByItem[id] = value;
+                                      });
+                                      return {
+                                        ...current,
+                                        purityByItem: nextPurityByItem,
+                                      };
+                                    });
+                                    setCustomRateDirty((current) =>
+                                      current.includes(fieldKey)
+                                        ? current
+                                        : [...current, fieldKey],
+                                    );
+                                  }}
+                                />
+                                <span>%</span>
+                              </label>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
+                  </div>
                 </div>
               </section>
               <section className='create-order-custom-section'>
                 <h3>Wastage</h3>
                 <div className='create-order-wastage-cards'>
-                  <div className={`create-order-wastage-card ${customRateDraft.wastageMode === 'percent' ? 'is-selected' : ''}`}><button type='button' className='create-order-wastage-select' onClick={() => changeCustomDraft('wastageMode', 'percent')}><span className='create-order-wastage-card-heading'><strong>Percentage</strong><span>{customRateDraft.wastageMode === 'percent' ? '✓' : '○'}</span></span></button><small>Wastage calculated as a percentage</small><div className='create-order-settings-input'><input inputMode='decimal' value={customRateDraft.wastagePercent} placeholder='Different values' onChange={(e) => changeCustomDraft('wastagePercent', e.target.value)} /><span>%</span></div></div>
-                  <div className={`create-order-wastage-card ${customRateDraft.wastageMode === 'per_g' ? 'is-selected' : ''}`}><button type='button' className='create-order-wastage-select' onClick={() => changeCustomDraft('wastageMode', 'per_g')}><span className='create-order-wastage-card-heading'><strong>Fixed per gram</strong><span>{customRateDraft.wastageMode === 'per_g' ? '✓' : '○'}</span></span></button><small>Fixed wastage amount per gram</small><div className='create-order-settings-input'><span>₹/g</span><input inputMode='decimal' value={customRateDraft.wastagePerGram} placeholder='Different values' onChange={(e) => changeCustomDraft('wastagePerGram', e.target.value)} /></div></div>
+                  <div
+                    className={`create-order-wastage-card ${customRateDraft.wastageMode === 'percent' ? 'is-selected' : ''}`}
+                  >
+                    <button
+                      type='button'
+                      className='create-order-wastage-select'
+                      onClick={() =>
+                        changeCustomDraft('wastageMode', 'percent')
+                      }
+                    >
+                      <span className='create-order-wastage-card-heading'>
+                        <strong>Percentage</strong>
+                        <span>
+                          {customRateDraft.wastageMode === 'percent'
+                            ? '✓'
+                            : '○'}
+                        </span>
+                      </span>
+                    </button>
+                    <small>Wastage calculated as a percentage</small>
+                    <div className='create-order-settings-input'>
+                      <input
+                        inputMode='decimal'
+                        value={customRateDraft.wastagePercent}
+                        placeholder='Different values'
+                        onChange={(e) =>
+                          changeCustomDraft('wastagePercent', e.target.value)
+                        }
+                      />
+                      <span>%</span>
+                    </div>
+                  </div>
+                  <div
+                    className={`create-order-wastage-card ${customRateDraft.wastageMode === 'per_g' ? 'is-selected' : ''}`}
+                  >
+                    <button
+                      type='button'
+                      className='create-order-wastage-select'
+                      onClick={() => changeCustomDraft('wastageMode', 'per_g')}
+                    >
+                      <span className='create-order-wastage-card-heading'>
+                        <strong>Fixed per gram</strong>
+                        <span>
+                          {customRateDraft.wastageMode === 'per_g' ? '✓' : '○'}
+                        </span>
+                      </span>
+                    </button>
+                    <small>Fixed wastage amount per gram</small>
+                    <div className='create-order-settings-input'>
+                      <span>₹/g</span>
+                      <input
+                        inputMode='decimal'
+                        value={customRateDraft.wastagePerGram}
+                        placeholder='Different values'
+                        onChange={(e) =>
+                          changeCustomDraft('wastagePerGram', e.target.value)
+                        }
+                      />
+                    </div>
+                  </div>
                 </div>
               </section>
               {(() => {
-                const diamondMap = new Map<string, { key: string; label: string }>();
-                const stoneMap = new Map<string, { key: string; label: string; unit: 'ct' | 'g' }>();
+                const diamondMap = new Map<
+                  string,
+                  { key: string; label: string }
+                >();
+                const stoneMap = new Map<
+                  string,
+                  { key: string; label: string; unit: 'ct' | 'g' }
+                >();
                 customizeSelected.forEach((id) => {
-                  const source = pricingContext.items.find((item) => item.inventoryItemId === id);
+                  const source = pricingContext.items.find(
+                    (item) => item.inventoryItemId === id,
+                  );
                   source?.diamonds.forEach((diamond) => {
-                    const key = String(diamond.combinationId ?? diamond.shapeId);
-                    diamondMap.set(key, { key, label: `${diamond.shape} ${diamond.quality || ''}`.trim() });
+                    const key = String(
+                      diamond.combinationId ?? diamond.shapeId,
+                    );
+                    diamondMap.set(key, {
+                      key,
+                      label: `${diamond.shape} ${diamond.quality || ''}`.trim(),
+                    });
                   });
                   source?.stones.forEach((stone) => {
                     const key = String(stone.stoneTypeId);
-                    stoneMap.set(key, { key, label: stone.stone, unit: stone.weightUnit });
+                    stoneMap.set(key, {
+                      key,
+                      label: stone.stone,
+                      unit: stone.weightUnit,
+                    });
                   });
                 });
                 const diamondRows = [...diamondMap.values()];
                 const stoneRows = [...stoneMap.values()];
-                return <>
-                  <section className='create-order-custom-section'><h3>Diamond prices</h3>{diamondRows.length ? <div className='create-order-custom-grid create-order-custom-grid-two'>{diamondRows.map((diamond) => <label className='create-order-custom-field' key={diamond.key}><span>{diamond.label} (₹/ct)</span><div className='create-order-settings-input'><span>₹/ct</span><input inputMode='decimal' value={customRateDraft.diamondRates[diamond.key] ?? ''} placeholder='Different values' onChange={(e) => changeCustomDraft(`diamond:${diamond.key}`, e.target.value)} /></div></label>)}</div> : <p className='create-order-custom-muted'>No diamond components in the selected items.</p>}</section>
-                  <section className='create-order-custom-section'><h3>Stone prices</h3>{stoneRows.length ? <div className='create-order-custom-grid create-order-custom-grid-two'>{stoneRows.map((stone) => <label className='create-order-custom-field' key={stone.key}><span>{stone.label} (₹/{stone.unit === 'ct' ? 'ct' : 'g'})</span><div className='create-order-settings-input'><span>₹/{stone.unit}</span><input inputMode='decimal' value={customRateDraft.stoneRates[stone.key] ?? ''} placeholder='Different values' onChange={(e) => changeCustomDraft(`stone:${stone.key}`, e.target.value)} /></div></label>)}</div> : <p className='create-order-custom-muted'>No stone components in the selected items.</p>}</section>
-                </>;
+                return (
+                  <>
+                    <section className='create-order-custom-section'>
+                      <h3>Diamond prices</h3>
+                      {diamondRows.length ? (
+                        <div className='create-order-custom-grid create-order-custom-grid-two'>
+                          {diamondRows.map((diamond) => (
+                            <label
+                              className='create-order-custom-field'
+                              key={diamond.key}
+                            >
+                              <span>{diamond.label} (₹/ct)</span>
+                              <div className='create-order-settings-input'>
+                                <span>₹/ct</span>
+                                <input
+                                  inputMode='decimal'
+                                  value={
+                                    customRateDraft.diamondRates[diamond.key] ??
+                                    ''
+                                  }
+                                  placeholder='Different values'
+                                  onChange={(e) =>
+                                    changeCustomDraft(
+                                      `diamond:${diamond.key}`,
+                                      e.target.value,
+                                    )
+                                  }
+                                />
+                              </div>
+                            </label>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className='create-order-custom-muted'>
+                          No diamond components in the selected items.
+                        </p>
+                      )}
+                    </section>
+                    <section className='create-order-custom-section'>
+                      <h3>Stone prices</h3>
+                      {stoneRows.length ? (
+                        <div className='create-order-custom-grid create-order-custom-grid-two'>
+                          {stoneRows.map((stone) => (
+                            <label
+                              className='create-order-custom-field'
+                              key={stone.key}
+                            >
+                              <span>
+                                {stone.label} (₹/
+                                {stone.unit === 'ct' ? 'ct' : 'g'})
+                              </span>
+                              <div className='create-order-settings-input'>
+                                <span>₹/{stone.unit}</span>
+                                <input
+                                  inputMode='decimal'
+                                  value={
+                                    customRateDraft.stoneRates[stone.key] ?? ''
+                                  }
+                                  placeholder='Different values'
+                                  onChange={(e) =>
+                                    changeCustomDraft(
+                                      `stone:${stone.key}`,
+                                      e.target.value,
+                                    )
+                                  }
+                                />
+                              </div>
+                            </label>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className='create-order-custom-muted'>
+                          No stone components in the selected items.
+                        </p>
+                      )}
+                    </section>
+                  </>
+                );
               })()}
-              <section className='create-order-custom-section'><h3>Other charges</h3><div className='create-order-custom-grid create-order-custom-grid-three'><label className='create-order-custom-field'><span>Certification (₹/ct)</span><div className='create-order-settings-input'><span>₹/ct</span><input inputMode='decimal' value={customRateDraft.certification} placeholder='Different values' onChange={(e) => changeCustomDraft('certification', e.target.value)} /></div></label><label className='create-order-custom-field'><span>GST</span><div className='create-order-settings-input'><input inputMode='decimal' value={customRateDraft.gst} placeholder='Different values' onChange={(e) => changeCustomDraft('gst', e.target.value)} /><span>%</span></div></label><label className='create-order-custom-field'><span>Extra cost</span><div className='create-order-settings-input'><span>₹</span><input inputMode='decimal' value={customRateDraft.extraCost} placeholder='Different values' onChange={(e) => changeCustomDraft('extraCost', e.target.value)} /></div></label></div></section>
+              <section className='create-order-custom-section'>
+                <h3>Other charges</h3>
+                <div className='create-order-custom-grid create-order-custom-grid-three'>
+                  <label className='create-order-custom-field'>
+                    <span>Certification (₹/ct)</span>
+                    <div className='create-order-settings-input'>
+                      <span>₹/ct</span>
+                      <input
+                        inputMode='decimal'
+                        value={customRateDraft.certification}
+                        placeholder='Different values'
+                        onChange={(e) =>
+                          changeCustomDraft('certification', e.target.value)
+                        }
+                      />
+                    </div>
+                  </label>
+                  <label className='create-order-custom-field'>
+                    <span>GST</span>
+                    <div className='create-order-settings-input'>
+                      <input
+                        inputMode='decimal'
+                        value={customRateDraft.gst}
+                        placeholder='Different values'
+                        onChange={(e) =>
+                          changeCustomDraft('gst', e.target.value)
+                        }
+                      />
+                      <span>%</span>
+                    </div>
+                  </label>
+                  <label className='create-order-custom-field'>
+                    <span>Extra cost</span>
+                    <div className='create-order-settings-input'>
+                      <span>₹</span>
+                      <input
+                        inputMode='decimal'
+                        value={customRateDraft.extraCost}
+                        placeholder='Different values'
+                        onChange={(e) =>
+                          changeCustomDraft('extraCost', e.target.value)
+                        }
+                      />
+                    </div>
+                  </label>
+                </div>
+              </section>
             </div>
-            <footer className='create-order-custom-modal-footer'><span>{customRateDirty.length ? `${customRateDirty.length} field${customRateDirty.length === 1 ? '' : 's'} changed` : 'Edit only the values you want to override.'}</span><div><button type='button' className='create-order-cancel-button' onClick={() => setShowCustomRates(false)}>Cancel</button><button type='button' className='create-order-submit-button' onClick={applyCustomRates} disabled={!customRateDirty.length}>Apply custom rates</button></div></footer>
+            <footer className='create-order-custom-modal-footer'>
+              <span>
+                {customRateDirty.length
+                  ? `${customRateDirty.length} field${customRateDirty.length === 1 ? '' : 's'} changed`
+                  : 'Edit only the values you want to override.'}
+              </span>
+              <div>
+                <button
+                  type='button'
+                  className='create-order-cancel-button'
+                  onClick={() => setShowCustomRates(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type='button'
+                  className='create-order-submit-button'
+                  onClick={applyCustomRates}
+                  disabled={!customRateDirty.length}
+                >
+                  Apply custom rates
+                </button>
+              </div>
+            </footer>
           </section>
         </div>
       )}

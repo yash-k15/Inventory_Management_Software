@@ -135,32 +135,24 @@ pub fn create_confirmed_order(
         let item_number = item_number
             .ok_or_else(|| "One or more items are no longer available.".to_string())?;
 
-        let existing_order: Option<String> = transaction
-            .query_row(
-                "SELECT 'ORD-' || printf('%04d', co.id)
-                 FROM customer_order_item coi
-                 JOIN customer_order co ON co.id = coi.order_id
-                 WHERE co.status <> 'Cancelled'
-                   AND co.customer_id = ?1
-                   AND co.exhibition_id IS ?2
-                   AND (
-                     coi.selection_item_id IN (
-                       SELECT si.id FROM selection_item si
-                       JOIN selection s ON s.id = si.selection_id
-                       WHERE si.inventory_item_id = ?3
-                         AND s.customer_id = co.customer_id
-                         AND s.exhibition_id IS co.exhibition_id
-                     )
-                     OR (coi.selection_item_id IS NULL AND CAST(json_extract(coi.item_snapshot, '$.inventory_item_id') AS INTEGER) = ?3)
-                   )
-                 ORDER BY co.id DESC LIMIT 1",
-                params![input.customer_id, input.exhibition_id, item.inventory_item_id],
-                |row| row.get(0),
-            )
-            .optional()
-            .map_err(|e| format!("Could not check existing orders: {e}"))?;
-        if let Some(order_number) = existing_order {
-            return Err(format!("{item_number} already belongs to {order_number}."));
+        if let Some(selection_item_id) = item.selection_item_id {
+            let existing_order: Option<String> = transaction
+                .query_row(
+                    "SELECT 'ORD-' || printf('%04d', co.id)
+                     FROM customer_order_item coi
+                     JOIN customer_order co ON co.id = coi.order_id
+                     WHERE co.status <> 'Cancelled'
+                       AND coi.selection_item_id = ?1
+                     ORDER BY co.id DESC
+                     LIMIT 1",
+                    [selection_item_id],
+                    |row| row.get(0),
+                )
+                .optional()
+                .map_err(|e| format!("Could not check existing orders: {e}"))?;
+            if let Some(order_number) = existing_order {
+                return Err(format!("{item_number} was already ordered from this exhibition selection in {order_number}."));
+            }
         }
     }
 

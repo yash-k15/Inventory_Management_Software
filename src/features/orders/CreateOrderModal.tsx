@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
+import { getDatabase } from '../../db';
 import { appDataDir, join } from '@tauri-apps/api/path';
 import {
   createConfirmedOrder,
@@ -166,15 +167,6 @@ function ItemThumbnail({
   );
 }
 
-function getInitials(value: string) {
-  return value
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join('')
-    .toUpperCase();
-}
 
 export default function CreateOrderModal({
   onClose,
@@ -186,12 +178,16 @@ export default function CreateOrderModal({
   const [customers, setCustomers] = useState<CreateOrderCustomer[]>([]);
   const [exhibitions, setExhibitions] = useState<CreateOrderExhibition[]>([]);
   const [inventory, setInventory] = useState<CreateOrderInventoryItem[]>([]);
+  const [orderType, setOrderType] = useState<'exhibition' | 'direct' | ''>('');
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
   const [selectedExhibitionId, setSelectedExhibitionId] = useState('');
   const [selectedItems, setSelectedItems] = useState<SelectedItem[]>([]);
   const [customerSearch, setCustomerSearch] = useState('');
+  const [exhibitionSearch, setExhibitionSearch] = useState('');
+  const [exhibitionCustomerIds, setExhibitionCustomerIds] = useState<number[] | null>(null);
   const [showCustomerPicker, setShowCustomerPicker] = useState(false);
   const [inventorySearch, setInventorySearch] = useState('');
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<number[]>([]);
   const [showMoreItems, setShowMoreItems] = useState(false);
   const [additionalSelectedIds, setAdditionalSelectedIds] = useState<number[]>(
     [],
@@ -517,8 +513,10 @@ export default function CreateOrderModal({
         setInventory(nextInventory);
         if (initialCustomerId != null)
           setSelectedCustomerId(String(initialCustomerId));
-        if (initialExhibitionId != null)
+        if (initialExhibitionId != null) {
           setSelectedExhibitionId(String(initialExhibitionId));
+          setOrderType('exhibition');
+        }
         if (initialItems.length) {
           const requestedIds = new Set(
             initialItems.map((entry) => entry.inventoryItemId),
@@ -633,22 +631,92 @@ export default function CreateOrderModal({
     (customer) => String(customer.id) === selectedCustomerId,
   );
 
-  const filteredCustomers = useMemo(() => {
+  const eligibleCustomers = useMemo(() => {
+    if (orderType !== 'exhibition') return customers;
+    if (!selectedExhibitionId || exhibitionCustomerIds === null) return [];
+    const eligibleIds = new Set(exhibitionCustomerIds);
+    return customers.filter((customer) => eligibleIds.has(customer.id));
+  }, [customers, orderType, selectedExhibitionId, exhibitionCustomerIds]);
+
+  const filteredEligibleCustomers = useMemo(() => {
     const term = customerSearch.trim().toLowerCase();
-
-    if (!term) return customers;
-
-    return customers.filter((customer) =>
-      [
-        customer.businessName,
-        customer.contactName,
-        customer.phone,
-        customer.city,
-      ]
+    if (!term) return eligibleCustomers;
+    return eligibleCustomers.filter((customer) =>
+      [customer.businessName, customer.contactName, customer.phone, customer.city]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(term)),
     );
-  }, [customers, customerSearch]);
+  }, [eligibleCustomers, customerSearch]);
+
+  const filteredExhibitions = useMemo(() => {
+    const term = exhibitionSearch.trim().toLowerCase();
+    if (!term) return exhibitions;
+    return exhibitions.filter((exhibition) =>
+      [exhibition.name, exhibition.startDate, exhibition.endDate]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(term)),
+    );
+  }, [exhibitions, exhibitionSearch]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadExhibitionCustomers() {
+      setExhibitionCustomerIds(null);
+      if (orderType !== 'exhibition' || !selectedExhibitionId) return;
+      try {
+        const db = await getDatabase();
+        const rows = await db.select<{ id: number }[]>(
+          `SELECT DISTINCT c.id
+           FROM customer c
+           JOIN selection s ON s.customer_id = c.id
+           WHERE s.exhibition_id = ? AND c.is_archived = 0
+           ORDER BY c.id`,
+          [Number(selectedExhibitionId)],
+        );
+        if (!cancelled) setExhibitionCustomerIds(rows.map((row) => Number(row.id)));
+      } catch (err) {
+        console.error('Failed to load exhibition customers:', err);
+        if (!cancelled) {
+          setExhibitionCustomerIds([]);
+          setError('Could not load customers for this exhibition.');
+        }
+      }
+    }
+    void loadExhibitionCustomers();
+    return () => { cancelled = true; };
+  }, [orderType, selectedExhibitionId]);
+
+  useEffect(() => {
+    if (step !== 2 || orderType !== 'direct' || initialItems.length > 0) return;
+    let cancelled = false;
+    setLoading(true);
+    searchCreateOrderInventory(inventorySearch)
+      .then((items) => {
+        if (!cancelled) setInventory(items);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(getErrorMessage(err, 'Could not load inventory.'));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [step, orderType, initialItems.length]);
+
+  useEffect(() => {
+    if (step !== 2 || orderType !== 'exhibition' || !selectedCustomerId || !selectedExhibitionId || initialItems.length > 0) return;
+    let cancelled = false;
+    setLoading(true);
+    searchCreateOrderSelectionItems(Number(selectedCustomerId), Number(selectedExhibitionId))
+      .then((items) => {
+        if (!cancelled) setInventory(items.filter((item) => !selectedItems.some((selected) => selected.item.id === item.id)));
+      })
+      .catch((err) => {
+        if (!cancelled) setError(getErrorMessage(err, 'Could not load this customer’s selected items.'));
+      })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [step, orderType, selectedCustomerId, selectedExhibitionId, initialItems.length]);
 
   const totalPaise = selectedItems.reduce(
     (total, selected) => total + Math.round(Number(selected.price || 0) * 100),
@@ -662,7 +730,28 @@ export default function CreateOrderModal({
   async function searchInventory(value: string) {
     setInventorySearch(value);
     try {
-      setInventory(await searchCreateOrderInventory(value));
+      let results: CreateOrderInventoryItem[];
+      if (
+        orderType === 'exhibition' &&
+        selectedCustomerId &&
+        selectedExhibitionId
+      ) {
+        results = await searchCreateOrderSelectionItems(
+          Number(selectedCustomerId),
+          Number(selectedExhibitionId),
+        );
+        const term = value.trim().toLocaleLowerCase();
+        if (term) {
+          results = results.filter((item) =>
+            [item.itemNumber, item.name ?? '', item.categoryName].some((field) =>
+              field.toLocaleLowerCase().includes(term),
+            ),
+          );
+        }
+      } else {
+        results = await searchCreateOrderInventory(value);
+      }
+      setInventory(results);
     } catch (err) {
       console.error('Failed to search order inventory:', err);
       setError(getErrorMessage(err, 'Could not search inventory.'));
@@ -734,8 +823,12 @@ export default function CreateOrderModal({
 
   function continueToNextStep() {
     setError(null);
+    if (step === 1 && !orderType) {
+      setError('Choose whether this is an exhibition order or a direct order.');
+      return;
+    }
     if (step === 1 && !selectedCustomerId) {
-      setError('Select a customer before continuing.');
+      setError('Select a customer before continuing.')
       return;
     }
     if (step === 2 && !selectedItems.length) {
@@ -881,126 +974,95 @@ export default function CreateOrderModal({
           ))}
         </div>
 
-        <div className='create-order-body'>
+        <div className={`create-order-body ${step === 1 ? 'create-order-body-step-one' : ''}`}>
           <div className='create-order-main'>
             {step === 1 && (
               <>
                 <section className='create-order-section'>
-                  <h3>Customer</h3>
-
-                  {selectedCustomer ? (
-                    <div className='create-order-customer-card'>
-                      <span className='create-order-avatar'>
-                        {getInitials(selectedCustomer.businessName)}
-                      </span>
-                      <div className='create-order-customer-info'>
-                        <strong>{selectedCustomer.businessName}</strong>
-                        <span>
-                          {[
-                            selectedCustomer.contactName,
-                            selectedCustomer.phone,
-                            selectedCustomer.city,
-                          ]
-                            .filter(Boolean)
-                            .join(' · ')}
-                        </span>
-                      </div>
-                      <button
-                        type='button'
-                        className='create-order-text-button'
-                        onClick={() => setShowCustomerPicker(true)}
-                      >
-                        Change
-                      </button>
-                    </div>
-                  ) : (
+                  <h3>Create order for</h3>
+                  <div className='create-order-type-options' role='radiogroup' aria-label='Create order for'>
                     <button
                       type='button'
-                      className='create-order-customer-placeholder'
-                      onClick={() => setShowCustomerPicker(true)}
+                      role='radio'
+                      aria-checked={orderType === 'exhibition'}
+                      className={`create-order-type-option ${orderType === 'exhibition' ? 'is-selected' : ''}`}
+                      onClick={() => {
+                        setOrderType('exhibition');
+                        setSelectedItems([]);
+                        setInventory([]);
+                        setInventorySearch('');
+                        setSelectedCategoryIds([]);
+                        setShowMoreItems(false);
+                        setAdditionalSelectedIds([]);
+                        setSelectedExhibitionId('');
+                        setExhibitionSearch('');
+                        setExhibitionDropdownOpen(false);
+                        setExhibitionCustomerIds(null);
+                        setSelectedCustomerId('');
+                        setShowCustomerPicker(false);
+                        setError(null);
+                      }}
                     >
-                      Choose a customer <span>›</span>
+                      <span className='create-order-type-radio' />
+                      <span><strong>From exhibition</strong><small>Create an order associated with an exhibition.</small></span>
                     </button>
-                  )}
-
-                  <p className='create-order-helper'>
-                    Not listed? Customer creation will be available from
-                    Customers.
-                  </p>
-
-                  {showCustomerPicker && (
-                    <div className='create-order-picker'>
-                      <input
-                        autoFocus
-                        value={customerSearch}
-                        onChange={(event) =>
-                          setCustomerSearch(event.target.value)
-                        }
-                        placeholder='Search business, contact, or phone...'
-                        aria-label='Search customers'
-                      />
-                      <div className='create-order-picker-list'>
-                        {filteredCustomers.map((customer) => (
-                          <button
-                            type='button'
-                            key={customer.id}
-                            onClick={() => {
-                              setSelectedCustomerId(String(customer.id));
-                              setShowCustomerPicker(false);
-                              setCustomerSearch('');
-                            }}
-                          >
-                            <strong>{customer.businessName}</strong>
-                            <span>
-                              {[
-                                customer.contactName,
-                                customer.phone,
-                                customer.city,
-                              ]
-                                .filter(Boolean)
-                                .join(' · ')}
-                            </span>
-                          </button>
-                        ))}
-                        {!filteredCustomers.length && (
-                          <p>No matching customers.</p>
-                        )}
-                      </div>
-                      <button
-                        type='button'
-                        className='create-order-text-button'
-                        onClick={() => setShowCustomerPicker(false)}
-                      >
-                        Close customer list
-                      </button>
-                    </div>
-                  )}
+                    <button
+                      type='button'
+                      role='radio'
+                      aria-checked={orderType === 'direct'}
+                      className={`create-order-type-option ${orderType === 'direct' ? 'is-selected' : ''}`}
+                      onClick={() => {
+                        setOrderType('direct');
+                        setSelectedItems([]);
+                        setInventory([]);
+                        setInventorySearch('');
+                        setSelectedCategoryIds([]);
+                        setShowMoreItems(false);
+                        setAdditionalSelectedIds([]);
+                        setSelectedExhibitionId('');
+                        setExhibitionSearch('');
+                        setExhibitionDropdownOpen(false);
+                        setExhibitionCustomerIds(null);
+                        setSelectedCustomerId('');
+                        setShowCustomerPicker(false);
+                        setError(null);
+                      }}
+                    >
+                      <span className='create-order-type-radio' />
+                      <span><strong>Direct order</strong><small>Create an order without an exhibition.</small></span>
+                    </button>
+                  </div>
                 </section>
 
-                <section className='create-order-section'>
-                  <h3>
-                    2 · Exhibition <span>(optional)</span>
-                  </h3>
-
+                {orderType === 'exhibition' && <section className='create-order-section'>
+                  <h3>Exhibition</h3>
                   <div className='create-order-exhibition-select'>
-                    <button
-                      type='button'
-                      className='create-order-exhibition-trigger'
-                      aria-haspopup='listbox'
+                    <input
+                      className='create-order-exhibition-search'
+                      value={exhibitionDropdownOpen ? exhibitionSearch : (
+                        exhibitions.find((exhibition) => String(exhibition.id) === selectedExhibitionId)?.name ?? ''
+                      )}
+                      onFocus={() => {
+                        setExhibitionDropdownOpen(true);
+                        setExhibitionSearch('');
+                      }}
+                      onChange={(event) => {
+                        setExhibitionSearch(event.target.value);
+                        setExhibitionDropdownOpen(true);
+                        setSelectedItems([]);
+                        setInventory([]);
+                        setInventorySearch('');
+                        setSelectedCategoryIds([]);
+                        setSelectedExhibitionId('');
+                        setExhibitionCustomerIds(null);
+                        setSelectedCustomerId('');
+                        setShowCustomerPicker(false);
+                      }}
+                      placeholder='Search or choose an exhibition...'
+                      aria-label='Search exhibitions'
+                      role='combobox'
                       aria-expanded={exhibitionDropdownOpen}
-                      onClick={() => setExhibitionDropdownOpen((open) => !open)}
-                    >
-                      <span>
-                        {selectedExhibitionId
-                          ? (exhibitions.find(
-                              (exhibition) =>
-                                String(exhibition.id) === selectedExhibitionId,
-                            )?.name ?? 'Select exhibition')
-                          : 'No exhibition · direct order'}
-                      </span>
-                      <span className='create-order-exhibition-chevron'>⌄</span>
-                    </button>
-
+                    />
                     {exhibitionDropdownOpen && (
                       <>
                         <button
@@ -1009,64 +1071,129 @@ export default function CreateOrderModal({
                           aria-label='Close exhibition menu'
                           onClick={() => setExhibitionDropdownOpen(false)}
                         />
-                        <div
-                          className='create-order-exhibition-menu'
-                          role='listbox'
-                        >
-                          <button
-                            type='button'
-                            role='option'
-                            aria-selected={!selectedExhibitionId}
-                            className={`create-order-exhibition-option ${
-                              !selectedExhibitionId ? 'is-selected' : ''
-                            }`}
-                            onClick={() => {
-                              setSelectedExhibitionId('');
-                              setExhibitionDropdownOpen(false);
-                            }}
-                          >
-                            <span>No exhibition · direct order</span>
-                            {!selectedExhibitionId && <span>✓</span>}
-                          </button>
-
-                          {exhibitions.map((exhibition) => {
-                            const selected =
-                              String(exhibition.id) === selectedExhibitionId;
-
+                        <div className='create-order-exhibition-menu' role='listbox'>
+                          {filteredExhibitions.map((exhibition) => {
+                            const selected = String(exhibition.id) === selectedExhibitionId;
                             return (
                               <button
                                 type='button'
                                 role='option'
                                 aria-selected={selected}
                                 key={exhibition.id}
-                                className={`create-order-exhibition-option ${
-                                  selected ? 'is-selected' : ''
-                                }`}
+                                className={`create-order-exhibition-option ${selected ? 'is-selected' : ''}`}
                                 onClick={() => {
-                                  setSelectedExhibitionId(
-                                    String(exhibition.id),
-                                  );
+                                  setSelectedItems([]);
+                                  setInventory([]);
+                                  setInventorySearch('');
+                                  setSelectedCategoryIds([]);
+                                  setSelectedExhibitionId(String(exhibition.id));
+                                  setSelectedCustomerId('');
+                                  setCustomerSearch('');
+                                  setShowCustomerPicker(false);
+                                  setExhibitionSearch('');
                                   setExhibitionDropdownOpen(false);
+                                  setError(null);
+                                }}
+                              >
+                                <span>{exhibition.name}<small>{exhibition.startDate}</small></span>
+                                {selected && <span>✓</span>}
+                              </button>
+                            );
+                          })}
+                          {!filteredExhibitions.length && <p className='create-order-empty-option'>No matching exhibitions.</p>}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  <p className='create-order-helper'>
+                    Choose an exhibition to see only customers who attended it.
+                  </p>
+                </section>}
+
+                {orderType && <section className='create-order-section'>
+                  <h3>Customer</h3>
+                  <div className='create-order-exhibition-select create-order-customer-select'>
+                    <input
+                      className='create-order-exhibition-search'
+                      value={showCustomerPicker ? customerSearch : (selectedCustomer?.businessName ?? '')}
+                      disabled={orderType === 'exhibition' && !selectedExhibitionId}
+                      onFocus={() => {
+                        if (orderType === 'exhibition' && !selectedExhibitionId) return;
+                        setExhibitionDropdownOpen(false);
+                        setCustomerSearch('');
+                        setShowCustomerPicker(true);
+                      }}
+                      onChange={(event) => {
+                        setCustomerSearch(event.target.value);
+                        setShowCustomerPicker(true);
+                        setSelectedItems([]);
+                        setInventory([]);
+                        setInventorySearch('');
+                        setSelectedCategoryIds([]);
+                        setSelectedCustomerId('');
+                      }}
+                      placeholder={orderType === 'exhibition' && !selectedExhibitionId ? 'Choose an exhibition first' : 'Search or choose a customer...'}
+                      aria-label='Search customers'
+                      role='combobox'
+                      aria-expanded={showCustomerPicker}
+                    />
+                    {showCustomerPicker && !(orderType === 'exhibition' && !selectedExhibitionId) && (
+                      <>
+                        <button
+                          type='button'
+                          className='create-order-dropdown-dismiss'
+                          aria-label='Close customer menu'
+                          onClick={() => {
+                            setShowCustomerPicker(false);
+                            setCustomerSearch('');
+                          }}
+                        />
+                        <div className='create-order-exhibition-menu create-order-customer-menu' role='listbox'>
+                          {filteredEligibleCustomers.map((customer) => {
+                            const selected = String(customer.id) === selectedCustomerId;
+                            return (
+                              <button
+                                type='button'
+                                role='option'
+                                aria-selected={selected}
+                                key={customer.id}
+                                className={`create-order-exhibition-option create-order-customer-option ${selected ? 'is-selected' : ''}`}
+                                onClick={() => {
+                                  if (selectedCustomerId !== String(customer.id)) {
+                                    setSelectedItems([]);
+                                    setInventory([]);
+                                    setInventorySearch('');
+                                    setSelectedCategoryIds([]);
+                                  }
+                                  setSelectedCustomerId(String(customer.id));
+                                  setCustomerSearch('');
+                                  setShowCustomerPicker(false);
+                                  setError(null);
                                 }}
                               >
                                 <span>
-                                  {exhibition.name}
-                                  <small>{exhibition.startDate}</small>
+                                  {customer.businessName}
+                                  <small>{[
+                                    customer.contactName,
+                                    customer.phone,
+                                    customer.city,
+                                  ].filter(Boolean).join(' · ')}</small>
                                 </span>
                                 {selected && <span>✓</span>}
                               </button>
                             );
                           })}
+                          {!filteredEligibleCustomers.length && <p className='create-order-empty-option'>No matching customers.</p>}
                         </div>
                       </>
                     )}
                   </div>
-
                   <p className='create-order-helper'>
-                    Orders can exist without an exhibition. Choose one only if
-                    this order belongs to it.
+                    Not listed? Customer creation will be available from Customers.
                   </p>
-                </section>
+                </section>}
+
+
               </>
             )}
 
@@ -1129,15 +1256,36 @@ export default function CreateOrderModal({
                           onChange={(event) =>
                             void searchInventory(event.target.value)
                           }
-                          placeholder='Scan barcode or search item number...'
-                          aria-label='Search inventory by barcode or item number'
+                          placeholder='Search by item number, name, or category...'
+                          aria-label='Search inventory by item number, name, or category'
                         />
                       </div>
                     )}
 
+                    <div className='create-order-category-filters' aria-label='Filter by category'>
+                      {[...new Map(inventory.map((item) => [item.categoryId, item.categoryName])).entries()].map(([categoryId, categoryName]) => (
+                        <button
+                          type='button'
+                          key={categoryId}
+                          className={selectedCategoryIds.includes(categoryId) ? 'is-selected' : ''}
+                          aria-pressed={selectedCategoryIds.includes(categoryId)}
+                          onClick={() => setSelectedCategoryIds((current) => current.includes(categoryId) ? current.filter((id) => id !== categoryId) : [...current, categoryId])}
+                        >
+                          {categoryName}
+                        </button>
+                      ))}
+                      {selectedCategoryIds.length > 0 && (
+                        <button type='button' className='create-order-category-clear' onClick={() => setSelectedCategoryIds([])}>Clear</button>
+                      )}
+                    </div>
                     <div
-                      className={`create-order-inventory-list ${showMoreItems && initialItems.length > 0 ? 'create-order-add-more-table' : ''}`}
+                      className={`create-order-inventory-list create-order-step2-table ${showMoreItems && initialItems.length > 0 ? 'create-order-add-more-table' : ''}`}
                     >
+                      {!showMoreItems && (
+                        <div className='create-order-step2-heading'>
+                          <span></span><span>Item</span><span>Gross wt.</span><span>Net wt.</span><span>Diamonds</span><span>Stones</span>
+                        </div>
+                      )}
                       {showMoreItems && initialItems.length > 0 && (
                         <div className='create-order-add-more-heading'>
                           <span></span>
@@ -1153,111 +1301,52 @@ export default function CreateOrderModal({
                       )}
 
                       {!loading &&
-                        inventory.map((item) => {
+                        inventory.filter((item) => (selectedCategoryIds.length === 0 || selectedCategoryIds.includes(item.categoryId)) && (showMoreItems || !selectedItems.some((selected) => selected.item.id === item.id))).map((item) => {
                           const alreadySelected = selectedItems.some(
                             (selected) => selected.item.id === item.id,
                           );
-                          const disabled =
-                            Boolean(item.isArchived) || alreadySelected;
-
-                          let badge = 'Add';
-                          if (item.isArchived) badge = 'Archived';
-                          else if (alreadySelected) badge = 'Already added';
-
                           return (
                             <div
                               key={item.id}
-                              className={`create-order-inventory-row ${
-                                disabled ? 'is-disabled' : ''
-                              }`}
+                              className='create-order-inventory-row'
                             >
-                              {initialItems.length > 0 && showMoreItems ? (
-                                <input
-                                  type='checkbox'
-                                  className='create-order-item-checkbox'
-                                  aria-label={`Select ${item.itemNumber}`}
-                                  checked={additionalSelectedIds.includes(
-                                    item.id,
-                                  )}
-                                  disabled={
-                                    Boolean(item.isArchived) || alreadySelected
+                              <input
+                                type='checkbox'
+                                className='create-order-item-checkbox'
+                                aria-label={`Select ${item.itemNumber}`}
+                                checked={initialItems.length > 0 && showMoreItems ? additionalSelectedIds.includes(item.id) : alreadySelected}
+                                disabled={Boolean(item.isArchived) || (initialItems.length > 0 && showMoreItems ? alreadySelected : false)}
+                                onChange={(event) => {
+                                  if (initialItems.length > 0 && showMoreItems) {
+                                    setAdditionalSelectedIds((current) => event.target.checked ? [...current, item.id] : current.filter((id) => id !== item.id));
+                                  } else if (event.target.checked) {
+                                    addItem(item);
+                                  } else {
+                                    setSelectedItems((current) => current.filter((selected) => selected.item.id !== item.id));
                                   }
-                                  onChange={(event) =>
-                                    setAdditionalSelectedIds((current) =>
-                                      event.target.checked
-                                        ? [...current, item.id]
-                                        : current.filter(
-                                            (id) => id !== item.id,
-                                          ),
-                                    )
-                                  }
-                                />
-                              ) : (
-                                <span className='create-order-item-icon'>
-                                  ◇
-                                </span>
-                              )}
-                              {showMoreItems && initialItems.length > 0 ? (
-                                <div className='create-order-item-identity create-order-add-more-identity'>
-                                  <ItemThumbnail
-                                    path={item.imagePath}
-                                    alt={item.itemNumber}
-                                  />
-                                  <div className='create-order-inventory-name'>
-                                    <strong>{item.itemNumber}</strong>
-                                    <span>{item.categoryName}</span>
-                                  </div>
-                                </div>
-                              ) : (
+                                }}
+                              />
+                              <div className='create-order-item-identity create-order-add-more-identity'>
+                                <ItemThumbnail path={item.imagePath} alt={item.itemNumber} />
                                 <div className='create-order-inventory-name'>
-                                  <strong>{item.itemNumber}</strong>
+                                  <strong>{item.itemNumber}{item.name ? ` · ${item.name}` : ''}</strong>
                                   <span>{item.categoryName}</span>
                                 </div>
-                              )}
-                              {showMoreItems && initialItems.length > 0 ? (
-                                <>
-                                  <span className='create-order-inventory-details'>
-                                    {formatWeight(item.grossWeightMilli)}
-                                  </span>
-                                  <span className='create-order-inventory-details'>
-                                    {formatWeight(item.netWeightMilli)}
-                                  </span>
-                                  <span className='create-order-inventory-details'>
-                                    {formatDetailLines(item.diamondDetails)}
-                                  </span>
-                                  <span className='create-order-inventory-details'>
-                                    {formatDetailLines(item.stoneDetails)}
-                                  </span>
-                                </>
-                              ) : (
-                                <span className='create-order-inventory-details'>
-                                  {formatDetailLines(item.diamondDetails)}
-                                </span>
-                              )}
-                              {!(initialItems.length > 0 && showMoreItems) && (
-                                <button
-                                  type='button'
-                                  disabled={disabled}
-                                  className={
-                                    disabled
-                                      ? 'create-order-item-badge'
-                                      : 'create-order-add-button'
-                                  }
-                                  onClick={() => addItem(item)}
-                                >
-                                  {badge}
-                                </button>
-                              )}
+                              </div>
+                              <span className='create-order-inventory-details'>{formatWeight(item.grossWeightMilli)}</span>
+                              <span className='create-order-inventory-details'>{formatWeight(item.netWeightMilli)}</span>
+                              <span className='create-order-inventory-details'>{formatDetailLines(item.diamondDetails)}</span>
+                              <span className='create-order-inventory-details'>{formatDetailLines(item.stoneDetails)}</span>
                             </div>
                           );
                         })}
 
-                      {!loading && !inventory.length && (
-                        <p className='create-order-empty'>
-                          No inventory items match this search.
-                        </p>
+                      {!loading && !inventory.some((item) => selectedCategoryIds.length === 0 || selectedCategoryIds.includes(item.categoryId)) && (
+                        <p className='create-order-empty'>No eligible items match your search and category filters.</p>
                       )}
                     </div>
+
+
 
                     {!(initialItems.length > 0 && showMoreItems) && (
                       <p className='create-order-helper'>

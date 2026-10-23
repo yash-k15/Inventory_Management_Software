@@ -2105,3 +2105,429 @@
     min-width: 0;
     text-align: left;
 }
+
+
+/* Create-order type selection */
+.create-order-type-options {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.create-order-type-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 11px;
+    width: 100%;
+    min-width: 0;
+    padding: 14px;
+    text-align: left;
+    color: #392f29;
+    background: #fffdfa;
+    border: 1px solid #e7ddd2;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: border-color 120ms ease, background 120ms ease;
+}
+
+.create-order-type-option:hover {
+    border-color: #c7a47b;
+}
+
+.create-order-type-option.is-selected {
+    border-color: #a77a43;
+    background: #fbf6ee;
+}
+
+.create-order-type-option > span:last-child {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.create-order-type-option strong {
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.create-order-type-option small {
+    color: #786e65;
+    font-size: 11px;
+    line-height: 1.45;
+}
+
+.create-order-type-radio {
+    display: block;
+    flex: 0 0 16px;
+    width: 16px;
+    height: 16px;
+    margin-top: 1px;
+    border: 1px solid #c9b9a8;
+    border-radius: 50%;
+    background: #fff;
+}
+
+.create-order-type-option.is-selected .create-order-type-radio {
+    border: 5px solid #8d5e2b;
+}
+
+@media (max-width: 600px) {
+    .create-order-type-options {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+
+/* Searchable exhibition picker */
+.create-order-exhibition-select {
+    position: relative;
+    z-index: 6;
+}
+.create-order-exhibition-search {
+    display: block;
+    width: 100%;
+    min-height: 41px;
+    box-sizing: border-box;
+    padding: 0 36px 0 12px;
+    border: 1px solid #ddcfc0;
+    border-radius: 8px;
+    background: #fff;
+    color: #342b26;
+    font: inherit;
+    font-size: 12px;
+    outline: none;
+}
+.create-order-exhibition-search:focus {
+    border-color: #a77a43;
+    box-shadow: 0 0 0 2px rgb(167 122 67 / 12%);
+}
+.create-order-exhibition-select > .create-order-exhibition-chevron {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    margin: 0;
+    pointer-events: none;
+}
+.create-order-empty-option {
+    margin: 0;
+    padding: 12px;
+    color: #796d62;
+    font-size: 12px;
+}
+.create-order-customer-placeholder:disabled {
+    cursor: not-allowed;
+    opacity: .65;
+}
+
+
+/* First-step layout: give the customer/exhibition selectors more room and
+   allow their menus to layer above the modal footer instead of being clipped. */
+.create-order-modal:has(.create-order-body-step-one) {
+    min-height: min(590px, 94vh);
+    overflow: visible;
+}
+
+.create-order-body-step-one {
+    position: relative;
+    z-index: 1;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: visible;
+    padding-top: 20px;
+    padding-bottom: 22px;
+}
+
+.create-order-body-step-one .create-order-main {
+    gap: 14px;
+}
+
+.create-order-body-step-one .create-order-section {
+    padding-top: 17px;
+    padding-bottom: 17px;
+}
+
+.create-order-body-step-one .create-order-exhibition-select {
+    z-index: 40;
+}
+
+.create-order-body-step-one .create-order-exhibition-menu {
+    z-index: 60;
+    max-height: min(280px, 42vh);
+}
+
+.create-order-body-step-one .create-order-dropdown-dismiss {
+    z-index: 50;
+}
+
+.create-order-body-step-one .create-order-footer {
+    position: relative;
+    z-index: 2;
+}
+
+/* Keep the customer picker visually consistent with the exhibition menu. */
+.create-order-body-step-one .create-order-picker {
+    position: relative;
+    z-index: 40;
+    margin-top: 8px;
+    padding: 5px;
+    border: 1px solid #e7ddd2;
+    border-radius: 10px;
+    background: #fffdf9;
+    box-shadow: 0 10px 28px rgb(39 31 26 / 10%);
+}
+
+.create-order-body-step-one .create-order-picker > input {
+    min-height: 41px;
+    height: 41px;
+    padding: 0 12px;
+    border-color: #ddcfc0;
+    border-radius: 8px;
+    background: #fff;
+}
+
+.create-order-body-step-one .create-order-picker-list {
+    max-height: min(240px, 36vh);
+    margin: 5px 0 0;
+    gap: 2px;
+}
+
+.create-order-body-step-one .create-order-picker-list button {
+    flex: 0 0 auto;
+    padding: 10px 11px;
+    border-radius: 7px;
+}
+
+.create-order-body-step-one .create-order-picker-list button:hover {
+    background: #f6eee3;
+}
+
+.create-order-body-step-one .create-order-picker-list button:focus-visible,
+.create-order-body-step-one .create-order-exhibition-option:focus-visible {
+    outline: 2px solid #a77a43;
+    outline-offset: -2px;
+}
+
+@media (max-width: 760px) {
+    .create-order-modal:has(.create-order-body-step-one) {
+        min-height: 0;
+        max-height: 96vh;
+        overflow: visible;
+    }
+
+    .create-order-body-step-one {
+        overflow-y: auto;
+        padding-top: 12px;
+        padding-bottom: 12px;
+    }
+}
+
+
+/* Customer picker uses the same anchored searchable dropdown as Exhibition. */
+.create-order-body-step-one .create-order-customer-select {
+    z-index: 40;
+}
+.create-order-body-step-one .create-order-customer-menu {
+    z-index: 60;
+    max-height: min(280px, 42vh);
+}
+.create-order-body-step-one .create-order-customer-select > input:disabled {
+    cursor: not-allowed;
+    background: #fdfaf6;
+    color: #8a7d71;
+}
+.create-order-body-step-one .create-order-customer-option {
+    align-items: flex-start;
+}
+.create-order-body-step-one .create-order-customer-option > span:first-child {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+
+/* Search fields intentionally have no dropdown arrows; keep text aligned naturally. */
+.create-order-body-step-one .create-order-exhibition-search {
+    padding-right: 12px;
+}
+
+/* Only the currently open picker should sit above the other form sections. */
+.create-order-body-step-one .create-order-exhibition-select:has(.create-order-exhibition-menu) {
+    z-index: 90;
+}
+
+.create-order-body-step-one .create-order-exhibition-menu {
+    z-index: 92;
+}
+
+.create-order-body-step-one .create-order-dropdown-dismiss {
+    z-index: 91;
+}
+
+
+/* Step 2 inventory selection table */
+.create-order-category-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    margin: 10px 0 8px;
+}
+
+.create-order-category-filters button {
+    border: 1px solid #ddcfc0;
+    border-radius: 999px;
+    padding: 6px 11px;
+    background: #fff;
+    color: #51453b;
+    font: inherit;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.create-order-category-filters button.is-selected {
+    border-color: #a77a43;
+    background: #f6eee3;
+    color: #6e4824;
+}
+
+.create-order-category-filters button.create-order-category-clear {
+    border-color: transparent;
+    background: transparent;
+    color: #8b5e2d;
+    text-decoration: underline;
+}
+
+.create-order-step2-table .create-order-step2-heading,
+.create-order-step2-table .create-order-inventory-row {
+    display: grid;
+    grid-template-columns: 20px minmax(160px, 1.25fr) minmax(70px, .55fr) minmax(70px, .55fr) minmax(120px, 1fr) minmax(120px, 1fr);
+    align-items: center;
+    gap: 10px;
+}
+
+.create-order-step2-table .create-order-step2-heading {
+    min-height: 36px;
+    padding: 0 10px;
+    border-bottom: 1px solid #e7ddd2;
+    background: #fbf9f6;
+    color: #786e65;
+    font-size: 9px;
+    font-weight: 750;
+    letter-spacing: .35px;
+    text-transform: uppercase;
+}
+
+.create-order-step2-table .create-order-inventory-row {
+    min-height: 62px;
+    padding: 8px 10px;
+}
+
+.create-order-step2-table .create-order-inventory-details {
+    justify-content: flex-start;
+    padding-top: 0;
+    overflow: visible;
+    white-space: pre-line;
+    overflow-wrap: anywhere;
+    text-overflow: clip;
+}
+
+.create-order-step2-table .create-order-add-more-identity {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+}
+
+.create-order-step2-table .create-order-inventory-name {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    overflow-wrap: anywhere;
+}
+
+.create-order-step2-table .create-order-inventory-name strong {
+    font-size: 11px;
+}
+
+.create-order-step2-table .create-order-inventory-name span {
+    color: #786e65;
+    font-size: 10px;
+}
+
+@media (max-width: 760px) {
+    .create-order-step2-table .create-order-step2-heading,
+    .create-order-step2-table .create-order-inventory-row {
+        grid-template-columns: 18px minmax(120px, 1.2fr) 60px 60px minmax(90px, 1fr) minmax(90px, 1fr);
+        gap: 5px;
+    }
+}
+
+
+/* Step 2 inventory thumbnails must stay fixed-size inside the grid row. */
+.create-order-step2-table .create-order-add-more-identity .create-order-item-thumbnail {
+    display: block;
+    flex: 0 0 48px;
+    width: 48px;
+    min-width: 48px;
+    max-width: 48px;
+    height: 48px;
+    min-height: 48px;
+    max-height: 48px;
+    object-fit: cover;
+    border-radius: 8px;
+}
+
+.create-order-added-items {
+    margin-top: 14px;
+    border: 1px solid #e7ddd2;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.create-order-added-items-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 11px 13px;
+    background: #fbf9f6;
+    border-bottom: 1px solid #e7ddd2;
+    font-size: 12px;
+}
+
+.create-order-added-items-heading span {
+    color: #786e65;
+    font-size: 11px;
+}
+
+.create-order-added-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 64px;
+    padding: 8px 12px;
+    border-bottom: 1px solid #eee5dc;
+}
+
+.create-order-added-item:last-child { border-bottom: 0; }
+
+.create-order-added-item .create-order-item-thumbnail {
+    display: block;
+    flex: 0 0 48px;
+    width: 48px;
+    min-width: 48px;
+    max-width: 48px;
+    height: 48px;
+    min-height: 48px;
+    max-height: 48px;
+    object-fit: cover;
+    border-radius: 8px;
+}
+
+.create-order-added-item .create-order-inventory-name { flex: 1; min-width: 0; }
+.create-order-added-item-remove {
+    border: 0;
+    background: transparent;
+    color: #8b5e2d;
+    cursor: pointer;
+    font: inherit;
+    font-size: 11px;
+    text-decoration: underline;
+}

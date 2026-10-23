@@ -19,6 +19,7 @@ export interface CreateOrderExhibition {
 export interface CreateOrderInventoryItem {
   id: number;
   itemNumber: string;
+  categoryId: number;
   categoryName: string;
   name: string | null;
   grossWeightMilli: number | null;
@@ -93,6 +94,7 @@ export async function searchCreateOrderInventory(
       SELECT
         i.id,
         i.item_number AS itemNumber,
+        i.category_id AS categoryId,
         c.name AS categoryName,
         i.name,
         i.gross_weight_milli AS grossWeightMilli,
@@ -123,12 +125,13 @@ export async function searchCreateOrderInventory(
         i.is_archived AS isArchived
       FROM item i
       JOIN category c ON c.id = i.category_id
-      WHERE
-        i.item_number LIKE ?
-        OR COALESCE(i.name, '') LIKE ?
-        OR c.name LIKE ?
+      WHERE i.is_archived = 0
+        AND (
+          i.item_number LIKE ?
+          OR COALESCE(i.name, '') LIKE ?
+          OR c.name LIKE ?
+        )
       ORDER BY i.item_number COLLATE NOCASE
-      LIMIT 100
     `,
     [term, term, term],
   );
@@ -145,6 +148,7 @@ export async function searchCreateOrderSelectionItems(
       SELECT
         i.id,
         i.item_number AS itemNumber,
+        i.category_id AS categoryId,
         c.name AS categoryName,
         i.name,
         i.gross_weight_milli AS grossWeightMilli,
@@ -423,6 +427,7 @@ export async function createConfirmedOrder(input: {
       SELECT
         i.id,
         i.item_number AS itemNumber,
+        i.category_id AS categoryId,
         c.name AS categoryName,
         i.name,
         i.gross_weight_milli AS grossWeightMilli,

@@ -121,21 +121,10 @@
 }
 
 .orders-provisional-card {
-    background: repeating-linear-gradient(135deg,
-            #fff 0,
-            #fff 7px,
-            #f8f3eb 7px,
-            #f8f3eb 14px);
-    cursor: pointer;
+    background: #fff;
 }
 
-.orders-provisional-card:hover {
-    background: repeating-linear-gradient(135deg,
-            #fffaf3 0,
-            #fffaf3 7px,
-            #f4eadd 7px,
-            #f4eadd 14px);
-}
+
 
 .orders-summary-inline-note {
     color      : #766c63;
@@ -457,7 +446,7 @@
 }
 
 .orders-number-cell {
-    text-align          : right !important;
+    text-align          : center !important;
     font-variant-numeric: tabular-nums;
 }
 
@@ -645,4 +634,345 @@
         flex      : 1 1 100%;
         text-align: left;
     }
+}
+
+/* Orders table: give each data column a stable amount of breathing room. */
+.orders-table {
+    min-width   : 1420px;
+    table-layout: auto;
+}
+
+.orders-table th,
+.orders-table td {
+    padding-left : 16px;
+    padding-right: 16px;
+}
+
+.orders-table th:nth-child(4),
+.orders-table td:nth-child(4) {
+    min-width: 72px;
+}
+
+.orders-table th:nth-child(5),
+.orders-table td:nth-child(5) {
+    min-width: 120px;
+}
+
+.orders-table th:nth-child(6),
+.orders-table td:nth-child(6),
+.orders-table th:nth-child(7),
+.orders-table td:nth-child(7),
+.orders-table th:nth-child(8),
+.orders-table td:nth-child(8) {
+    min-width: 145px;
+}
+
+.orders-table th:nth-child(9),
+.orders-table td:nth-child(9) {
+    min-width: 130px;
+}
+
+.orders-table th:nth-child(10),
+.orders-table td:nth-child(10) {
+    min-width: 160px;
+}
+
+.orders-payment-received {
+    color      : #267448 !important;
+    font-weight: 650;
+}
+
+.orders-payment-pending {
+    font-weight: 700;
+}
+
+.orders-status-select {
+    min-width    : 126px;
+    min-height   : 31px;
+    padding      : 0 25px 0 10px;
+    border       : 1px solid #ded4c9;
+    border-radius: 8px;
+    background   : #fff;
+    color        : #44382f;
+    font         : inherit;
+    font-size    : 11px;
+    font-weight  : 650;
+    cursor       : pointer;
+}
+
+.orders-status-select:focus {
+    outline     : 2px solid rgb(157 117 70 / 25%);
+    border-color: #a77a43;
+}
+
+.orders-status-select--cancelled {
+    border-color: #e8c8c3;
+    background  : #fff4f2;
+    color       : #a04439;
+}
+
+.orders-actions-cell {
+    display    : flex;
+    align-items: center;
+    gap        : 8px;
+}
+
+.orders-record-payment {
+    min-height   : 30px;
+    padding      : 0 10px;
+    border       : 1px solid #d9c5a9;
+    border-radius: 8px;
+    background   : #fbf5eb;
+    color        : #77552e;
+    font         : inherit;
+    font-size    : 11px;
+    font-weight  : 650;
+    cursor       : pointer;
+}
+
+.orders-record-payment:hover {
+    background: #f2e5d1;
+}
+
+.orders-record-payment:disabled {
+    opacity: .55;
+    cursor : not-allowed;
+}
+
+.orders-payment-backdrop {
+    position   : fixed;
+    z-index    : 1000;
+    inset      : 0;
+    display    : grid;
+    place-items: center;
+    padding    : 24px;
+    background : rgb(35 27 22 / 42%);
+}
+
+.orders-payment-modal {
+    width        : min(100%, 500px);
+    max-height   : min(90vh, 760px);
+    overflow-y   : auto;
+    padding      : 24px;
+    border       : 1px solid #e5d8c9;
+    border-radius: 16px;
+    background   : #fffdf9;
+    box-shadow   : 0 20px 70px rgb(31 23 17 / 24%);
+}
+
+.orders-payment-modal-header {
+    display        : flex;
+    align-items    : flex-start;
+    justify-content: space-between;
+    gap            : 16px;
+    margin-bottom  : 18px;
+}
+
+.orders-payment-modal-header h2 {
+    margin   : 0;
+    color    : #332b26;
+    font-size: 22px;
+}
+
+.orders-payment-modal-header p {
+    margin   : 5px 0 0;
+    color    : #786e65;
+    font-size: 12px;
+}
+
+.orders-payment-modal-header button {
+    border    : 0;
+    background: transparent;
+    color     : #766d65;
+    font-size : 25px;
+    cursor    : pointer;
+}
+
+.orders-payment-balance {
+    display        : flex;
+    justify-content: space-between;
+    gap            : 12px;
+    padding        : 13px 15px;
+    border         : 1px solid #eadcc3;
+    border-radius  : 10px;
+    background     : #fbf6ed;
+    color          : #6d5434;
+    font-size      : 12px;
+}
+
+.orders-payment-balance strong {
+    font-size           : 16px;
+    font-variant-numeric: tabular-nums;
+}
+
+.orders-payment-form {
+    display              : grid;
+    grid-template-columns: 1fr 1fr;
+    gap                  : 15px;
+    margin-top           : 18px;
+}
+
+.orders-payment-form label {
+    display       : flex;
+    min-width     : 0;
+    flex-direction: column;
+    gap           : 7px;
+    color         : #5f5348;
+    font-size     : 12px;
+    font-weight   : 650;
+}
+
+.orders-payment-form label>input,
+.orders-payment-form label>select,
+.orders-payment-form textarea {
+    width        : 100%;
+    min-width    : 0;
+    min-height   : 40px;
+    box-sizing   : border-box;
+    padding      : 9px 11px;
+    border       : 1px solid #dcd0c3;
+    border-radius: 9px;
+    background   : #fff;
+    color        : #342b26;
+    font         : inherit;
+    font-weight  : 400;
+}
+
+.orders-payment-form label>input:focus,
+.orders-payment-form label>select:focus,
+.orders-payment-form textarea:focus {
+    outline     : 2px solid rgb(157 117 70 / 20%);
+    border-color: #a77a43;
+}
+
+.orders-payment-notes {
+    grid-column: 1 / -1;
+}
+
+.orders-payment-form textarea {
+    resize: vertical;
+}
+
+.orders-payment-form footer {
+    grid-column    : 1 / -1;
+    display        : flex;
+    justify-content: flex-end;
+    gap            : 10px;
+    padding-top    : 4px;
+}
+
+.orders-payment-cancel,
+.orders-payment-submit {
+    min-height   : 40px;
+    padding      : 0 15px;
+    border-radius: 9px;
+    font         : inherit;
+    font-size    : 12px;
+    font-weight  : 650;
+    cursor       : pointer;
+}
+
+.orders-payment-cancel {
+    border    : 1px solid #dcd0c3;
+    background: #fff;
+    color     : #65584d;
+}
+
+.orders-payment-submit {
+    border    : 1px solid #2c2420;
+    background: #2c2420;
+    color     : #fffaf4;
+}
+
+.orders-payment-submit:disabled,
+.orders-payment-cancel:disabled {
+    opacity: .6;
+    cursor : not-allowed;
+}
+
+.orders-payment-form-error {
+    margin-top: 12px;
+}
+
+@media (max-width: 600px) {
+    .orders-payment-modal {
+        padding: 18px;
+    }
+
+    .orders-payment-form {
+        grid-template-columns: 1fr;
+    }
+
+    .orders-payment-notes,
+    .orders-payment-form footer {
+        grid-column: auto;
+    }
+}
+
+
+/* Orders UI polish: reuse the app's custom dropdown for row status changes. */
+.orders-row-status-dropdown {
+    width        : 145px;
+    min-height   : 34px;
+    height       : 34px;
+    box-sizing   : border-box;
+    padding      : 0 9px;
+    border-color : #ded4c9;
+    border-radius: 9px;
+    background   : #fffdf9;
+    gap          : 0;
+}
+
+.orders-row-status-dropdown .orders-filter-label {
+    display: none;
+}
+
+.orders-row-status-dropdown .orders-dropdown-trigger {
+    width    : 100%;
+    max-width: none;
+    gap      : 7px;
+    font-size: 11px;
+}
+
+.orders-row-status-dropdown .orders-dropdown-menu {
+    max-height: none;
+    overflow-y: visible;
+}
+
+.orders-row-status-dropdown--cancelled {
+    border-color: #e8c8c3;
+    background  : #fff4f2;
+}
+
+.orders-row-status-dropdown--cancelled .orders-dropdown-trigger {
+    color: #a04439;
+}
+
+/* Keep all status-filter choices visible at once. */
+.orders-status-filter .orders-dropdown-menu {
+    max-height: none;
+    overflow-y: visible;
+}
+
+/* Normalize form controls and remove the number input spinner. */
+.orders-payment-form input[type='number'] {
+    appearance     : textfield;
+    -moz-appearance: textfield;
+}
+
+.orders-payment-form input[type='number']::-webkit-inner-spin-button,
+.orders-payment-form input[type='number']::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin            : 0;
+}
+
+.orders-payment-form label>select {
+    appearance         : none;
+    -webkit-appearance : none;
+    -moz-appearance    : none;
+    padding-right      : 34px !important;
+    background-color   : #fff !important;
+    background-image   : url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 20 20' fill='none'%3E%3Cpath d='m5 7.5 5 5 5-5' stroke='%23837467' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") !important;
+    background-repeat  : no-repeat !important;
+    background-position: right 11px center !important;
 }

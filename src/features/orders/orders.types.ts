@@ -19,6 +19,8 @@ export interface OrderRow {
   itemCount: number;
   orderDate: string;
   totalValuePaise: number;
+  paymentReceivedPaise: number;
+  paymentPendingPaise: number;
   status: OrderStatus;
 }
 

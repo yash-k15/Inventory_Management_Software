@@ -3,10 +3,13 @@ import {
   getOrderFilterOptions,
   getOrders,
   getOrdersSummary,
+  updateOrderStatus,
   type OrdersFilters,
   type OrderFilterOptions,
 } from './orders.queries';
 import type { OrderRow, OrderStatus, OrdersSummary } from './orders.types';
+import { createPayment } from '../payments/payments.queries';
+import type { PaymentMethod } from '../payments/payments.types';
 import './OrdersScreen.css';
 import CreateOrderModal from './CreateOrderModal';
 import OrderDetailsScreen from './OrderDetailsScreen';
@@ -256,6 +259,16 @@ function OrdersScreen() {
   const [error, setError] = useState<string | null>(null);
   const [createOrderOpen, setCreateOrderOpen] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null);
+  const [paymentOrder, setPaymentOrder] = useState<OrderRow | null>(null);
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentDate, setPaymentDate] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  });
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('Cash');
+  const [paymentNotes, setPaymentNotes] = useState('');
+  const [paymentSaving, setPaymentSaving] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
 
   const loadOrders = useCallback(async () => {
     setLoading(true);
@@ -338,6 +351,61 @@ function OrdersScreen() {
     { value: 'value-low', label: 'Lowest value' },
   ];
 
+  async function handleStatusChange(order: OrderRow, value: string) {
+    try {
+      setError(null);
+      await updateOrderStatus(order.id, value as OrderStatus);
+      await loadOrders();
+    } catch (err) {
+      console.error('Failed to update order status:', err);
+      setError(err instanceof Error ? err.message : 'Could not update order status.');
+    }
+  }
+
+  function openPayment(order: OrderRow) {
+    setPaymentOrder(order);
+    setPaymentAmount('');
+    setPaymentDate(() => {
+      const now = new Date();
+      return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    });
+    setPaymentMethod('Cash');
+    setPaymentNotes('');
+    setPaymentError(null);
+  }
+
+  async function submitOrderPayment(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!paymentOrder) return;
+    const amountPaise = Math.round(Number(paymentAmount) * 100);
+    if (!Number.isSafeInteger(amountPaise) || amountPaise <= 0) {
+      setPaymentError('Enter a payment amount greater than zero.');
+      return;
+    }
+    if (amountPaise > paymentOrder.paymentPendingPaise) {
+      setPaymentError('Payment cannot exceed this order’s pending balance.');
+      return;
+    }
+    setPaymentSaving(true);
+    setPaymentError(null);
+    try {
+      await createPayment({
+        orderId: paymentOrder.id,
+        amountPaise,
+        paymentDate,
+        paymentMethod,
+        notes: paymentNotes,
+      });
+      setPaymentOrder(null);
+      await loadOrders();
+    } catch (err) {
+      console.error('Failed to record order payment:', err);
+      setPaymentError(err instanceof Error ? err.message : 'Could not record payment.');
+    } finally {
+      setPaymentSaving(false);
+    }
+  }
+
   if (selectedOrderId !== null) {
     return (
       <OrderDetailsScreen
@@ -396,14 +464,7 @@ function OrdersScreen() {
           <span className='orders-summary-note'>Non-cancelled orders</span>
         </div>
 
-        <button
-          type='button'
-          className='orders-summary-card orders-provisional-card'
-          onClick={() => {
-            // Exhibition navigation will be connected to the selection review flow.
-          }}
-          title='Review provisional selections in Exhibitions'
-        >
+        <div className='orders-summary-card orders-provisional-card'>
           <span className='orders-summary-label'>Provisional selections</span>
           <strong className='orders-summary-value'>
             {summary.provisionalItemCount}
@@ -413,9 +474,9 @@ function OrdersScreen() {
             <span className='orders-summary-inline-note'> customers</span>
           </strong>
           <span className='orders-summary-note'>
-            Not orders until confirmed · <u>Review in Exhibitions</u>
+            Not orders until confirmed
           </span>
-        </button>
+        </div>
       </section>
 
       <section className='orders-filters' aria-label='Filter orders'>
@@ -509,8 +570,10 @@ function OrdersScreen() {
                 <th className='orders-number-cell'>Items</th>
                 <th>Order date</th>
                 <th className='orders-number-cell'>Order value</th>
+                <th className='orders-number-cell'>Payment received</th>
+                <th className='orders-number-cell'>Payment pending</th>
                 <th>Status</th>
-                <th aria-label='Open order' />
+                <th>Actions</th>
               </tr>
             </thead>
 
@@ -553,16 +616,32 @@ function OrdersScreen() {
                     <td className='orders-number-cell orders-value'>
                       {formatMoney(order.totalValuePaise)}
                     </td>
-                    <td>
-                      <span
-                        className={`orders-status-badge orders-status-badge--${order.status
-                          .toLowerCase()
-                          .replace(/ /g, '-')}`}
-                      >
-                        {order.status}
-                      </span>
+                    <td className='orders-number-cell orders-payment-received'>
+                      {formatMoney(order.paymentReceivedPaise)}
+                    </td>
+                    <td className='orders-number-cell orders-payment-pending'>
+                      {formatMoney(order.paymentPendingPaise)}
                     </td>
                     <td>
+                      <CustomDropdown
+                        label=''
+                        ariaLabel={`Change status for ${formatOrderNumber(order.id)}`}
+                        value={order.status}
+                        options={statusOptions.map((status) => ({
+                          value: status,
+                          label: status,
+                        }))}
+                        className={`orders-row-status-dropdown orders-row-status-dropdown--${order.status.toLowerCase().replace(/ /g, '-')}`}
+                        onChange={(value) => void handleStatusChange(order, value)}
+                      />
+                    </td>
+                    <td className='orders-actions-cell'>
+                      {order.status !== 'Cancelled' && order.paymentPendingPaise > 0 && (
+                        <button type='button' className='orders-record-payment'
+                          onClick={() => openPayment(order)}>
+                          Record payment
+                        </button>
+                      )}
                       <button
                         type='button'
                         className='orders-row-open'
@@ -578,7 +657,7 @@ function OrdersScreen() {
 
               {loading && (
                 <tr>
-                  <td colSpan={8} className='orders-table-message'>
+                  <td colSpan={10} className='orders-table-message'>
                     Loading orders…
                   </td>
                 </tr>
@@ -586,7 +665,7 @@ function OrdersScreen() {
 
               {!loading && !error && orders.length === 0 && (
                 <tr>
-                  <td colSpan={8} className='orders-table-message'>
+                  <td colSpan={10} className='orders-table-message'>
                     No orders match these filters.
                   </td>
                 </tr>
@@ -597,8 +676,7 @@ function OrdersScreen() {
 
         <footer className='orders-table-footer'>
           Showing {orders.length} of {orders.length} matching orders. Order
-          value is the total of its jewelry items. Payments are tracked per
-          customer and exhibition, not per order.
+          value is the final order total. Payments and pending balances are tracked per order.
         </footer>
       </section>
       {createOrderOpen && (
@@ -609,6 +687,33 @@ function OrdersScreen() {
             void loadOrders();
           }}
         />
+      )}
+      {paymentOrder && (
+        <div className='orders-payment-backdrop' role='presentation'
+          onMouseDown={(event) => { if (event.target === event.currentTarget && !paymentSaving) setPaymentOrder(null); }}>
+          <section className='orders-payment-modal' role='dialog' aria-modal='true' aria-labelledby='orders-payment-title'>
+            <header className='orders-payment-modal-header'>
+              <div>
+                <h2 id='orders-payment-title'>Record payment</h2>
+                <p>{formatOrderNumber(paymentOrder.id)} · {paymentOrder.customerName}</p>
+              </div>
+              <button type='button' onClick={() => setPaymentOrder(null)} disabled={paymentSaving} aria-label='Close modal'>×</button>
+            </header>
+            <div className='orders-payment-balance'>
+              <span>Pending balance</span><strong>{formatMoney(paymentOrder.paymentPendingPaise)}</strong>
+            </div>
+            {paymentError && <div className='orders-error orders-payment-form-error' role='alert'>{paymentError}</div>}
+            <form className='orders-payment-form' onSubmit={(event) => void submitOrderPayment(event)}>
+              <label><span>Amount (₹) *</span><input required type='number' min='0.01' max={(paymentOrder.paymentPendingPaise / 100).toFixed(2)} step='0.01' value={paymentAmount} onChange={(event) => setPaymentAmount(event.target.value)} placeholder='0.00' /></label>
+              <label><span>Payment date *</span><input required type='date' value={paymentDate} onChange={(event) => setPaymentDate(event.target.value)} /></label>
+              <label><span>Payment method *</span><select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value as PaymentMethod)}>
+                {(['Cash', 'Bank Transfer', 'UPI', 'Cheque', 'Other'] as PaymentMethod[]).map((method) => <option key={method} value={method}>{method}</option>)}
+              </select></label>
+              <label className='orders-payment-notes'><span>Notes (optional)</span><textarea rows={3} maxLength={1000} value={paymentNotes} onChange={(event) => setPaymentNotes(event.target.value)} placeholder='Add a reference or details…' /></label>
+              <footer><button type='button' className='orders-payment-cancel' onClick={() => setPaymentOrder(null)} disabled={paymentSaving}>Cancel</button><button type='submit' className='orders-payment-submit' disabled={paymentSaving}>{paymentSaving ? 'Saving…' : 'Record payment'}</button></footer>
+            </form>
+          </section>
+        </div>
       )}
     </section>
   );

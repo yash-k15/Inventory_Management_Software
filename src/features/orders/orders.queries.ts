@@ -88,10 +88,13 @@ export async function getOrders(filters: OrdersFilters): Promise<OrderRow[]> {
          ),
          0
        ) AS totalValuePaise,
+       COALESCE(vob.paid_paise, 0) AS paymentReceivedPaise,
+       COALESCE(vob.outstanding_paise, 0) AS paymentPendingPaise,
        co.status
      FROM customer_order co
      LEFT JOIN customer c ON c.id = co.customer_id
      LEFT JOIN exhibition e ON e.id = co.exhibition_id
+     LEFT JOIN v_order_balance vob ON vob.order_id = co.id
      WHERE (
        co.customer_name_snapshot LIKE ?
        OR CAST(co.id AS TEXT) LIKE ?
@@ -299,4 +302,30 @@ export async function getOrderDetails(orderId: number): Promise<OrderDetails | n
       header.finalTotalPaise ??
       items.reduce((sum, item) => sum + item.agreedPricePaise, 0),
   };
+}
+
+
+export async function updateOrderStatus(orderId: number, status: OrderStatus): Promise<void> {
+  if (!Number.isInteger(orderId) || orderId <= 0) {
+    throw new Error('Invalid order.');
+  }
+  const allowedStatuses: OrderStatus[] = [
+    'Confirmed', 'On Hold', 'Manufacturing', 'Ready', 'Sent', 'Completed', 'Cancelled',
+  ];
+  if (!allowedStatuses.includes(status)) {
+    throw new Error('Select a valid order status.');
+  }
+  const db = await getDatabase();
+  const rows = await db.select<{ id: number; status: OrderStatus }[]>(
+    'SELECT id, status FROM customer_order WHERE id = ?',
+    [orderId],
+  );
+  if (!rows.length) throw new Error('This order could not be found.');
+  if (rows[0].status === status) return;
+  await db.execute(
+    `UPDATE customer_order
+     SET status = ?, updated_at = datetime('now', 'localtime')
+     WHERE id = ?`,
+    [status, orderId],
+  );
 }

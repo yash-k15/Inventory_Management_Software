@@ -43,43 +43,6 @@
     font-size : 13px
 }
 
-.exhibition-customers-filters {
-    display  : flex;
-    flex-wrap: wrap;
-    gap      : 5px
-}
-
-.exhibition-customers-filter {
-    display      : inline-flex;
-    align-items  : center;
-    gap          : 6px;
-    min-height   : 29px;
-    padding      : 0 11px;
-    border       : 1px solid #e2d3c2;
-    border-radius: 99px;
-    background   : #fff;
-    color        : #302722;
-    font         : inherit;
-    font-size    : 12px;
-    white-space  : nowrap;
-    cursor       : pointer
-}
-
-.exhibition-customers-filter span {
-    color               : #786d63;
-    font-variant-numeric: tabular-nums
-}
-
-.exhibition-customers-filter.is-active {
-    border-color: #2c2420;
-    background  : #2c2420;
-    color       : #fff
-}
-
-.exhibition-customers-filter.is-active span {
-    color: #e9ddd0
-}
-
 .exhibition-customers-add {
     margin-left: auto;
     white-space: nowrap
@@ -98,7 +61,7 @@
 
 .exhibition-customers-table {
     width          : 100%;
-    min-width      : 900px;
+    min-width      : 1120px;
     border-collapse: collapse;
     text-align     : left
 }

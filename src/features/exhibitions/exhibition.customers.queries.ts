@@ -9,6 +9,8 @@ export interface ExhibitionCustomerRow {
   selectionId: number | null;
   activeItemCount: number;
   itemNumbers: string[];
+  orderNumbers: string[];
+  orderCreatedItemCount: number;
 }
 
 export async function getExhibitionCustomers(exhibitionId: number, search: string): Promise<ExhibitionCustomerRow[]> {
@@ -21,7 +23,7 @@ export async function getExhibitionCustomers(exhibitionId: number, search: strin
   const primaryPhone = contactPhoneColumns.length ? contactPhoneColumns.map((name) => `(SELECT cc.${name} FROM customer_contact cc WHERE cc.customer_id=c.id AND cc.is_primary=1 ORDER BY cc.id LIMIT 1)`).join(', ') : 'NULL';
   const phoneFallback = `${primaryPhone}${hasCustomerPhone ? ', c.phone' : ''}`;
   const pattern = `%${search.trim()}%`;
-  const rows = await db.select<(Omit<ExhibitionCustomerRow, 'itemNumbers'> & { itemNumbersRaw: string | null })[]>(
+  const rows = await db.select<(Omit<ExhibitionCustomerRow, 'itemNumbers' | 'orderNumbers'> & { itemNumbersRaw: string | null; orderNumbersRaw: string | null })[]>(
     `SELECT c.id, c.business_name AS businessName,
       ${hasCity ? 'c.city' : 'NULL'} AS city,
       (SELECT cc.name FROM customer_contact cc WHERE cc.customer_id=c.id AND cc.is_primary=1 ORDER BY cc.id LIMIT 1) AS contactName,
@@ -32,7 +34,36 @@ export async function getExhibitionCustomers(exhibitionId: number, search: strin
         SELECT json_extract(si.snapshot_data, '$.item_number') AS item_number
         FROM selection_item si WHERE si.selection_id=s.id AND si.status='active'
         ORDER BY si.added_at DESC, si.id DESC LIMIT 3
-      )) AS itemNumbersRaw
+      )) AS itemNumbersRaw,
+      (SELECT GROUP_CONCAT(orderNumber, '|') FROM (
+        SELECT 'ORD-' || printf('%04d', co.id) AS orderNumber
+        FROM customer_order co
+        WHERE co.customer_id=c.id
+          AND co.status <> 'Cancelled'
+          AND (
+            co.exhibition_id=?
+            OR EXISTS (
+              SELECT 1
+              FROM customer_order_item linked_coi
+              JOIN selection_item linked_si ON linked_si.id=linked_coi.selection_item_id
+              JOIN selection linked_s ON linked_s.id=linked_si.selection_id
+              WHERE linked_coi.order_id=co.id
+                AND linked_s.customer_id=co.customer_id
+                AND linked_s.exhibition_id=?
+            )
+          )
+        ORDER BY co.created_at DESC, co.id DESC
+      )) AS orderNumbersRaw,
+      (SELECT COUNT(DISTINCT linked_si.id)
+       FROM customer_order_item linked_coi
+       JOIN customer_order linked_co ON linked_co.id=linked_coi.order_id
+       JOIN selection_item linked_si ON linked_si.id=linked_coi.selection_item_id
+       JOIN selection linked_s ON linked_s.id=linked_si.selection_id
+       WHERE linked_co.customer_id=c.id
+         AND linked_co.status <> 'Cancelled'
+         AND linked_s.customer_id=c.id
+         AND linked_s.exhibition_id=?
+      ) AS orderCreatedItemCount
      FROM customer c
      JOIN selection s ON s.customer_id=c.id AND s.exhibition_id=?
      WHERE c.is_archived=0
@@ -40,9 +71,13 @@ export async function getExhibitionCustomers(exhibitionId: number, search: strin
          OR COALESCE((SELECT cc.name FROM customer_contact cc WHERE cc.customer_id=c.id AND cc.is_primary=1 ORDER BY cc.id LIMIT 1),'') LIKE ?
          OR COALESCE(${phoneFallback}, '') LIKE ?)
      ORDER BY c.business_name COLLATE NOCASE`,
-    [exhibitionId, pattern, pattern, pattern, pattern],
+    [exhibitionId, exhibitionId, exhibitionId, exhibitionId, pattern, pattern, pattern, pattern],
   );
-  return rows.map((row) => ({ ...row, itemNumbers: row.itemNumbersRaw ? row.itemNumbersRaw.split('|') : [] }));
+  return rows.map((row) => ({
+    ...row,
+    itemNumbers: row.itemNumbersRaw ? row.itemNumbersRaw.split('|') : [],
+    orderNumbers: row.orderNumbersRaw ? row.orderNumbersRaw.split('|') : [],
+  }));
 }
 
 export async function createExhibitionCustomer(input: { businessName: string; contactName: string; phone: string; city: string }): Promise<number> {

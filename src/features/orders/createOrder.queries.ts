@@ -27,6 +27,7 @@ export interface CreateOrderInventoryItem {
   stoneDetails: string;
   imagePath: string | null;
   isArchived: number;
+  selectionItemId?: number | null;
 }
 
 export interface NewOrderItem {
@@ -132,6 +133,77 @@ export async function searchCreateOrderInventory(
     [term, term, term],
   );
 }
+
+
+export async function searchCreateOrderSelectionItems(
+  customerId: number,
+  exhibitionId: number,
+): Promise<CreateOrderInventoryItem[]> {
+  const db = await getDatabase();
+
+  return db.select<CreateOrderInventoryItem[]>(
+    `
+      SELECT
+        i.id,
+        i.item_number AS itemNumber,
+        c.name AS categoryName,
+        i.name,
+        i.gross_weight_milli AS grossWeightMilli,
+        i.net_weight_milli AS netWeightMilli,
+        COALESCE((
+          SELECT group_concat(
+            COALESCE(ds.code, ds.name) || ': ' ||
+            printf('%.3f', d.weight_milli / 1000.0) || ' ct' ||
+            CASE WHEN d.pieces IS NOT NULL THEN ' (' || d.pieces || ' pcs)' ELSE '' END,
+            char(10)
+          )
+          FROM item_diamond d
+          JOIN diamond_shape ds ON ds.id = d.shape_id
+          WHERE d.item_id = i.id
+        ), '') AS diamondDetails,
+        COALESCE((
+          SELECT group_concat(
+            COALESCE(st.tag_label, st.name) || ': ' ||
+            printf('%.3f', s.weight_milli / 1000.0) || ' ct' ||
+            CASE WHEN s.pieces IS NOT NULL THEN ' (' || s.pieces || ' pcs)' ELSE '' END,
+            char(10)
+          )
+          FROM item_stone s
+          JOIN stone_type st ON st.id = s.stone_type_id
+          WHERE s.item_id = i.id
+        ), '') AS stoneDetails,
+        i.image_path AS imagePath,
+        i.is_archived AS isArchived,
+        si.id AS selectionItemId
+      FROM selection s
+      JOIN selection_item si ON si.selection_id = s.id
+      JOIN item i ON i.id = si.inventory_item_id
+      JOIN category c ON c.id = i.category_id
+      WHERE s.customer_id = ?
+        AND s.exhibition_id = ?
+        AND si.status = 'active'
+        AND i.is_archived = 0
+        AND NOT EXISTS (
+          SELECT 1
+          FROM customer_order_item coi
+          JOIN customer_order co ON co.id = coi.order_id
+          WHERE co.status <> 'Cancelled'
+            AND co.customer_id = s.customer_id
+            AND co.exhibition_id = s.exhibition_id
+            AND (
+              coi.selection_item_id = si.id
+              OR (
+                coi.selection_item_id IS NULL
+                AND CAST(json_extract(coi.item_snapshot, '$.inventory_item_id') AS INTEGER) = i.id
+              )
+            )
+        )
+      ORDER BY i.item_number COLLATE NOCASE
+    `,
+    [customerId, exhibitionId],
+  );
+}
+
 
 
 export interface OrderPricingContext {

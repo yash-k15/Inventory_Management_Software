@@ -1950,7 +1950,6 @@
     justify-content: flex-start;
     align-items    : center;
     text-align     : left;
-    gap            : 10px
 }
 
 .create-order-price-review-table .create-order-price-review-item>input {
@@ -2032,19 +2031,77 @@
 }
 
 
-/* Price Review thumbnail safeguard: keep product images at thumbnail size.
-   Other review-step identity layout rules remain scoped to their own tables. */
-.create-order-price-review-table .create-order-price-review-item>.create-order-item-thumbnail,
-.create-order-price-review-table .create-order-price-review-item>img,
-.create-order-price-review-table .create-order-price-review-item img {
-    display   : block;
-    flex      : 0 0 48px;
-    width     : 48px;
-    min-width : 48px;
-    max-width : 48px;
-    height    : 48px;
+/* Explicitly scope thumbnail sizing per table to prevent cross-step regressions. */
+/* Add more items only */
+.create-order-add-more-table .create-order-item-thumbnail {
+    display      : block;
+    flex         : 0 0 48px;
+    width        : 48px;
+    min-width    : 48px;
+    max-width    : 48px;
+    height       : 48px;
+    min-height   : 48px;
+    max-height   : 48px;
+    object-fit   : cover;
+    border-radius: 8px;
+}
+
+/* Price Review keeps its own fixed thumbnail size, independent of other tables. */
+.create-order-price-review-table .create-order-item-thumbnail {
+    display      : block;
+    flex         : 0 0 48px;
+    width        : 48px;
+    min-width    : 48px;
+    max-width    : 48px;
+    height       : 48px;
+    min-height   : 48px;
+    max-height   : 48px;
+    object-fit   : cover;
+    border-radius: 8px;
+}
+
+/* Shared 48x48 item identity layout across all four Create Order tables.
+   Keep each rule scoped to its table to avoid thumbnail-size regressions. */
+.create-order-add-more-table .create-order-add-more-identity,
+.create-order-selected-row .create-order-selected-name,
+.create-order-price-review-table .create-order-price-review-item,
+.create-order-review-section .create-order-review-item-name {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
+    min-width: 0;
+    text-align: left;
+}
+
+.create-order-add-more-table .create-order-add-more-identity .create-order-item-thumbnail,
+.create-order-selected-row .create-order-selected-name .create-order-item-thumbnail,
+.create-order-price-review-table .create-order-price-review-item .create-order-item-thumbnail,
+.create-order-review-section .create-order-review-item-name .create-order-item-thumbnail {
+    display: block;
+    flex: 0 0 48px;
+    width: 48px;
+    min-width: 48px;
+    max-width: 48px;
+    height: 48px;
     min-height: 48px;
     max-height: 48px;
+    margin: 0;
+    border-radius: 8px;
     object-fit: cover;
-    align-self: center;
+}
+
+.create-order-add-more-table .create-order-add-more-identity .create-order-inventory-name,
+.create-order-selected-row .create-order-selected-name > span,
+.create-order-price-review-table .create-order-price-review-item > .create-order-item-identity-copy,
+.create-order-review-section .create-order-review-item-name > span {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 4px;
+    min-width: 0;
+    text-align: left;
 }

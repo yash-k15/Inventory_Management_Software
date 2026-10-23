@@ -6,6 +6,7 @@ import {
   getCreateOrderCustomers,
   getCreateOrderExhibitions,
   searchCreateOrderInventory,
+  searchCreateOrderSelectionItems,
   getOrderPricingContext,
   type OrderPricingContext,
   type CreateOrderCustomer,
@@ -1072,11 +1073,43 @@ export default function CreateOrderModal({
                   <button
                     type='button'
                     className='create-order-add-more-button'
-                    onClick={() => {
+                    onClick={async () => {
                       setShowMoreItems(true);
                       setAdditionalSelectedIds([]);
                       setInventorySearch('');
-                      void searchInventory('');
+                      if (!selectedCustomerId || !selectedExhibitionId) {
+                        setInventory([]);
+                        setError(
+                          'Select the customer and exhibition before adding items from their selection.',
+                        );
+                        return;
+                      }
+                      try {
+                        setLoading(true);
+                        setError(null);
+                        const selectionItems =
+                          await searchCreateOrderSelectionItems(
+                            Number(selectedCustomerId),
+                            Number(selectedExhibitionId),
+                          );
+                        const alreadyInOrder = new Set(
+                          selectedItems.map((selected) => selected.item.id),
+                        );
+                        setInventory(
+                          selectionItems.filter(
+                            (item) => !alreadyInOrder.has(item.id),
+                          ),
+                        );
+                      } catch (err) {
+                        setError(
+                          getErrorMessage(
+                            err,
+                            'Could not load this customer’s selected items.',
+                          ),
+                        );
+                      } finally {
+                        setLoading(false);
+                      }
                     }}
                   >
                     + Add more items
@@ -1161,10 +1194,23 @@ export default function CreateOrderModal({
                                   ◇
                                 </span>
                               )}
-                              <div className='create-order-inventory-name'>
-                                <strong>{item.itemNumber}</strong>
-                                <span>{item.categoryName}</span>
-                              </div>
+                              {showMoreItems && initialItems.length > 0 ? (
+                                <div className='create-order-item-identity create-order-add-more-identity'>
+                                  <ItemThumbnail
+                                    path={item.imagePath}
+                                    alt={item.itemNumber}
+                                  />
+                                  <div className='create-order-inventory-name'>
+                                    <strong>{item.itemNumber}</strong>
+                                    <span>{item.categoryName}</span>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className='create-order-inventory-name'>
+                                  <strong>{item.itemNumber}</strong>
+                                  <span>{item.categoryName}</span>
+                                </div>
+                              )}
                               {showMoreItems && initialItems.length > 0 ? (
                                 <>
                                   <span className='create-order-inventory-details'>
@@ -1249,7 +1295,11 @@ export default function CreateOrderModal({
                                   (selected) => selected.item.id === item.id,
                                 ),
                             )
-                            .map((item) => ({ item, price: '' })),
+                            .map((item) => ({
+                              item,
+                              price: '',
+                              selectionItemId: item.selectionItemId ?? null,
+                            })),
                         ]);
                         setShowMoreItems(false);
                         setAdditionalSelectedIds([]);

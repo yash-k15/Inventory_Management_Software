@@ -96,7 +96,29 @@ const CATEGORY_CHART_COLORS = [
   '#8c7898',
   '#73959a',
   '#bd8a8a',
+  '#7f8f45',
+  '#c17c45',
+  '#557c8c',
+  '#a66b83',
+  '#8a7652',
+  '#6e9b83',
+  '#a18bc1',
+  '#c09a57',
+  '#5f8d9e',
+  '#b4775d',
+  '#7d83a8',
+  '#8c9a63',
 ];
+
+// Derive colors from the category ID so a category keeps its color when
+// other categories have zero items or the category list changes order.
+function getCategoryChartColor(categoryId: number) {
+  const index =
+    (((categoryId - 1) % CATEGORY_CHART_COLORS.length) +
+      CATEGORY_CHART_COLORS.length) %
+    CATEGORY_CHART_COLORS.length;
+  return CATEGORY_CHART_COLORS[index];
+}
 
 function Overview({
   exhibition,
@@ -105,7 +127,10 @@ function Overview({
   exhibition: Exhibition;
   onOpenTab: (tab: WorkspaceTab) => void;
 }) {
-  const categoryTotal = exhibition.categories.reduce(
+  const activeCategories = exhibition.categories.filter(
+    (category) => category.itemCount > 0,
+  );
+  const categoryTotal = activeCategories.reduce(
     (total, category) => total + category.itemCount,
     0,
   );
@@ -144,15 +169,15 @@ function Overview({
   }, [exhibition.id]);
   const donutCircumference = 2 * Math.PI * 72;
   let accumulatedItems = 0;
-  const donutSegments = exhibition.categories
-    .map((category, index) => {
+  const donutSegments = activeCategories
+    .map((category) => {
       const segmentLength =
         categoryTotal > 0
           ? (category.itemCount / categoryTotal) * donutCircumference
           : 0;
       const segment = {
         category,
-        color: CATEGORY_CHART_COLORS[index % CATEGORY_CHART_COLORS.length],
+        color: getCategoryChartColor(category.categoryId),
         length: segmentLength,
         offset: accumulatedItems,
       };
@@ -160,7 +185,7 @@ function Overview({
       return segment;
     })
     .filter(({ category }) => category.itemCount > 0 && categoryTotal > 0);
-  const hoveredCategory = exhibition.categories.find(
+  const hoveredCategory = activeCategories.find(
     (category) => category.categoryId === hoveredCategoryId,
   );
 
@@ -207,7 +232,7 @@ function Overview({
               <h2>Registered inventory by category</h2>
               <span>Registered items, not selections</span>
             </header>
-            {exhibition.categories.length === 0 ? (
+            {activeCategories.length === 0 ? (
               <div className='exhibition-overview-empty'>
                 <p>No inventory categories are available yet.</p>
                 <button
@@ -282,7 +307,7 @@ function Overview({
                   </p>
                 </div>
                 <div className='exhibition-overview-legend'>
-                  {exhibition.categories.map((category, index) => (
+                  {activeCategories.map((category) => (
                     <div
                       className='exhibition-overview-legend-item'
                       key={category.categoryId}
@@ -290,10 +315,9 @@ function Overview({
                       <span
                         className='exhibition-overview-legend-swatch'
                         style={{
-                          backgroundColor:
-                            CATEGORY_CHART_COLORS[
-                              index % CATEGORY_CHART_COLORS.length
-                            ],
+                          backgroundColor: getCategoryChartColor(
+                            category.categoryId,
+                          ),
                         }}
                         aria-hidden='true'
                       />
@@ -376,7 +400,7 @@ function Overview({
             <h2>Selections by category</h2>
             <span>Unique pieces selected vs. registered</span>
           </header>
-          {exhibition.categories.length === 0 ? (
+          {activeCategories.length === 0 ? (
             <div className='exhibition-overview-empty'>
               <p>
                 Category selection details will appear when inventory categories
@@ -385,7 +409,7 @@ function Overview({
             </div>
           ) : (
             <div className='exhibition-overview-selection-list'>
-              {exhibition.categories.map((category) => {
+              {activeCategories.map((category) => {
                 const uniqueSelectedItems = category.uniqueSelectedItems ?? 0;
                 const totalSelections = category.totalSelections ?? 0;
                 const percentage =
@@ -571,8 +595,13 @@ function SharedInterest({ exhibitionId }: { exhibitionId: number }) {
           />
         </label>
         <div className='exhibition-shared-interest-category'>
-          <span className='exhibition-shared-interest-filter-label'>Category</span>
-          <div className='exhibition-shared-interest-category-dropdown' ref={categoryDropdownRef}>
+          <span className='exhibition-shared-interest-filter-label'>
+            Category
+          </span>
+          <div
+            className='exhibition-shared-interest-category-dropdown'
+            ref={categoryDropdownRef}
+          >
             <button
               type='button'
               className='exhibition-shared-interest-category-select'
@@ -583,12 +612,29 @@ function SharedInterest({ exhibitionId }: { exhibitionId: number }) {
                 if (event.key === 'Escape') setCategoryMenuOpen(false);
               }}
             >
-              <span>{categoryFilter === 'all' ? 'All categories' : categoryFilter}</span>
-              <span className='exhibition-shared-interest-category-chevron' aria-hidden='true'>⌄</span>
+              <span>
+                {categoryFilter === 'all' ? 'All categories' : categoryFilter}
+              </span>
+              <span
+                className='exhibition-shared-interest-category-chevron'
+                aria-hidden='true'
+              >
+                ⌄
+              </span>
             </button>
             {categoryMenuOpen && (
-              <div className='exhibition-shared-interest-category-menu' role='listbox' aria-label='Filter by category'>
-                {[{ value: 'all', label: 'All categories' }, ...categories.map((category) => ({ value: category, label: category }))].map((option) => (
+              <div
+                className='exhibition-shared-interest-category-menu'
+                role='listbox'
+                aria-label='Filter by category'
+              >
+                {[
+                  { value: 'all', label: 'All categories' },
+                  ...categories.map((category) => ({
+                    value: category,
+                    label: category,
+                  })),
+                ].map((option) => (
                   <button
                     key={option.value}
                     type='button'
@@ -601,7 +647,9 @@ function SharedInterest({ exhibitionId }: { exhibitionId: number }) {
                     }}
                   >
                     <span>{option.label}</span>
-                    {categoryFilter === option.value && <span aria-hidden='true'>✓</span>}
+                    {categoryFilter === option.value && (
+                      <span aria-hidden='true'>✓</span>
+                    )}
                   </button>
                 ))}
               </div>
@@ -679,7 +727,11 @@ function SharedInterest({ exhibitionId }: { exhibitionId: number }) {
                         className='exhibition-shared-interest-image'
                         src={convertFileSrc(item.imagePath)}
                         alt={`${item.itemNumber}`}
-                        onError={() => setImageErrors((current) => new Set(current).add(item.itemId))}
+                        onError={() =>
+                          setImageErrors((current) =>
+                            new Set(current).add(item.itemId),
+                          )
+                        }
                       />
                     ) : (
                       <span
@@ -703,7 +755,10 @@ function SharedInterest({ exhibitionId }: { exhibitionId: number }) {
                   <td className='exhibition-shared-interest-customer-names'>
                     <div className='exhibition-shared-interest-customer-chips'>
                       {item.customerNames.map((name) => (
-                        <span className='exhibition-shared-interest-customer-chip' key={name}>
+                        <span
+                          className='exhibition-shared-interest-customer-chip'
+                          key={name}
+                        >
                           {name}
                         </span>
                       ))}
@@ -734,6 +789,19 @@ export default function ExhibitionWorkspace({
   const [sharedInterestCount, setSharedInterestCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  async function refreshExhibition() {
+    const results = await getExhibitions({
+      search: '',
+      status: 'all',
+    });
+
+    const match = results.find((item) => item.id === exhibitionId) ?? null;
+
+    if (match) {
+      setExhibition(match);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -899,20 +967,13 @@ export default function ExhibitionWorkspace({
             exhibitionUpcoming={
               exhibition.startDate > new Date().toLocaleDateString('en-CA')
             }
+            onInventoryChanged={refreshExhibition}
           />
         ) : activeTab === 'selections' ? (
           <ExhibitionSelections
             exhibitionId={exhibitionId}
             initialCustomerId={selectedCustomerId}
-            onRefreshExhibition={async () => {
-              const results = await getExhibitions({
-                search: '',
-                status: 'all',
-              });
-              const match =
-                results.find((item) => item.id === exhibitionId) ?? null;
-              if (match) setExhibition(match);
-            }}
+            onRefreshExhibition={refreshExhibition}
           />
         ) : activeTab === 'shared-interest' ? (
           <SharedInterest exhibitionId={exhibitionId} />

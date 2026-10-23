@@ -314,7 +314,8 @@ export async function getExhibitionInventory(
   filters: ExhibitionInventoryFilters,
 ): Promise<ExhibitionInventoryRow[]> {
   const database = await getDatabase();
-  const conditions: string[] = [];
+  // Keep already-registered archived items visible, but never offer archived items for new registration.
+  const conditions: string[] = ['(ei.item_id IS NOT NULL OR i.is_archived = 0)'];
   const params: (string | number)[] = [exhibitionId];
 
   if (filters.registeredOnly) {
@@ -421,8 +422,10 @@ export async function registerExhibitionItems(
 
   let added = 0;
   for (const itemId of [...new Set(itemIds)]) {
+    // Enforce the archived-item restriction at the data layer as well as in the UI.
     const result = await database.execute(
-      'INSERT OR IGNORE INTO exhibition_item (exhibition_id, item_id) VALUES (?, ?)',
+      `INSERT OR IGNORE INTO exhibition_item (exhibition_id, item_id)
+       SELECT ?, i.id FROM item i WHERE i.id = ? AND i.is_archived = 0`,
       [exhibitionId, itemId],
     );
     if (result.rowsAffected > 0) added += 1;
@@ -438,7 +441,7 @@ export async function registerExhibitionItemByBarcode(
   if (!normalized) return 'not-found';
   const database = await getDatabase();
   const items = await database.select<{ id: number }[]>(
-    'SELECT id FROM item WHERE item_number = ? COLLATE NOCASE LIMIT 1',
+    'SELECT id FROM item WHERE item_number = ? COLLATE NOCASE AND is_archived = 0 LIMIT 1',
     [normalized],
   );
   if (!items.length) return 'not-found';

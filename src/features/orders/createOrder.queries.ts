@@ -134,7 +134,6 @@ export async function searchCreateOrderInventory(
   );
 }
 
-
 export async function searchCreateOrderSelectionItems(
   customerId: number,
   exhibitionId: number,
@@ -204,8 +203,6 @@ export async function searchCreateOrderSelectionItems(
   );
 }
 
-
-
 export interface OrderPricingContext {
   rates: {
     goldRatePaisePerGram: number;
@@ -225,12 +222,25 @@ export interface OrderPricingContext {
     purityPercentBp: number;
     purityName: string | null;
     certified: boolean;
-    diamonds: Array<{ shapeId: number; shape: string; combinationId: number | null; quality: string | null; weightMilliCarats: number }>;
-    stones: Array<{ stoneTypeId: number; stone: string; weightUnit: 'ct' | 'g'; weightMilli: number }>;
+    diamonds: Array<{
+      shapeId: number;
+      shape: string;
+      combinationId: number | null;
+      quality: string | null;
+      weightMilliCarats: number;
+    }>;
+    stones: Array<{
+      stoneTypeId: number;
+      stone: string;
+      weightUnit: 'ct' | 'g';
+      weightMilli: number;
+    }>;
   }>;
 }
 
-export async function getOrderPricingContext(itemIds: number[]): Promise<OrderPricingContext> {
+export async function getOrderPricingContext(
+  itemIds: number[],
+): Promise<OrderPricingContext> {
   const db = await getDatabase();
   const rateRows = await db.select<{ rateKey: string; value: number }[]>(
     `SELECT rate_key AS rateKey, value FROM global_rate`,
@@ -238,7 +248,9 @@ export async function getOrderPricingContext(itemIds: number[]): Promise<OrderPr
   const settings = await db.select<{ key: string; value: string | null }[]>(
     `SELECT key, value FROM app_setting WHERE key IN ('wastage_mode', 'gst_rate_bp')`,
   );
-  const combinations = await db.select<{ id: number; shapeId: number; rate: number }[]>(
+  const combinations = await db.select<
+    { id: number; shapeId: number; rate: number }[]
+  >(
     `SELECT id, shape_id AS shapeId, rate_per_ct_paise AS rate FROM diamond_combination WHERE is_archived = 0`,
   );
   const shapes = await db.select<{ id: number; rate: number }[]>(
@@ -247,31 +259,95 @@ export async function getOrderPricingContext(itemIds: number[]): Promise<OrderPr
   const stoneRates = await db.select<{ id: number; rate: number }[]>(
     `SELECT id, rate_paise_per_unit AS rate FROM stone_type WHERE is_archived = 0`,
   );
-  const rateMap = Object.fromEntries(rateRows.map((r) => [r.rateKey, Number(r.value) || 0]));
-  const settingMap = Object.fromEntries(settings.map((r) => [r.key, r.value ?? '']));
-  const ids = [...new Set(itemIds)].filter((id) => Number.isInteger(id) && id > 0);
+  const rateMap = Object.fromEntries(
+    rateRows.map((r) => [r.rateKey, Number(r.value) || 0]),
+  );
+  const settingMap = Object.fromEntries(
+    settings.map((r) => [r.key, r.value ?? '']),
+  );
+  const ids = [...new Set(itemIds)].filter(
+    (id) => Number.isInteger(id) && id > 0,
+  );
   const items: OrderPricingContext['items'] = [];
   if (ids.length) {
     const marks = ids.map(() => '?').join(',');
-    const base = await db.select<Array<{ id: number; itemNumber: string; grossWeightMilli: number | null; netWeightMilli: number | null; purityPercentBp: number; purityName: string | null; certified: number }>>(
-      `SELECT i.id, i.item_number AS itemNumber, i.gross_weight_milli AS grossWeightMilli, i.net_weight_milli AS netWeightMilli, COALESCE(p.percent_bp, 10000) AS purityPercentBp, p.name AS purityName, CASE WHEN TRIM(COALESCE(i.igi_certificate_number, '')) <> '' THEN 1 ELSE 0 END AS certified FROM item i LEFT JOIN purity p ON p.id = i.purity_id WHERE i.id IN (${marks})`, ids,
+    const base = await db.select<
+      Array<{
+        id: number;
+        itemNumber: string;
+        grossWeightMilli: number | null;
+        netWeightMilli: number | null;
+        purityPercentBp: number;
+        purityName: string | null;
+        certified: number;
+      }>
+    >(
+      `SELECT i.id, i.item_number AS itemNumber, i.gross_weight_milli AS grossWeightMilli, i.net_weight_milli AS netWeightMilli, COALESCE(p.percent_bp, 10000) AS purityPercentBp, p.name AS purityName, CASE WHEN TRIM(COALESCE(i.igi_certificate_number, '')) <> '' THEN 1 ELSE 0 END AS certified FROM item i LEFT JOIN purity p ON p.id = i.purity_id WHERE i.id IN (${marks})`,
+      ids,
     );
-    const diamonds = await db.select<Array<{ itemId: number; shapeId: number; shape: string; combinationId: number | null; quality: string | null; weightMilliCarats: number }>>(
-      `SELECT d.item_id AS itemId, d.shape_id AS shapeId, ds.name AS shape, d.combination_id AS combinationId, dc.quality, d.weight_milli AS weightMilliCarats FROM item_diamond d JOIN diamond_shape ds ON ds.id=d.shape_id LEFT JOIN diamond_combination dc ON dc.id=d.combination_id WHERE d.item_id IN (${marks})`, ids,
+    const diamonds = await db.select<
+      Array<{
+        itemId: number;
+        shapeId: number;
+        shape: string;
+        combinationId: number | null;
+        quality: string | null;
+        weightMilliCarats: number;
+      }>
+    >(
+      `SELECT d.item_id AS itemId, d.shape_id AS shapeId, ds.name AS shape, d.combination_id AS combinationId, dc.quality, d.weight_milli AS weightMilliCarats FROM item_diamond d JOIN diamond_shape ds ON ds.id=d.shape_id LEFT JOIN diamond_combination dc ON dc.id=d.combination_id WHERE d.item_id IN (${marks})`,
+      ids,
     );
-    const stones = await db.select<Array<{ itemId: number; stoneTypeId: number; stone: string; weightUnit: 'ct'|'g'; weightMilli: number }>>(
-      `SELECT s.item_id AS itemId, s.stone_type_id AS stoneTypeId, st.name AS stone, st.weight_unit AS weightUnit, s.weight_milli AS weightMilli FROM item_stone s JOIN stone_type st ON st.id=s.stone_type_id WHERE s.item_id IN (${marks})`, ids,
+    const stones = await db.select<
+      Array<{
+        itemId: number;
+        stoneTypeId: number;
+        stone: string;
+        weightUnit: 'ct' | 'g';
+        weightMilli: number;
+      }>
+    >(
+      `SELECT s.item_id AS itemId, s.stone_type_id AS stoneTypeId, st.name AS stone, st.weight_unit AS weightUnit, s.weight_milli AS weightMilli FROM item_stone s JOIN stone_type st ON st.id=s.stone_type_id WHERE s.item_id IN (${marks})`,
+      ids,
     );
-    for (const row of base) items.push({ ...row, inventoryItemId: row.id, certified: Boolean(row.certified), diamonds: diamonds.filter((d) => d.itemId === row.id).map(({itemId: _id, ...d}) => d), stones: stones.filter((st) => st.itemId === row.id).map(({itemId: _id, ...st}) => st) });
+    for (const row of base)
+      items.push({
+        ...row,
+        inventoryItemId: row.id,
+        certified: Boolean(row.certified),
+        diamonds: diamonds
+          .filter((d) => d.itemId === row.id)
+          .map(({ itemId: _id, ...d }) => d),
+        stones: stones
+          .filter((st) => st.itemId === row.id)
+          .map(({ itemId: _id, ...st }) => st),
+      });
   }
-  return { rates: { goldRatePaisePerGram: rateMap.gold_per_g_paise || 0, wastageMode: settingMap.wastage_mode === 'per_g' ? 'per_g' : 'percent', wastagePercentBp: rateMap.wastage_percent_bp || 0, wastagePaisePerGram: rateMap.wastage_per_g_paise || 0, certificationPaisePerCarat: rateMap.certification_per_ct_paise || 0, gstRateBp: Number(settingMap.gst_rate_bp || 300), diamondRatesPaisePerCarat: Object.fromEntries([...combinations.map((r) => [String(r.id), Number(r.rate) || 0]), ...shapes.map((r) => [String(r.id), Number(r.rate) || 0])]), stoneRatesPaisePerUnit: Object.fromEntries(stoneRates.map((r) => [String(r.id), Number(r.rate) || 0])) }, items };
+  return {
+    rates: {
+      goldRatePaisePerGram: rateMap.gold_per_g_paise || 0,
+      wastageMode: settingMap.wastage_mode === 'per_g' ? 'per_g' : 'percent',
+      wastagePercentBp: rateMap.wastage_percent_bp || 0,
+      wastagePaisePerGram: rateMap.wastage_per_g_paise || 0,
+      certificationPaisePerCarat: rateMap.certification_per_ct_paise || 0,
+      gstRateBp: Number(settingMap.gst_rate_bp || 300),
+      diamondRatesPaisePerCarat: Object.fromEntries([
+        ...combinations.map((r) => [String(r.id), Number(r.rate) || 0]),
+        ...shapes.map((r) => [String(r.id), Number(r.rate) || 0]),
+      ]),
+      stoneRatesPaisePerUnit: Object.fromEntries(
+        stoneRates.map((r) => [String(r.id), Number(r.rate) || 0]),
+      ),
+    },
+    items,
+  };
 }
 
 export async function createConfirmedOrder(input: {
   customerId: number;
   exhibitionId: number | null;
   notes: string;
-  finalTotalPaise: number;
+  roundedTotalPaise: number | null;
   pricingMethod?: 'direct' | 'global' | 'custom_all' | 'custom_individual';
   items: NewOrderItem[];
 }): Promise<number> {
@@ -388,7 +464,9 @@ export async function createConfirmedOrder(input: {
     );
 
     if (existing.length) {
-      const inventoryItem = currentItems.find((current) => current.id === item.inventoryItemId);
+      const inventoryItem = currentItems.find(
+        (current) => current.id === item.inventoryItemId,
+      );
       throw new Error(
         `${inventoryItem?.itemNumber ?? 'This item'} was already ordered from this exhibition selection in ${existing[0].orderNumber}.`,
       );
@@ -489,11 +567,14 @@ export async function createConfirmedOrder(input: {
       customerId: input.customerId,
       exhibitionId: input.exhibitionId,
       notes: input.notes.trim(),
-      finalTotalPaise: input.finalTotalPaise,
+      roundedTotalPaise: input.roundedTotalPaise,
       items: orderItems.map((item) => ({
         inventoryItemId: item.inventoryItemId,
         agreedPricePaise: item.price,
-        selectionItemId: input.items.find((source) => source.inventoryItemId === item.inventoryItemId)?.selectionItemId ?? null,
+        selectionItemId:
+          input.items.find(
+            (source) => source.inventoryItemId === item.inventoryItemId,
+          )?.selectionItemId ?? null,
         itemSnapshot: JSON.stringify(item.snapshot),
         pricingBreakdown: JSON.stringify({
           source: input.pricingMethod ?? 'direct',

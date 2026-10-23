@@ -48,6 +48,7 @@ pub fn run() {
     let activity_log = include_str!("../../src/db/migrations/012_activity_log.sql");
     let activity_operation_id = include_str!("../../src/db/migrations/013_activity_operation_id.sql");
     let order_final_total = include_str!("../../src/db/migrations/014_order_final_total.sql");
+    let order_notes_and_final_total = include_str!("../../src/db/migrations/015_order_notes_and_final_total.sql");
 
     let migrations = || {
         vec![
@@ -65,6 +66,12 @@ pub fn run() {
             Migration { version: 12, description: "add inventory and selection activity log", sql: activity_log, kind: MigrationKind::Up },
             Migration { version: 13, description: "add operation id to activity log", sql: activity_operation_id, kind: MigrationKind::Up },
             Migration { version: 14, description: "support final order total overrides", sql: order_final_total, kind: MigrationKind::Up },
+            Migration {
+                version: 15,
+                description: "persist order notes and final rounded total",
+                sql: order_notes_and_final_total,
+                kind: MigrationKind::Up,
+            },
         ]
     };
 

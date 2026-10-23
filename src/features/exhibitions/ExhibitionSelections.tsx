@@ -6,6 +6,8 @@ import {
   getSelectionCustomers,
   getSelectionItems,
   getSelectionOrders,
+  getSelectionOrderDetail,
+  type SelectionOrderDetail,
   type SelectionOrderSummary,
   removeSelectionItem,
   searchSelectionInventory,
@@ -88,6 +90,13 @@ export default function ExhibitionSelections({
   const [createOrderOpen, setCreateOrderOpen] = useState(false);
   const [orders, setOrders] = useState<SelectionOrderSummary[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
+  const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
+  const [orderDetails, setOrderDetails] = useState<
+    Record<number, SelectionOrderDetail>
+  >({});
+  const [orderDetailLoading, setOrderDetailLoading] = useState<number | null>(
+    null,
+  );
   const [customers, setCustomers] = useState<SelectionCustomer[]>([]),
     [selectedId, setSelectedId] = useState<number | null>(null),
     [items, setItems] = useState<SelectionRow[]>([]),
@@ -227,16 +236,28 @@ export default function ExhibitionSelections({
     const c = customers.find((row) => row.id === selectedId);
     if (!c) {
       setOrders([]);
-      return () => { dead = true; };
+      return () => {
+        dead = true;
+      };
     }
     setOrdersLoading(true);
     void getSelectionOrders(exhibitionId, c.id)
-      .then((rows) => { if (!dead) setOrders(rows); })
-      .catch((e) => {
-        if (!dead) setFeedback({ error: true, text: e instanceof Error ? e.message : 'Unable to load orders.' });
+      .then((rows) => {
+        if (!dead) setOrders(rows);
       })
-      .finally(() => { if (!dead) setOrdersLoading(false); });
-    return () => { dead = true; };
+      .catch((e) => {
+        if (!dead)
+          setFeedback({
+            error: true,
+            text: e instanceof Error ? e.message : 'Unable to load orders.',
+          });
+      })
+      .finally(() => {
+        if (!dead) setOrdersLoading(false);
+      });
+    return () => {
+      dead = true;
+    };
   }, [exhibitionId, selectedId, customers, items]);
 
   useEffect(() => {
@@ -401,6 +422,60 @@ export default function ExhibitionSelections({
       });
     }
   }
+  const formatMoney = (paise: number) =>
+    new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(paise / 100);
+  const formatReviewWeight = (milli: number | null) =>
+    milli == null ? '—' : `${(milli / 1000).toFixed(3)} g`;
+  const formatOrderDetails = (details: SelectionRow['diamonds']) =>
+    details.length
+      ? details
+          .map(
+            (d) =>
+              `${d.label}: ${((d.weight_milli ?? 0) / 1000).toFixed(3)} ct${d.pieces == null ? '' : ` (${d.pieces} pcs)`}`,
+          )
+          .join('\n')
+      : '—';
+  const formatOrderDetailTotals = (details: SelectionRow['diamonds']) => {
+    const weightMilli = details.reduce(
+      (sum, detail) => sum + (detail.weight_milli ?? 0),
+      0,
+    );
+    const pieces = details.reduce(
+      (sum, detail) => sum + (detail.pieces ?? 0),
+      0,
+    );
+    const hasPieces = details.some((detail) => detail.pieces != null);
+    return weightMilli || pieces
+      ? `${(weightMilli / 1000).toFixed(3)} ct${hasPieces ? ` (${pieces} pcs)` : ''}`
+      : '—';
+  };
+  async function toggleOrder(orderId: number) {
+    if (expandedOrderId === orderId) {
+      setExpandedOrderId(null);
+      return;
+    }
+    setExpandedOrderId(orderId);
+    if (orderDetails[orderId]) return;
+    setOrderDetailLoading(orderId);
+    try {
+      const detail = await getSelectionOrderDetail(orderId);
+      if (detail)
+        setOrderDetails((current) => ({ ...current, [orderId]: detail }));
+    } catch (e) {
+      setFeedback({
+        error: true,
+        text: e instanceof Error ? e.message : 'Unable to load order details.',
+      });
+    } finally {
+      setOrderDetailLoading(null);
+    }
+  }
+
   return (
     <section className='exhibition-selections'>
       <aside className='selection-customer-panel'>
@@ -633,24 +708,223 @@ export default function ExhibitionSelections({
             </section>
             <section className='selection-items-section selection-section-card'>
               <div className='selection-items-heading'>
-                <div className='selection-tabs' role='tablist' aria-label='Customer exhibition records'>
-                  <button type='button' role='tab' aria-selected={activeTab === 'items'} className={activeTab === 'items' ? 'is-active' : ''} onClick={() => setActiveTab('items')}>Selected items <span>{active.length}</span></button>
-                  <button type='button' role='tab' aria-selected={activeTab === 'orders'} className={activeTab === 'orders' ? 'is-active' : ''} onClick={() => setActiveTab('orders')}>Orders <span>{orders.length}</span></button>
+                <div
+                  className='selection-tabs'
+                  role='tablist'
+                  aria-label='Customer exhibition records'
+                >
+                  <button
+                    type='button'
+                    role='tab'
+                    aria-selected={activeTab === 'items'}
+                    className={activeTab === 'items' ? 'is-active' : ''}
+                    onClick={() => setActiveTab('items')}
+                  >
+                    Selected items <span>{active.length}</span>
+                  </button>
+                  <button
+                    type='button'
+                    role='tab'
+                    aria-selected={activeTab === 'orders'}
+                    className={activeTab === 'orders' ? 'is-active' : ''}
+                    onClick={() => setActiveTab('orders')}
+                  >
+                    Orders <span>{orders.length}</span>
+                  </button>
                 </div>
-                {activeTab === 'items' && <div className='selection-order-actions'>
-                  <span>{selectedForOrder.length} selected for order</span>
-                  <button type='button' className='selection-button selection-button--primary' disabled={!selectedForOrder.length || selectedForOrder.some(id => active.find(item => item.id === id)?.locked === 1)} onClick={() => setCreateOrderOpen(true)}>Create order</button>
-                </div>}
+                {activeTab === 'items' && (
+                  <div className='selection-order-actions'>
+                    <span>{selectedForOrder.length} selected for order</span>
+                    <button
+                      type='button'
+                      className='selection-button selection-button--primary'
+                      disabled={
+                        !selectedForOrder.length ||
+                        selectedForOrder.some(
+                          (id) =>
+                            active.find((item) => item.id === id)?.locked === 1,
+                        )
+                      }
+                      onClick={() => setCreateOrderOpen(true)}
+                    >
+                      Create order
+                    </button>
+                  </div>
+                )}
               </div>
               {activeTab === 'orders' ? (
-                ordersLoading ? <p className='selection-muted'>Loading orders…</p> : orders.length === 0 ? <div className='selection-no-items'><p>No orders for this customer in this exhibition.</p><span>Orders created from this selection will appear here.</span></div> : (
+                ordersLoading ? (
+                  <p className='selection-muted'>Loading orders…</p>
+                ) : orders.length === 0 ? (
+                  <div className='selection-no-items'>
+                    <p>No orders for this customer in this exhibition.</p>
+                    <span>
+                      Orders created from this selection will appear here.
+                    </span>
+                  </div>
+                ) : (
                   <div className='selection-orders-list'>
-                    {orders.map(order => <article className='selection-order-card' key={order.id}>
-                      <div><strong>{order.orderNumber}</strong><small>{new Date(order.createdAt.replace(' ', 'T')).toLocaleDateString('en-IN')}</small></div>
-                      <span className={`selection-order-status status-${order.status.toLowerCase().replace(/\s+/g, '-')}`}>{order.status}</span>
-                      <span>{order.itemCount} item{order.itemCount === 1 ? '' : 's'}</span>
-                      <strong>{new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(order.totalPaise / 100)}</strong>
-                    </article>)}
+                    {orders.map((order) => {
+                      const expanded = expandedOrderId === order.id;
+                      const detail = orderDetails[order.id];
+                      return (
+                        <article
+                          className={`selection-order-entry ${expanded ? 'is-expanded' : ''}`}
+                          key={order.id}
+                        >
+                          <button
+                            type='button'
+                            className='selection-order-card'
+                            aria-expanded={expanded}
+                            onClick={() => void toggleOrder(order.id)}
+                          >
+                            <span className='selection-order-number'>
+                              <strong>{order.orderNumber}</strong>
+                              <small>
+                                {order.itemCount} item
+                                {order.itemCount === 1 ? '' : 's'}
+                              </small>
+                            </span>
+                            <span className='selection-order-date'>
+                              {new Date(
+                                order.createdAt.replace(' ', 'T'),
+                              ).toLocaleDateString('en-IN')}
+                            </span>
+                            <strong className='selection-order-value'>
+                              {formatMoney(order.totalPaise)}
+                            </strong>
+                            <span
+                              className='selection-order-chevron'
+                              aria-hidden='true'
+                            >
+                              {expanded ? '⌃' : '⌄'}
+                            </span>
+                          </button>
+                          {expanded && (
+                            <div className='selection-order-expanded'>
+                              {orderDetailLoading === order.id ? (
+                                <p className='selection-muted'>
+                                  Loading order details…
+                                </p>
+                              ) : detail ? (
+                                <>
+                                  <div className='selection-order-review-table'>
+                                    <div className='selection-order-review-heading'>
+                                      <span>Item</span>
+                                      <span>Gross wt.</span>
+                                      <span>Net wt.</span>
+                                      <span>Diamonds</span>
+                                      <span>Stones</span>
+                                      <span>Final price</span>
+                                    </div>
+                                    {detail.items.map((item, index) => (
+                                      <div
+                                        className='selection-order-review-row'
+                                        key={`${order.id}-${index}`}
+                                      >
+                                        <div className='selection-order-review-item'>
+                                          <Thumbnail
+                                            path={item.imagePath}
+                                            alt={item.itemNumber}
+                                          />
+                                          <span>
+                                            <strong>{item.itemNumber}</strong>
+                                            <small>{item.categoryName}</small>
+                                          </span>
+                                        </div>
+                                        <span>
+                                          {formatReviewWeight(
+                                            item.grossWeightMilli,
+                                          )}
+                                        </span>
+                                        <span>
+                                          {formatReviewWeight(
+                                            item.netWeightMilli,
+                                          )}
+                                        </span>
+                                        <span className='selection-order-review-detail'>
+                                          {formatOrderDetails(item.diamonds)}
+                                        </span>
+                                        <span className='selection-order-review-detail'>
+                                          {formatOrderDetails(item.stones)}
+                                        </span>
+                                        <strong>
+                                          {formatMoney(item.pricePaise)}
+                                        </strong>
+                                      </div>
+                                    ))}
+                                    <div className='selection-order-review-row selection-order-review-total-row'>
+                                      <strong>Totals</strong>
+                                      <strong>
+                                        {formatReviewWeight(
+                                          detail.items.some(
+                                            (i) => i.grossWeightMilli != null,
+                                          )
+                                            ? detail.items.reduce(
+                                                (sum, i) =>
+                                                  sum +
+                                                  (i.grossWeightMilli ?? 0),
+                                                0,
+                                              )
+                                            : null,
+                                        )}
+                                      </strong>
+                                      <strong>
+                                        {formatReviewWeight(
+                                          detail.items.some(
+                                            (i) => i.netWeightMilli != null,
+                                          )
+                                            ? detail.items.reduce(
+                                                (sum, i) =>
+                                                  sum + (i.netWeightMilli ?? 0),
+                                                0,
+                                              )
+                                            : null,
+                                        )}
+                                      </strong>
+                                      <strong>
+                                        {formatOrderDetailTotals(
+                                          detail.items.flatMap(
+                                            (i) => i.diamonds,
+                                          ),
+                                        )}
+                                      </strong>
+                                      <strong>
+                                        {formatOrderDetailTotals(
+                                          detail.items.flatMap((i) => i.stones),
+                                        )}
+                                      </strong>
+                                      <strong>
+                                        {formatMoney(
+                                          detail.calculatedTotalPaise,
+                                        )}
+                                      </strong>
+                                    </div>
+                                  </div>
+                                  <div className='selection-order-final-total'>
+                                    <span>Final order total</span>
+                                    <strong>
+                                      {formatMoney(detail.totalPaise)}
+                                    </strong>
+                                  </div>
+                                  <div className='selection-order-notes'>
+                                    <strong>Notes</strong>
+                                    <p>
+                                      {detail.notes?.trim() ||
+                                        'No notes added for this order.'}
+                                    </p>
+                                  </div>
+                                </>
+                              ) : (
+                                <p className='selection-muted'>
+                                  Unable to load order details.
+                                </p>
+                              )}
+                            </div>
+                          )}
+                        </article>
+                      );
+                    })}
                   </div>
                 )
               ) : active.length === 0 ? (
@@ -716,7 +990,21 @@ export default function ExhibitionSelections({
                       {sortedActive.map((i) => (
                         <tr key={i.id}>
                           <td className='selection-order-checkbox-cell'>
-                            <input type='checkbox' aria-label={`Include ${i.itemNumber} in order`} checked={selectedForOrder.includes(i.id)} disabled={i.locked === 1 || i.inventoryItemId == null} onChange={(event) => setSelectedForOrder(current => event.target.checked ? [...current, i.id] : current.filter(id => id !== i.id))} />
+                            <input
+                              type='checkbox'
+                              aria-label={`Include ${i.itemNumber} in order`}
+                              checked={selectedForOrder.includes(i.id)}
+                              disabled={
+                                i.locked === 1 || i.inventoryItemId == null
+                              }
+                              onChange={(event) =>
+                                setSelectedForOrder((current) =>
+                                  event.target.checked
+                                    ? [...current, i.id]
+                                    : current.filter((id) => id !== i.id),
+                                )
+                              }
+                            />
                           </td>
                           <td>
                             <div className='selection-table-item'>
@@ -768,7 +1056,15 @@ export default function ExhibitionSelections({
                               : '—'}
                           </td>
                           <td className='selection-order-status-cell'>
-                            {i.locked ? <span className='selection-locked-badge'>Ordered</span> : <span className='selection-not-ordered-badge'>Not ordered</span>}
+                            {i.locked ? (
+                              <span className='selection-locked-badge'>
+                                Ordered
+                              </span>
+                            ) : (
+                              <span className='selection-not-ordered-badge'>
+                                Not ordered
+                              </span>
+                            )}
                           </td>
                           <td className='selection-action-cell'>
                             {i.locked ? (
@@ -821,7 +1117,17 @@ export default function ExhibitionSelections({
         <CreateOrderModal
           initialCustomerId={customer.id}
           initialExhibitionId={exhibitionId}
-          initialItems={active.filter(item => selectedForOrder.includes(item.id) && item.inventoryItemId != null).map(item => ({ inventoryItemId: item.inventoryItemId as number, selectionItemId: item.id, itemNumber: item.itemNumber }))}
+          initialItems={active
+            .filter(
+              (item) =>
+                selectedForOrder.includes(item.id) &&
+                item.inventoryItemId != null,
+            )
+            .map((item) => ({
+              inventoryItemId: item.inventoryItemId as number,
+              selectionItemId: item.id,
+              itemNumber: item.itemNumber,
+            }))}
           onClose={() => setCreateOrderOpen(false)}
           onCreated={async () => {
             setCreateOrderOpen(false);

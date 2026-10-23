@@ -799,7 +799,10 @@ export default function CreateOrderModal({
           ? Number(selectedExhibitionId)
           : null,
         notes,
-        finalTotalPaise,
+        roundedTotalPaise:
+          roundOffFinalTotal.trim() !== ''
+            ? Number(roundOffFinalTotal) * 100
+            : null,
         items: selectedItems.map((selected) => ({
           inventoryItemId: selected.item.id,
           agreedPricePaise: Math.round(Number(selected.price) * 100),

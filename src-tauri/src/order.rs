@@ -21,7 +21,7 @@ pub struct CreateOrderInput {
     exhibition_id: Option<i64>,
     notes: String,
     #[serde(default)]
-    final_total_paise: Option<i64>,
+    rounded_total_paise: Option<i64>,
     items: Vec<NewOrderItem>,
 }
 
@@ -36,8 +36,8 @@ pub fn create_confirmed_order(
     if input.items.is_empty() {
         return Err("Add at least one jewelry item.".to_string());
     }
-    if input.final_total_paise.is_some_and(|value| value < 0) {
-        return Err("Enter a valid final order total.".to_string());
+    if input.rounded_total_paise.is_some_and(|value| value < 0) {
+        return Err("Enter a valid rounded order total.".to_string());
     }
 
     let mut seen = std::collections::HashSet::new();
@@ -156,13 +156,43 @@ pub fn create_confirmed_order(
         }
     }
 
+    
+    let calculated_total_paise: i64 = input
+        .items
+        .iter()
+        .map(|item| item.agreed_price_paise)
+        .sum();
+
+    let rounded_total_paise = input.rounded_total_paise;
+
+    let final_total_paise =
+        rounded_total_paise.unwrap_or(calculated_total_paise);
+
     transaction
         .execute(
-            "INSERT INTO customer_order (customer_id, customer_name_snapshot, exhibition_id, status, final_total_paise)
-             VALUES (?1, ?2, ?3, 'Confirmed', ?4)",
-            params![input.customer_id, customer_name, input.exhibition_id, input.final_total_paise],
+            "INSERT INTO customer_order (
+                customer_id,
+                customer_name_snapshot,
+                exhibition_id,
+                status,
+                notes,
+                calculated_total_paise,
+                rounded_total_paise,
+                final_total_paise
+            )
+            VALUES (?1, ?2, ?3, 'Confirmed', ?4, ?5, ?6, ?7)",
+            params![
+                input.customer_id,
+                customer_name,
+                input.exhibition_id,
+                input.notes.trim(),
+                calculated_total_paise,
+                rounded_total_paise,
+                final_total_paise
+            ],
         )
         .map_err(|e| format!("Could not create the order: {e}"))?;
+
     let order_id = transaction.last_insert_rowid();
 
     for item in &input.items {
@@ -180,19 +210,6 @@ pub fn create_confirmed_order(
                 ],
             )
             .map_err(|e| format!("Could not save an order item: {e}"))?;
-    }
-
-    if !input.notes.trim().is_empty() {
-        transaction
-            .execute(
-                "UPDATE order_status_history SET notes = ?1
-                 WHERE order_id = ?2 AND status = 'Confirmed'
-                   AND id = (SELECT id FROM order_status_history
-                             WHERE order_id = ?2 AND status = 'Confirmed'
-                             ORDER BY id DESC LIMIT 1)",
-                params![input.notes.trim(), order_id],
-            )
-            .map_err(|e| format!("Could not save order notes: {e}"))?;
     }
 
     transaction

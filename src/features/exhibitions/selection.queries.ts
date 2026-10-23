@@ -99,7 +99,6 @@ export async function getSelectionCustomers(
   );
 }
 
-
 export interface AvailableSelectionCustomer {
   id: number;
   businessName: string;
@@ -159,11 +158,13 @@ export async function addCustomerToSelectionExhibition(
 export async function getSelectionItems(selectionId: number) {
   const db = await getDatabase();
 
-  const rows = await db.select<(Omit<SelectionRow, 'diamonds' | 'stones'> & {
-    diamondsJson: string | null;
-    stonesJson: string | null;
-    netWeightMilli: number | null;
-  })[]>(
+  const rows = await db.select<
+    (Omit<SelectionRow, 'diamonds' | 'stones'> & {
+      diamondsJson: string | null;
+      stonesJson: string | null;
+      netWeightMilli: number | null;
+    })[]
+  >(
     `SELECT
        si.id,
        si.inventory_item_id AS inventoryItemId,
@@ -512,13 +513,14 @@ export async function removeSelectionItem(selectionItemId: number) {
   }
 }
 
-
 export interface SelectionOrderSummary {
   id: number;
   orderNumber: string;
   status: string;
   createdAt: string;
   itemCount: number;
+  calculatedTotalPaise: number;
+  roundedTotalPaise: number | null;
   totalPaise: number;
 }
 
@@ -527,14 +529,17 @@ export async function getSelectionOrders(
   customerId: number,
 ): Promise<SelectionOrderSummary[]> {
   const db = await getDatabase();
-  return db.select<SelectionOrderSummary[]>(`
+  return db.select<SelectionOrderSummary[]>(
+    `
     SELECT
       co.id,
       'ORD-' || printf('%04d', co.id) AS orderNumber,
       co.status,
       co.created_at AS createdAt,
       COUNT(coi.id) AS itemCount,
-      COALESCE(SUM(coi.agreed_price_paise), 0) AS totalPaise
+      co.calculated_total_paise AS calculatedTotalPaise,
+      co.rounded_total_paise AS roundedTotalPaise,
+      co.final_total_paise AS totalPaise
     FROM customer_order co
     LEFT JOIN customer_order_item coi ON coi.order_id = co.id
     WHERE co.customer_id = ?
@@ -552,5 +557,114 @@ export async function getSelectionOrders(
       )
     GROUP BY co.id
     ORDER BY co.created_at DESC, co.id DESC
-  `, [customerId, exhibitionId, exhibitionId]);
+  `,
+    [customerId, exhibitionId, exhibitionId],
+  );
+}
+
+export interface SelectionOrderDetail {
+  id: number;
+  orderNumber: string;
+  createdAt: string;
+  itemCount: number;
+  calculatedTotalPaise: number;
+  roundedTotalPaise: number | null;
+  totalPaise: number;
+  notes: string | null;
+  items: {
+    itemNumber: string;
+    categoryName: string;
+    imagePath: string | null;
+    grossWeightMilli: number | null;
+    netWeightMilli: number | null;
+    diamonds: SelectionDetail[];
+    stones: SelectionDetail[];
+    pricePaise: number;
+  }[];
+}
+
+export async function getSelectionOrderDetail(
+  orderId: number,
+): Promise<SelectionOrderDetail | null> {
+  const db = await getDatabase();
+  const orders = await db.select<Omit<SelectionOrderDetail, 'items'>[]>(
+    `
+    SELECT co.id,
+      'ORD-' || printf('%04d', co.id) AS orderNumber,
+      co.created_at AS createdAt,
+      COUNT(coi.id) AS itemCount,
+      co.calculated_total_paise AS calculatedTotalPaise,
+      co.rounded_total_paise AS roundedTotalPaise,
+      co.final_total_paise AS totalPaise,
+      co.notes AS notes
+    FROM customer_order co
+    LEFT JOIN customer_order_item coi ON coi.order_id = co.id
+    WHERE co.id = ?
+    GROUP BY co.id
+  `,
+    [orderId],
+  );
+  if (!orders.length) return null;
+  const rows = await db.select<
+    {
+      id: number;
+      itemNumber: string;
+      categoryName: string;
+      imagePath: string | null;
+      grossWeightMilli: number | null;
+      netWeightMilli: number | null;
+      diamondsJson: string | null;
+      stonesJson: string | null;
+      pricePaise: number;
+    }[]
+  >(
+    `
+    SELECT coi.id,
+      COALESCE(json_extract(coi.item_snapshot, '$.item_number'), 'Deleted item') AS itemNumber,
+      COALESCE(json_extract(coi.item_snapshot, '$.category'), '—') AS categoryName,
+      json_extract(coi.item_snapshot, '$.image_path') AS imagePath,
+      json_extract(coi.item_snapshot, '$.gross_weight_milli') AS grossWeightMilli,
+      COALESCE(json_extract(coi.item_snapshot, '$.net_weight_milli'),
+        (SELECT i.net_weight_milli FROM item i WHERE i.id = json_extract(coi.item_snapshot, '$.inventory_item_id'))) AS netWeightMilli,
+      json_extract(coi.item_snapshot, '$.diamonds') AS diamondsJson,
+      json_extract(coi.item_snapshot, '$.stones') AS stonesJson,
+      coi.agreed_price_paise AS pricePaise
+    FROM customer_order_item coi
+    WHERE coi.order_id = ?
+    ORDER BY coi.id
+  `,
+    [orderId],
+  );
+  const parse = (value: string | null): SelectionDetail[] => {
+    if (!value) return [];
+    try {
+      const parsed: unknown = JSON.parse(value);
+      if (!Array.isArray(parsed)) return [];
+      return parsed.map((d: any) => ({
+        label: String(d.label ?? d.shape ?? d.stone ?? '—'),
+        pieces: d.pieces == null ? null : Number(d.pieces),
+        weight_milli:
+          d.weight_milli == null
+            ? d.weightMilli == null
+              ? null
+              : Number(d.weightMilli)
+            : Number(d.weight_milli),
+      }));
+    } catch {
+      return [];
+    }
+  };
+  return {
+    ...orders[0],
+    items: rows.map((row) => ({
+      itemNumber: row.itemNumber,
+      categoryName: row.categoryName,
+      imagePath: row.imagePath,
+      grossWeightMilli: row.grossWeightMilli,
+      netWeightMilli: row.netWeightMilli,
+      diamonds: parse(row.diamondsJson),
+      stones: parse(row.stonesJson),
+      pricePaise: row.pricePaise,
+    })),
+  };
 }

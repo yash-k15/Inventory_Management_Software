@@ -1,16 +1,13 @@
-export type PaymentMethod =
-  | 'Cash'
-  | 'Bank Transfer'
-  | 'UPI'
-  | 'Cheque'
-  | 'Other';
+export type PaymentMethod = 'Cash' | 'Bank Transfer' | 'UPI' | 'Cheque' | 'Other';
 
 export interface PaymentRow {
   id: number;
+  orderId: number | null;
+  orderNumber: string | null;
   customerId: number | null;
   customerName: string;
-  exhibitionId: number;
-  exhibitionName: string;
+  exhibitionId: number | null;
+  exhibitionName: string | null;
   amountPaise: number;
   paymentDate: string;
   paymentMethod: string | null;
@@ -18,22 +15,18 @@ export interface PaymentRow {
   createdAt: string;
 }
 
-export interface PaymentCustomerOption {
+export interface PaymentOrderOption {
   id: number;
-  name: string;
+  orderNumber: string;
+  customerName: string;
+  exhibitionName: string | null;
+  totalPaise: number;
+  paidPaise: number;
+  outstandingPaise: number;
+  sourceLabel: string;
 }
 
-export interface PaymentExhibitionOption {
-  id: number;
-  name: string;
-  startDate: string;
-  endDate: string;
-}
-
-export interface PaymentFormOptions {
-  customers: PaymentCustomerOption[];
-  exhibitions: PaymentExhibitionOption[];
-}
+export interface PaymentFormOptions { orders: PaymentOrderOption[]; }
 
 export interface PaymentSummary {
   totalReceivedPaise: number;
@@ -42,8 +35,7 @@ export interface PaymentSummary {
 }
 
 export interface CreatePaymentInput {
-  customerId: number;
-  exhibitionId: number;
+  orderId: number;
   amountPaise: number;
   paymentDate: string;
   paymentMethod: PaymentMethod;

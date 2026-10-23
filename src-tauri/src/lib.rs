@@ -49,6 +49,7 @@ pub fn run() {
     let activity_operation_id = include_str!("../../src/db/migrations/013_activity_operation_id.sql");
     let order_final_total = include_str!("../../src/db/migrations/014_order_final_total.sql");
     let order_notes_and_final_total = include_str!("../../src/db/migrations/015_order_notes_and_final_total.sql");
+    let order_linked_payments = include_str!("../../src/db/migrations/016_order_linked_payments.sql");
 
     let migrations = || {
         vec![
@@ -70,6 +71,12 @@ pub fn run() {
                 version: 15,
                 description: "persist order notes and final rounded total",
                 sql: order_notes_and_final_total,
+                kind: MigrationKind::Up,
+            },
+            Migration {
+                version: 16,
+                description: "link payments to individual orders",
+                sql: order_linked_payments,
                 kind: MigrationKind::Up,
             },
         ]

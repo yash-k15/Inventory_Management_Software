@@ -5,7 +5,7 @@ import { createPayment } from '../payments/payments.queries';
 import type { PaymentMethod } from '../payments/payments.types';
 import './OrderDetailsScreen.css';
 
-interface Props { orderId: number; onBack: () => void; }
+interface Props { orderId: number; onBack: () => void; backLabel?: string; }
 const money = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const formatMoney = (paise: number | null | undefined) => paise == null || !Number.isFinite(Number(paise)) ? '—' : money.format(Number(paise) / 100);
 const formatNumber = (value: unknown, digits = 3) => value == null || value === '' || !Number.isFinite(Number(value)) ? '—' : Number(value).toFixed(digits);
@@ -96,7 +96,7 @@ function OrderPriceBreakdown({ items, totalValuePaise }: { items: OrderDetailIte
   </section>;
 }
 
-export default function OrderDetailsScreen({ orderId, onBack }: Props) {
+export default function OrderDetailsScreen({ orderId, onBack, backLabel = 'Orders' }: Props) {
   const [order, setOrder] = useState<OrderDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -165,11 +165,11 @@ export default function OrderDetailsScreen({ orderId, onBack }: Props) {
     }
   }
 
-  if (loading) return <section className="order-details-screen"><button className="order-details-back" onClick={onBack}>← Orders</button><p className="order-details-message">Loading order details…</p></section>;
-  if (!order) return <section className="order-details-screen"><button className="order-details-back" onClick={onBack}>← Orders</button><p className="order-details-message" role="alert">{error || 'Order not found.'}</p></section>;
+  if (loading) return <section className="order-details-screen"><button className="order-details-back" onClick={onBack}>← {backLabel}</button><p className="order-details-message">Loading order details…</p></section>;
+  if (!order) return <section className="order-details-screen"><button className="order-details-back" onClick={onBack}>← {backLabel}</button><p className="order-details-message" role="alert">{error || 'Order not found.'}</p></section>;
   const isDirect = order.exhibitionId === null;
   return <section className="order-details-screen">
-    <button type="button" className="order-details-back" onClick={onBack}>← Orders</button>
+    <button type="button" className="order-details-back" onClick={onBack}>← {backLabel}</button>
     <header className="order-details-heading">
       <div className="order-details-title-row"><h1>{orderNumber(order.id)}</h1><span className={`order-detail-badge order-detail-status order-detail-status--${order.status.toLowerCase().replace(/ /g, '-')}`}>{order.status}</span><span className={`order-detail-badge ${isDirect ? 'order-detail-source--direct' : 'order-detail-source--exhibition'}`}>{isDirect ? 'Direct' : 'Exhibition'}</span></div>
       <p>{order.customerName} · {order.items.length} {order.items.length === 1 ? 'item' : 'items'} · {isDirect ? 'created directly' : 'from exhibition selections'} · Created {formatDate(order.createdAt)}</p>

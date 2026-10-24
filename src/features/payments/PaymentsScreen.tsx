@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { createPayment, getPaymentFormOptions, getPayments, getPaymentSummary } from './payments.queries';
-import type { CreatePaymentInput, PaymentFormOptions, PaymentMethod, PaymentRow, PaymentSummary } from './payments.types';
+import { getPayments, getPaymentSummary } from './payments.queries';
+import type { PaymentRow, PaymentSummary } from './payments.types';
 import './PaymentsScreen.css';
 
-interface PaymentsScreenProps { onAddPayment: () => void }
+interface PaymentsScreenProps { onViewOrder?: (orderId: number) => void }
 interface DropdownOption { value: string; label: string }
 interface CustomDropdownProps {
   label: string; value: string; options: DropdownOption[];
@@ -73,8 +73,6 @@ function CustomDropdown({ label, value, options, onChange, ariaLabel }: CustomDr
 
 const currency = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const emptySummary: PaymentSummary = { totalReceivedPaise: 0, totalOutstandingPaise: 0, transactionCount: 0 };
-const paymentMethods: PaymentMethod[] = ['Cash', 'Bank Transfer', 'UPI', 'Cheque', 'Other'];
-function localToday() { const now = new Date(); return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`; }
 function formatMoney(paise: number) { return currency.format(paise / 100); }
 function formatDate(value: string | null | undefined) {
   if (!value) return '—';
@@ -83,7 +81,7 @@ function formatDate(value: string | null | undefined) {
   return new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }).format(date);
 }
 
-function PaymentsScreen({ onAddPayment }: PaymentsScreenProps) {
+function PaymentsScreen({ onViewOrder }: PaymentsScreenProps) {
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [summary, setSummary] = useState<PaymentSummary>(emptySummary);
   const [loading, setLoading] = useState(true);
@@ -93,13 +91,6 @@ function PaymentsScreen({ onAddPayment }: PaymentsScreenProps) {
   const [exhibitionFilter, setExhibitionFilter] = useState('all');
   const [methodFilter, setMethodFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('all');
-  const [modalOpen, setModalOpen] = useState(false);
-  const [formOptions, setFormOptions] = useState<PaymentFormOptions>({ orders: [] });
-  const [formLoading, setFormLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
-  const [formSuccess, setFormSuccess] = useState<string | null>(null);
-  const [form, setForm] = useState({ orderId: '', amount: '', paymentDate: localToday(), paymentMethod: 'Cash' as PaymentMethod, notes: '' });
 
   const loadPayments = useCallback(async () => {
     setLoading(true); setError(null);
@@ -112,37 +103,6 @@ function PaymentsScreen({ onAddPayment }: PaymentsScreenProps) {
     } finally { setLoading(false); }
   }, []);
   useEffect(() => { void loadPayments(); }, [loadPayments]);
-
-  const openPaymentModal = useCallback(async () => {
-    onAddPayment();
-    setModalOpen(true); setFormError(null); setFormSuccess(null); setFormLoading(true);
-    try {
-      const options = await getPaymentFormOptions();
-      setFormOptions(options);
-      setForm((current) => ({ ...current, orderId: current.orderId && options.orders.some((order) => String(order.id) === current.orderId) ? current.orderId : '' }));
-    } catch (err) { console.error('Failed to load payment form options:', err); setFormError('Could not load orders. Please close and try again.'); }
-    finally { setFormLoading(false); }
-  }, [onAddPayment]);
-
-  function closePaymentModal() { if (saving) return; setModalOpen(false); setFormError(null); }
-
-  async function submitPayment(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setFormError(null); setFormSuccess(null);
-    const amount = Number(form.amount);
-    if (!form.orderId) { setFormError('Please select an order.'); return; }
-    if (!form.amount.trim() || !Number.isFinite(amount) || amount <= 0) { setFormError('Enter an amount greater than ₹0.'); return; }
-    if (Math.round(amount * 100) > Number.MAX_SAFE_INTEGER) { setFormError('The payment amount is too large.'); return; }
-    const input: CreatePaymentInput = { orderId: Number(form.orderId), amountPaise: Math.round(amount * 100), paymentDate: form.paymentDate, paymentMethod: form.paymentMethod, notes: form.notes };
-    setSaving(true);
-    try {
-      await createPayment(input);
-      setFormSuccess('Payment recorded successfully.');
-      setModalOpen(false);
-      setForm({ orderId: '', amount: '', paymentDate: localToday(), paymentMethod: 'Cash', notes: '' });
-      await loadPayments();
-    } catch (err) { console.error('Failed to record payment:', err); setFormError(err instanceof Error ? err.message : 'Could not record payment. Please try again.'); }
-    finally { setSaving(false); }
-  }
 
   const customerOptions = useMemo<DropdownOption[]>(() => [
     { value: 'all', label: 'All customers' },
@@ -186,12 +146,11 @@ function PaymentsScreen({ onAddPayment }: PaymentsScreenProps) {
   return <section className="payments-screen">
     <header className="payments-page-heading"><div>
       <h1 className="payments-page-title">Payments</h1>
-      <p className="payments-page-description">Record and review payments received against individual orders.</p>
-    </div><button type="button" className="payments-create-button" onClick={() => void openPaymentModal()}><span aria-hidden="true">+</span> Record payment</button></header>
+      <p className="payments-page-description">A history of payments recorded against orders.</p>
+    </div></header>
 
     <section className="payments-summary" aria-label="Payment summary">
       <div className="payments-summary-card"><span className="payments-summary-label">Total received</span><strong className="payments-summary-value">{formatMoney(summary.totalReceivedPaise)}</strong><span className="payments-summary-note">All recorded payment transactions</span></div>
-      <div className="payments-summary-card"><span className="payments-summary-label">Outstanding balance</span><strong className="payments-summary-value">{formatMoney(summary.totalOutstandingPaise)}</strong><span className="payments-summary-note">Across non-cancelled orders</span></div>
       <div className="payments-summary-card"><span className="payments-summary-label">Transactions</span><strong className="payments-summary-value">{summary.transactionCount}</strong><span className="payments-summary-note">Historical payment entries</span></div>
     </section>
 
@@ -204,28 +163,13 @@ function PaymentsScreen({ onAddPayment }: PaymentsScreenProps) {
       <button type="button" className="payments-reset-button" onClick={resetFilters}>Reset filters</button>
     </section>
 
-    {formSuccess && <div className="payments-success" role="status"><span>{formSuccess}</span><button type="button" aria-label="Dismiss message" onClick={() => setFormSuccess(null)}>×</button></div>}
     {error && <div className="payments-error" role="alert"><span>{error}</span><button type="button" onClick={() => void loadPayments()}>Retry</button></div>}
     <section className="payments-table-card" aria-label="Payment transactions"><div className="payments-table-scroll"><table className="payments-table"><thead><tr><th>Payment date</th><th>Order</th><th>Customer</th><th>Exhibition / source</th><th>Payment method</th><th>Notes</th><th className="payments-number-cell">Amount received</th></tr></thead><tbody>
-      {!loading && !error && filteredPayments.map((payment) => <tr key={payment.id}><td className="payments-date">{formatDate(payment.paymentDate)}</td><td><div className="payments-primary-cell">{payment.orderNumber || 'Legacy payment'}</div></td><td><div className="payments-primary-cell">{payment.customerName || '—'}</div></td><td><div className="payments-primary-cell">{payment.exhibitionName || (payment.orderId ? 'Direct order' : 'Unallocated legacy payment')}</div></td><td><span className="payments-method-badge">{payment.paymentMethod || 'Not specified'}</span></td><td className="payments-notes" title={payment.notes || undefined}>{payment.notes || '—'}</td><td className="payments-number-cell payments-amount">{formatMoney(payment.amountPaise)}</td></tr>)}
+      {!loading && !error && filteredPayments.map((payment) => <tr key={payment.id}><td className="payments-date">{formatDate(payment.paymentDate)}</td><td><div className="payments-primary-cell">{payment.orderId !== null && payment.orderId !== undefined && onViewOrder ? <button type="button" className="payments-order-link" onClick={() => onViewOrder(payment.orderId as number)}>{payment.orderNumber || `Order ${payment.orderId}`}<span aria-hidden="true"> ↗</span></button> : payment.orderNumber || 'Legacy payment'}</div></td><td><div className="payments-primary-cell">{payment.customerName || '—'}</div></td><td><div className="payments-primary-cell">{payment.exhibitionName || (payment.orderId ? 'Direct order' : 'Unallocated legacy payment')}</div></td><td><span className="payments-method-badge">{payment.paymentMethod || 'Not specified'}</span></td><td className="payments-notes" title={payment.notes || undefined}>{payment.notes || '—'}</td><td className="payments-number-cell payments-amount">{formatMoney(payment.amountPaise)}</td></tr>)}
       {loading && <tr><td colSpan={7} className="payments-table-message">Loading payments…</td></tr>}
       {!loading && !error && filteredPayments.length === 0 && <tr><td colSpan={7} className="payments-table-message">{payments.length ? 'No payments match these filters.' : 'No payments recorded yet.'}</td></tr>}
-    </tbody></table></div><footer className="payments-table-footer">Showing {filteredPayments.length} of {payments.length} payment transactions. New payments are recorded against individual orders.</footer></section>
-    {modalOpen && <div className="payment-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closePaymentModal(); }}>
-      <section className="payment-modal" role="dialog" aria-modal="true" aria-labelledby="payment-modal-title">
-        <header className="payment-modal-header"><div><h2 id="payment-modal-title">Record payment</h2><p>Record a payment against a confirmed order.</p></div><button type="button" className="payment-modal-close" onClick={closePaymentModal} aria-label="Close modal" disabled={saving}>×</button></header>
-        {formError && <div className="payments-error payment-form-error" role="alert">{formError}</div>}
-        {formLoading ? <div className="payment-form-loading">Loading orders…</div> : <form className="payment-form" onSubmit={(event) => void submitPayment(event)}>
-          <div className="payment-form-field payment-form-field--wide"><span className="payment-form-label">Order <span>*</span></span><CustomDropdown label="" ariaLabel="Select order" value={form.orderId} options={[{ value: '', label: 'Select an order' }, ...formOptions.orders.map((order) => ({ value: String(order.id), label: `${order.orderNumber} · ${order.customerName} · ${order.sourceLabel} · Pending ${formatMoney(order.outstandingPaise)}` }))]} onChange={(value) => setForm((current) => ({ ...current, orderId: value }))} /></div>
-          {!formOptions.orders.length && <p className="payment-form-hint payment-form-field--wide">No eligible orders are available. Create a confirmed order before recording a payment.</p>}
-          <label className="payment-form-field"><span className="payment-form-label">Amount (₹) <span>*</span></span><div className="payment-amount-input"><span>₹</span><input required type="number" min="0.01" step="0.01" inputMode="decimal" placeholder="0.00" value={form.amount} onChange={(event) => setForm((current) => ({ ...current, amount: event.target.value }))} /></div></label>
-          <label className="payment-form-field"><span className="payment-form-label">Payment date <span>*</span></span><input required className="payment-form-input" type="date" value={form.paymentDate} onChange={(event) => setForm((current) => ({ ...current, paymentDate: event.target.value }))} /></label>
-          <div className="payment-form-field payment-form-field--wide"><span className="payment-form-label">Payment method <span>*</span></span><CustomDropdown label="" ariaLabel="Select payment method" value={form.paymentMethod} options={paymentMethods.map((method) => ({ value: method, label: method }))} onChange={(value) => setForm((current) => ({ ...current, paymentMethod: value as PaymentMethod }))} /></div>
-          <label className="payment-form-field payment-form-field--wide"><span className="payment-form-label">Notes <span className="payment-form-optional">Optional</span></span><textarea className="payment-form-input payment-form-notes" rows={3} maxLength={1000} placeholder="Add any reference or additional details…" value={form.notes} onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))} /></label>
-          <footer className="payment-form-actions"><button type="button" className="payment-cancel-button" onClick={closePaymentModal} disabled={saving}>Cancel</button><button type="submit" className="payments-create-button" disabled={saving || !formOptions.orders.length}>{saving ? 'Saving…' : 'Record payment'}</button></footer>
-        </form>}
-      </section>
-    </div>}
+    </tbody></table></div><footer className="payments-table-footer">Showing {filteredPayments.length} of {payments.length} payment transactions.</footer></section>
+
   </section>;
 }
 

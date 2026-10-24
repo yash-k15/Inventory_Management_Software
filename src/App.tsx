@@ -8,6 +8,7 @@ import ExhibitionsScreen from './features/exhibitions/ExhibitionsScreen';
 import ExhibitionWorkspace from './features/exhibitions/ExhibitionWorkspace';
 import SettingsScreen from './features/settings/SettingsScreen';
 import OrdersScreen from './features/orders/OrdersScreen';
+import OrderDetailsScreen from './features/orders/OrderDetailsScreen';
 import PaymentsScreen from './features/payments/PaymentsScreen';
 import Sidebar, { type SidebarView } from './components/Sidebar/Sidebar';
 import './App.css';
@@ -24,6 +25,7 @@ function App() {
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(
     null,
   );
+  const [selectedPaymentOrderId, setSelectedPaymentOrderId] = useState<number | null>(null);
 
   function canLeaveSettings() {
     if (view !== 'settings' || !settingsDirty) return true;
@@ -83,6 +85,7 @@ function App() {
           if (!canLeaveSettings()) return;
           setNotice(null);
           setSelectedCustomerId(null);
+          setSelectedPaymentOrderId(null);
           setView(nextView);
         }}
         onAddItem={openAddItem}
@@ -103,7 +106,18 @@ function App() {
                 onViewItem={openItemDetails}
               />
             )}
-            {view === 'orders' && <OrdersScreen />}
+            {view === 'orders' && selectedPaymentOrderId !== null ? (
+              <OrderDetailsScreen
+                orderId={selectedPaymentOrderId}
+                backLabel='Payments'
+                onBack={() => {
+                  setSelectedPaymentOrderId(null);
+                  setView('payments');
+                }}
+              />
+            ) : view === 'orders' ? (
+              <OrdersScreen />
+            ) : null}
             {view === 'customers' && selectedCustomerId === null && (
               <CustomersScreen
                 onViewCustomerHistory={(customerId) => {
@@ -134,8 +148,9 @@ function App() {
               )}
             {view === 'payments' && (
               <PaymentsScreen
-                onAddPayment={() => {
-                  // Modal wiring will be added in the next step.
+                onViewOrder={(orderId) => {
+                  setSelectedPaymentOrderId(orderId);
+                  setView('orders');
                 }}
               />
             )}

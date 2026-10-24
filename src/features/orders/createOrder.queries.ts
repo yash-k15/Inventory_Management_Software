@@ -35,6 +35,7 @@ export interface NewOrderItem {
   inventoryItemId: number;
   agreedPricePaise: number;
   selectionItemId?: number | null;
+  pricingBreakdown?: Record<string, unknown>;
 }
 
 export async function getCreateOrderCustomers(): Promise<
@@ -232,12 +233,14 @@ export interface OrderPricingContext {
       combinationId: number | null;
       quality: string | null;
       weightMilliCarats: number;
+      pieces: number | null;
     }>;
     stones: Array<{
       stoneTypeId: number;
       stone: string;
       weightUnit: 'ct' | 'g';
       weightMilli: number;
+      pieces: number | null;
     }>;
   }>;
 }
@@ -297,9 +300,10 @@ export async function getOrderPricingContext(
         combinationId: number | null;
         quality: string | null;
         weightMilliCarats: number;
+        pieces: number | null;
       }>
     >(
-      `SELECT d.item_id AS itemId, d.shape_id AS shapeId, ds.name AS shape, d.combination_id AS combinationId, dc.quality, d.weight_milli AS weightMilliCarats FROM item_diamond d JOIN diamond_shape ds ON ds.id=d.shape_id LEFT JOIN diamond_combination dc ON dc.id=d.combination_id WHERE d.item_id IN (${marks})`,
+      `SELECT d.item_id AS itemId, d.shape_id AS shapeId, ds.name AS shape, d.combination_id AS combinationId, dc.quality, d.weight_milli AS weightMilliCarats, d.pieces FROM item_diamond d JOIN diamond_shape ds ON ds.id=d.shape_id LEFT JOIN diamond_combination dc ON dc.id=d.combination_id WHERE d.item_id IN (${marks})`,
       ids,
     );
     const stones = await db.select<
@@ -309,9 +313,10 @@ export async function getOrderPricingContext(
         stone: string;
         weightUnit: 'ct' | 'g';
         weightMilli: number;
+        pieces: number | null;
       }>
     >(
-      `SELECT s.item_id AS itemId, s.stone_type_id AS stoneTypeId, st.name AS stone, st.weight_unit AS weightUnit, s.weight_milli AS weightMilli FROM item_stone s JOIN stone_type st ON st.id=s.stone_type_id WHERE s.item_id IN (${marks})`,
+      `SELECT s.item_id AS itemId, s.stone_type_id AS stoneTypeId, st.name AS stone, st.weight_unit AS weightUnit, s.weight_milli AS weightMilli, s.pieces FROM item_stone s JOIN stone_type st ON st.id=s.stone_type_id WHERE s.item_id IN (${marks})`,
       ids,
     );
     for (const row of base)
@@ -416,6 +421,7 @@ export async function createConfirmedOrder(input: {
       categoryName: string;
       name: string | null;
       grossWeightMilli: number | null;
+      netWeightMilli: number | null;
       purityName: string | null;
       igiCertificateNumber: string | null;
       huid: string | null;
@@ -431,6 +437,7 @@ export async function createConfirmedOrder(input: {
         c.name AS categoryName,
         i.name,
         i.gross_weight_milli AS grossWeightMilli,
+        i.net_weight_milli AS netWeightMilli,
         p.name AS purityName,
         i.igi_certificate_number AS igiCertificateNumber,
         i.huid,
@@ -546,6 +553,7 @@ export async function createConfirmedOrder(input: {
       category: item.categoryName,
       name: item.name,
       gross_weight_milli: item.grossWeightMilli,
+      net_weight_milli: item.netWeightMilli,
       purity: item.purityName,
       diamonds: diamondRows
         .filter((diamond) => diamond.itemId === item.id)
@@ -581,14 +589,15 @@ export async function createConfirmedOrder(input: {
             (source) => source.inventoryItemId === item.inventoryItemId,
           )?.selectionItemId ?? null,
         itemSnapshot: JSON.stringify(item.snapshot),
-        pricingBreakdown: JSON.stringify({
-          source: input.pricingMethod ?? 'direct',
-          inventory_item_id: item.inventoryItemId,
-          pricing_note:
-            input.pricingMethod && input.pricingMethod !== 'direct'
-              ? 'Pricing method selected during order creation. Final agreed item price was entered and saved; automatic rate calculation is not yet applied.'
-              : 'Final negotiated selling price entered when creating the order.',
-        }),
+        pricingBreakdown: JSON.stringify(
+          input.items.find(
+            (source) => source.inventoryItemId === item.inventoryItemId,
+          )?.pricingBreakdown ?? {
+            source: 'direct',
+            breakdown_available: false,
+            agreed_price_paise: item.price,
+          },
+        ),
       })),
     },
   });

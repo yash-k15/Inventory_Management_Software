@@ -216,8 +216,12 @@ export interface OrderDetailItem {
   id: number;
   itemNumber: string;
   category: string;
+  imageUrl: string | null;
   grossWeightMilli: number | null;
+  netWeightMilli: number | null;
   details: string;
+  itemSnapshot: Record<string, unknown>;
+  pricingBreakdown: Record<string, any> | null;
   agreedPricePaise: number;
 }
 
@@ -238,18 +242,50 @@ export interface OrderDetails {
   notes: string | null;
   items: OrderDetailItem[];
   totalValuePaise: number;
+  paymentReceivedPaise: number;
+  paymentPendingPaise: number;
 }
 
-export async function getOrderDetails(orderId: number): Promise<OrderDetails | null> {
+function parseJsonObject(
+  value: string | null | undefined,
+): Record<string, any> {
+  if (!value) return {};
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as Record<string, any>)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+export async function getOrderDetails(
+  orderId: number,
+): Promise<OrderDetails | null> {
   const db = await getDatabase();
-  const headers = await db.select<{
-    id: number; customerName: string; customerId: number | null;
-    contactName: string | null; phone: string | null; city: string | null;
-    exhibitionId: number | null; exhibitionName: string | null;
-    exhibitionStartDate: string | null; exhibitionEndDate: string | null;
-    status: OrderStatus; createdAt: string; confirmedAt: string | null;
-    notes: string | null; finalTotalPaise: number | null;
-  }[]>(`
+  const headers = await db.select<
+    {
+      id: number;
+      customerName: string;
+      customerId: number | null;
+      contactName: string | null;
+      phone: string | null;
+      city: string | null;
+      exhibitionId: number | null;
+      exhibitionName: string | null;
+      exhibitionStartDate: string | null;
+      exhibitionEndDate: string | null;
+      status: OrderStatus;
+      createdAt: string;
+      confirmedAt: string | null;
+      notes: string | null;
+      finalTotalPaise: number | null;
+      paymentReceivedPaise: number | null;
+      paymentPendingPaise: number | null;
+    }[]
+  >(
+    `
     SELECT
       co.id,
       co.customer_name_snapshot AS customerName,
@@ -264,39 +300,104 @@ export async function getOrderDetails(orderId: number): Promise<OrderDetails | n
       co.status,
       co.created_at AS createdAt,
       co.final_total_paise AS finalTotalPaise,
+      COALESCE(vob.paid_paise, 0) AS paymentReceivedPaise,
+      COALESCE(vob.outstanding_paise, 0) AS paymentPendingPaise,
       (SELECT osh.changed_at FROM order_status_history osh WHERE osh.order_id = co.id AND osh.status = 'Confirmed' ORDER BY osh.changed_at LIMIT 1) AS confirmedAt,
       (SELECT osh.notes FROM order_status_history osh WHERE osh.order_id = co.id AND osh.notes IS NOT NULL AND trim(osh.notes) <> '' ORDER BY osh.changed_at DESC, osh.id DESC LIMIT 1) AS notes
     FROM customer_order co
     LEFT JOIN customer c ON c.id = co.customer_id
     LEFT JOIN exhibition e ON e.id = co.exhibition_id
+    LEFT JOIN v_order_balance vob ON vob.order_id = co.id
     WHERE co.id = ?
-  `, [orderId]);
+  `,
+    [orderId],
+  );
   if (!headers.length) return null;
   const header = headers[0];
-  const rows = await db.select<{ id: number; itemSnapshot: string; agreedPricePaise: number }[]>(`
-    SELECT id, item_snapshot AS itemSnapshot, agreed_price_paise AS agreedPricePaise
-    FROM customer_order_item WHERE order_id = ? ORDER BY id
-  `, [orderId]);
+  const rows = await db.select<
+    {
+      id: number;
+      itemSnapshot: string | null;
+      pricingBreakdown: string | null;
+      agreedPricePaise: number;
+      currentGrossWeightMilli: number | null;
+      currentNetWeightMilli: number | null;
+      currentImagePath: string | null;
+    }[]
+  >(
+    `
+    SELECT
+      coi.id AS id,
+      coi.item_snapshot AS itemSnapshot,
+      coi.pricing_breakdown AS pricingBreakdown,
+      coi.agreed_price_paise AS agreedPricePaise,
+      i.gross_weight_milli AS currentGrossWeightMilli,
+      i.net_weight_milli AS currentNetWeightMilli,
+      i.image_path AS currentImagePath
+    FROM customer_order_item coi
+    LEFT JOIN item i ON i.id = CAST(json_extract(coi.item_snapshot, '$.inventory_item_id') AS INTEGER)
+    WHERE coi.order_id = ?
+    ORDER BY coi.id
+  `,
+    [orderId],
+  );
+
   const items: OrderDetailItem[] = rows.map((row) => {
-    let snapshot: Record<string, any> = {};
-    try { snapshot = JSON.parse(row.itemSnapshot || '{}'); } catch { snapshot = {}; }
+    const snapshot = parseJsonObject(row.itemSnapshot);
+    const pricingBreakdown = parseJsonObject(row.pricingBreakdown);
     const diamonds = Array.isArray(snapshot.diamonds) ? snapshot.diamonds : [];
     const stones = Array.isArray(snapshot.stones) ? snapshot.stones : [];
     const detailParts = [
-      ...diamonds.map((d: any) => `${d.shape || 'Diamond'} · ${((Number(d.weightMilli) || 0) / 1000).toFixed(3)} ct`),
-      ...stones.map((s: any) => `${s.stone || 'Stone'} · ${((Number(s.weightMilli) || 0) / 1000).toFixed(3)} ct`),
+      ...diamonds.map(
+        (d: any) =>
+          `${d.shape || 'Diamond'}${d.quality ? ` · ${d.quality}` : ''} · ${((Number(d.weightMilli) || 0) / 1000).toFixed(3)} ct${d.pieces == null ? '' : ` (${d.pieces} pcs)`}`,
+      ),
+      ...stones.map(
+        (s: any) =>
+          `${s.stone || 'Stone'} · ${((Number(s.weightMilli) || 0) / 1000).toFixed(3)} ${s.weightUnit || 'ct'}${s.pieces == null ? '' : ` (${s.pieces} pcs)`}`,
+      ),
     ];
+    const imageCandidate =
+      snapshot.image_path ??
+      snapshot.image_url ??
+      snapshot.imageUrl ??
+      snapshot.image ??
+      row.currentImagePath ??
+      null;
     return {
       id: row.id,
-      itemNumber: String(snapshot.item_number || '—'),
+      itemNumber: String(snapshot.item_number || snapshot.itemNumber || '—'),
       category: String(snapshot.category || '—'),
-      grossWeightMilli: snapshot.gross_weight_milli == null ? null : Number(snapshot.gross_weight_milli),
+      imageUrl:
+        typeof imageCandidate === 'string' && imageCandidate.trim()
+          ? imageCandidate
+          : null,
+      grossWeightMilli:
+        snapshot.gross_weight_milli == null
+          ? row.currentGrossWeightMilli == null
+            ? null
+            : Number(row.currentGrossWeightMilli)
+          : Number(snapshot.gross_weight_milli),
+      netWeightMilli:
+        snapshot.net_weight_milli == null
+          ? snapshot.netWeightMilli == null
+            ? row.currentNetWeightMilli == null
+              ? null
+              : Number(row.currentNetWeightMilli)
+            : Number(snapshot.netWeightMilli)
+          : Number(snapshot.net_weight_milli),
       details: detailParts.join(', ') || '—',
+      itemSnapshot: snapshot,
+      pricingBreakdown: Object.keys(pricingBreakdown).length
+        ? pricingBreakdown
+        : null,
       agreedPricePaise: row.agreedPricePaise,
     };
   });
   return {
     ...header,
+    paymentReceivedPaise: header.paymentReceivedPaise ?? 0,
+    paymentPendingPaise: header.paymentPendingPaise ?? 0,
     items,
     totalValuePaise:
       header.finalTotalPaise ??
@@ -304,13 +405,21 @@ export async function getOrderDetails(orderId: number): Promise<OrderDetails | n
   };
 }
 
-
-export async function updateOrderStatus(orderId: number, status: OrderStatus): Promise<void> {
+export async function updateOrderStatus(
+  orderId: number,
+  status: OrderStatus,
+): Promise<void> {
   if (!Number.isInteger(orderId) || orderId <= 0) {
     throw new Error('Invalid order.');
   }
   const allowedStatuses: OrderStatus[] = [
-    'Confirmed', 'On Hold', 'Manufacturing', 'Ready', 'Sent', 'Completed', 'Cancelled',
+    'Confirmed',
+    'On Hold',
+    'Manufacturing',
+    'Ready',
+    'Sent',
+    'Completed',
+    'Cancelled',
   ];
   if (!allowedStatuses.includes(status)) {
     throw new Error('Select a valid order status.');

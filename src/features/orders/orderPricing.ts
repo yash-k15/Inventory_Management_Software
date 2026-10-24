@@ -18,6 +18,7 @@ export interface PricingDiamond {
   combinationId: number | null;
   quality: string | null;
   weightMilliCarats: number;
+  pieces: number | null;
 }
 
 export interface PricingStone {
@@ -25,6 +26,7 @@ export interface PricingStone {
   stone: string;
   weightUnit: 'ct' | 'g';
   weightMilli: number;
+  pieces: number | null;
 }
 
 export interface PricingItem {
@@ -56,8 +58,8 @@ export interface PricingBreakdown {
   calculated_total_paise: number;
   agreed_price_paise: number;
   rates_snapshot: PricingRates;
-  diamond_lines: Array<{ shape: string; quality: string | null; weight_ct: number; rate_paise_per_ct: number; value_paise: number }>;
-  stone_lines: Array<{ stone: string; weight: number; unit: 'ct' | 'g'; rate_paise_per_unit: number; value_paise: number }>;
+  diamond_lines: Array<{ shape: string; quality: string | null; pieces: number | null; weight_ct: number; rate_paise_per_ct: number; value_paise: number }>;
+  stone_lines: Array<{ stone: string; pieces: number | null; weight: number; unit: 'ct' | 'g'; rate_paise_per_unit: number; value_paise: number }>;
 }
 
 const roundMoney = (value: number) => Math.max(0, Math.round(value));
@@ -80,17 +82,18 @@ export function calculateItemPrice(
     const key = String(diamond.combinationId ?? diamond.shapeId);
     const rate = rates.diamondRatesPaisePerCarat[key] ?? 0;
     const weight = diamond.weightMilliCarats / 1000;
-    return { shape: diamond.shape, quality: diamond.quality, weight_ct: weight, rate_paise_per_ct: rate, value_paise: roundMoney(weight * rate) };
+    return { shape: diamond.shape, quality: diamond.quality, pieces: diamond.pieces, weight_ct: weight, rate_paise_per_ct: rate, value_paise: roundMoney(weight * rate) };
   });
   const stoneLines = item.stones.map((stone) => {
     const rate = rates.stoneRatesPaisePerUnit[String(stone.stoneTypeId)] ?? 0;
     const weight = stone.weightMilli / 1000;
-    return { stone: stone.stone, weight, unit: stone.weightUnit, rate_paise_per_unit: rate, value_paise: roundMoney(weight * rate) };
+    return { stone: stone.stone, pieces: stone.pieces, weight, unit: stone.weightUnit, rate_paise_per_unit: rate, value_paise: roundMoney(weight * rate) };
   });
   const diamondValue = diamondLines.reduce((sum, line) => sum + line.value_paise, 0);
   const stoneValue = stoneLines.reduce((sum, line) => sum + line.value_paise, 0);
   const totalDiamondCarats = item.diamonds.reduce((sum, diamond) => sum + diamond.weightMilliCarats / 1000, 0);
-  const certificationValue = item.certified ? roundMoney(totalDiamondCarats * rates.certificationPaisePerCarat) : 0;
+  // Apply the entered certification rate regardless of the inventory item's certified flag.
+  const certificationValue = roundMoney(totalDiamondCarats * rates.certificationPaisePerCarat);
   const subtotal = goldValue + wastageValue + diamondValue + stoneValue + certificationValue;
   const gstValue = roundMoney(subtotal * rates.gstRateBp / 10000);
   const calculatedTotal = subtotal + gstValue;

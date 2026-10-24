@@ -360,9 +360,29 @@ export default function CreateOrderModal({
       (!/^\d*\.?\d*$/.test(value) || Number(value) < 0)
     )
       return;
-    setCustomRateDraft((current) =>
-      current ? ({ ...current, [key]: value } as CustomRateDraft) : current,
-    );
+
+    setCustomRateDraft((current) => {
+      if (!current) return current;
+
+      if (key.startsWith('diamond:')) {
+        const rateKey = key.slice('diamond:'.length);
+        return {
+          ...current,
+          diamondRates: { ...current.diamondRates, [rateKey]: value },
+        };
+      }
+
+      if (key.startsWith('stone:')) {
+        const rateKey = key.slice('stone:'.length);
+        return {
+          ...current,
+          stoneRates: { ...current.stoneRates, [rateKey]: value },
+        };
+      }
+
+      return { ...current, [key]: value } as CustomRateDraft;
+    });
+
     setCustomRateDirty((current) =>
       current.includes(key) ? current : [...current, key],
     );
@@ -896,11 +916,53 @@ export default function CreateOrderModal({
           roundOffFinalTotal.trim() !== ''
             ? Number(roundOffFinalTotal) * 100
             : null,
-        items: selectedItems.map((selected) => ({
-          inventoryItemId: selected.item.id,
-          agreedPricePaise: Math.round(Number(selected.price) * 100),
-          selectionItemId: selected.selectionItemId ?? null,
-        })),
+        items: selectedItems.map((selected) => {
+          const agreedPricePaise = Math.round(Number(selected.price) * 100);
+          const source = pricingContext?.items.find(
+            (item) => item.inventoryItemId === selected.item.id,
+          );
+          const direct = selected.directPrice || selected.pricingSource === 'direct';
+
+          if (direct || !pricingContext || !source) {
+            return {
+              inventoryItemId: selected.item.id,
+              agreedPricePaise,
+              selectionItemId: selected.selectionItemId ?? null,
+              pricingBreakdown: {
+                source: 'direct',
+                breakdown_available: false,
+                agreed_price_paise: agreedPricePaise,
+              },
+            };
+          }
+
+          const override = customRatesByItem[selected.item.id];
+          const rates = effectiveRatesForItem(selected.item.id, pricingContext.rates) ?? pricingContext.rates;
+          const pricingItem = {
+            ...source,
+            purityPercentBp: override?.purityPercentBp ?? source.purityPercentBp,
+          } as PricingItem;
+          const calculation = calculateItemPrice(
+            pricingItem,
+            rates,
+            override ? 'custom_individual' : 'global',
+          );
+          const extraCostPaise = override?.extraCostPaise ?? 0;
+
+          return {
+            inventoryItemId: selected.item.id,
+            agreedPricePaise,
+            selectionItemId: selected.selectionItemId ?? null,
+            pricingBreakdown: {
+              ...calculation,
+              source: override ? 'custom_individual' : 'global',
+              extra_cost_paise: extraCostPaise,
+              calculated_total_paise: calculation.calculated_total_paise + extraCostPaise,
+              agreed_price_paise: agreedPricePaise,
+              breakdown_available: true,
+            },
+          };
+        }),
       });
 
       onCreated(orderId);

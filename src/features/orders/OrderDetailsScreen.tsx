@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { getOrderDetails, type OrderDetails, type OrderDetailItem } from './orders.queries';
+import { createPayment } from '../payments/payments.queries';
+import type { PaymentMethod } from '../payments/payments.types';
 import './OrderDetailsScreen.css';
 
 interface Props { orderId: number; onBack: () => void; }
@@ -99,6 +101,16 @@ export default function OrderDetailsScreen({ orderId, onBack }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedItems, setExpandedItems] = useState<number[]>([]);
+  const [paymentOpen, setPaymentOpen] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentDate, setPaymentDate] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  });
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('Cash');
+  const [paymentNotes, setPaymentNotes] = useState('');
+  const [paymentSaving, setPaymentSaving] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;
     setLoading(true); setError(null); setExpandedItems([]);
@@ -110,6 +122,49 @@ export default function OrderDetailsScreen({ orderId, onBack }: Props) {
     }).finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [orderId]);
+  function openPaymentDialog() {
+    const now = new Date();
+    setPaymentAmount('');
+    setPaymentDate(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`);
+    setPaymentMethod('Cash');
+    setPaymentNotes('');
+    setPaymentError(null);
+    setPaymentOpen(true);
+  }
+
+  async function submitOrderPayment(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!order) return;
+    const amountPaise = Math.round(Number(paymentAmount) * 100);
+    if (!Number.isSafeInteger(amountPaise) || amountPaise <= 0) {
+      setPaymentError('Enter a payment amount greater than zero.');
+      return;
+    }
+    if (amountPaise > order.paymentPendingPaise) {
+      setPaymentError('Payment cannot exceed this order’s pending balance.');
+      return;
+    }
+    setPaymentSaving(true);
+    setPaymentError(null);
+    try {
+      await createPayment({
+        orderId: order.id,
+        amountPaise,
+        paymentDate,
+        paymentMethod,
+        notes: paymentNotes,
+      });
+      const updatedOrder = await getOrderDetails(orderId);
+      if (updatedOrder) setOrder(updatedOrder);
+      setPaymentOpen(false);
+    } catch (err) {
+      console.error('Failed to record order payment:', err);
+      setPaymentError(err instanceof Error ? err.message : 'Could not record payment.');
+    } finally {
+      setPaymentSaving(false);
+    }
+  }
+
   if (loading) return <section className="order-details-screen"><button className="order-details-back" onClick={onBack}>← Orders</button><p className="order-details-message">Loading order details…</p></section>;
   if (!order) return <section className="order-details-screen"><button className="order-details-back" onClick={onBack}>← Orders</button><p className="order-details-message" role="alert">{error || 'Order not found.'}</p></section>;
   const isDirect = order.exhibitionId === null;
@@ -122,7 +177,7 @@ export default function OrderDetailsScreen({ orderId, onBack }: Props) {
     <div className="od-context-grid">
       <section className="order-detail-card od-context-card"><span className="od-context-label">CUSTOMER</span><strong>{order.customerName}</strong><p>{[order.contactName, order.phone].filter(Boolean).join(' · ') || 'Contact details unavailable'}</p>{order.city && <p>{order.city}</p>}</section>
       <section className="order-detail-card od-context-card"><span className="od-context-label">{isDirect ? 'ORDER TYPE' : 'EXHIBITION'}</span><strong>{isDirect ? 'Direct order' : order.exhibitionName || 'Exhibition'}</strong>{!isDirect && <p>{[order.exhibitionStartDate && formatDate(order.exhibitionStartDate), order.exhibitionEndDate && formatDate(order.exhibitionEndDate)].filter(Boolean).join(' – ')}</p>}<p>Confirmed: {formatDate(order.confirmedAt)}</p></section>
-      <section className="order-detail-card od-context-card"><span className="od-context-label">PAYMENTS</span><strong>{formatMoney(order.paymentReceivedPaise)} received</strong><p>{formatMoney(order.paymentPendingPaise)} outstanding</p></section>
+      <section className="order-detail-card od-context-card"><span className="od-context-label">PAYMENTS</span><strong>{formatMoney(order.paymentReceivedPaise)} received</strong><p>{formatMoney(order.paymentPendingPaise)} outstanding</p>{order.status !== 'Cancelled' && order.paymentPendingPaise > 0 && <button type="button" className="od-record-payment" onClick={openPaymentDialog}>Record payment</button>}</section>
       <section className="order-detail-card od-context-card"><span className="od-context-label">RECORD</span><strong>{orderNumber(order.id)}</strong><p>Created {formatDate(order.createdAt)}</p><p>{isDirect ? 'Direct order' : 'Exhibition selections'}</p></section>
     </div>
     <section className="order-detail-card od-items-section"><div className="od-section-heading"><div><h2>Jewelry items</h2><p>Select an item to view its saved pricing calculation.</p></div><strong className="od-item-count">{order.items.length} {order.items.length === 1 ? 'item' : 'items'}</strong></div>
@@ -155,5 +210,22 @@ export default function OrderDetailsScreen({ orderId, onBack }: Props) {
     </section>
     <OrderPriceBreakdown items={order.items} totalValuePaise={order.totalValuePaise} />
     {order.notes && <section className="order-detail-card od-notes-card"><h2>Notes</h2><p>{order.notes}</p></section>}
+    {paymentOpen && <div className="orders-payment-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !paymentSaving) setPaymentOpen(false); }}>
+      <section className="orders-payment-modal" role="dialog" aria-modal="true" aria-labelledby="od-payment-title">
+        <header className="orders-payment-modal-header">
+          <div><h2 id="od-payment-title">Record payment</h2><p>{orderNumber(order.id)} · {order.customerName}</p></div>
+          <button type="button" onClick={() => setPaymentOpen(false)} disabled={paymentSaving} aria-label="Close modal">×</button>
+        </header>
+        <div className="orders-payment-balance"><span>Pending balance</span><strong>{formatMoney(order.paymentPendingPaise)}</strong></div>
+        {paymentError && <div className="orders-error orders-payment-form-error" role="alert">{paymentError}</div>}
+        <form className="orders-payment-form" onSubmit={(event) => void submitOrderPayment(event)}>
+          <label><span>Amount (₹) *</span><input required type="number" min="0.01" max={(order.paymentPendingPaise / 100).toFixed(2)} step="0.01" value={paymentAmount} onChange={(event) => setPaymentAmount(event.target.value)} placeholder="0.00" /></label>
+          <label><span>Payment date *</span><input required type="date" value={paymentDate} onChange={(event) => setPaymentDate(event.target.value)} /></label>
+          <label><span>Payment method *</span><select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value as PaymentMethod)}>{(['Cash', 'Bank Transfer', 'UPI', 'Cheque', 'Other'] as PaymentMethod[]).map((method) => <option key={method} value={method}>{method}</option>)}</select></label>
+          <label className="orders-payment-notes"><span>Notes (optional)</span><textarea rows={3} maxLength={1000} value={paymentNotes} onChange={(event) => setPaymentNotes(event.target.value)} placeholder="Add a reference or details…" /></label>
+          <footer><button type="button" className="orders-payment-cancel" onClick={() => setPaymentOpen(false)} disabled={paymentSaving}>Cancel</button><button type="submit" className="orders-payment-submit" disabled={paymentSaving}>{paymentSaving ? 'Saving…' : 'Record payment'}</button></footer>
+        </form>
+      </section>
+    </div>}
   </section>;
 }

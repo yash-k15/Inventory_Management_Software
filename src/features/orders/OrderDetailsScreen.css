@@ -92,3 +92,21 @@
 @media (max-width: 900px) {
   .od-item-summary { grid-template-columns: 44px minmax(120px, 1fr) minmax(55px, .35fr) minmax(55px, .35fr) minmax(85px, .55fr) minmax(85px, .55fr) minmax(90px, .5fr) 18px; }
 }
+
+
+/* Record payment action on the Order Details payment summary. */
+.od-record-payment {
+  align-self: flex-start;
+  margin-top: 7px;
+  padding: 7px 11px;
+  border: 1px solid #cbb79d;
+  border-radius: 8px;
+  background: #fffaf2;
+  color: #604b35;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.od-record-payment:hover { background: #f5ecdf; }
+.od-record-payment:focus-visible { outline: 2px solid #9b743c; outline-offset: 2px; }

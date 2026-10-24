@@ -976,3 +976,35 @@
     background-repeat  : no-repeat !important;
     background-position: right 11px center !important;
 }
+
+/* Sortable Orders table headers */
+.orders-sort-header-button {
+    display        : inline-flex;
+    align-items    : center;
+    gap            : 5px;
+    width          : 100%;
+    justify-content: flex-start;
+    padding        : 0;
+    border         : 0;
+    background     : transparent;
+    color          : inherit;
+    font           : inherit;
+    font-weight    : inherit;
+    text-align     : left;
+    cursor         : pointer;
+}
+
+.orders-sort-header-button--numeric {
+    justify-content: center;
+    text-align     : center;
+}
+
+.orders-sort-indicator {
+    opacity  : 0.4;
+    font-size: 11px;
+}
+
+.orders-sort-indicator--active {
+    opacity: 1;
+}
+

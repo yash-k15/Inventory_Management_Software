@@ -250,7 +250,21 @@ function formatOrderNumber(id: number) {
   return `ORD-${String(id).padStart(4, '0')}`;
 }
 
+type OrderSortColumn =
+  | 'order'
+  | 'customer'
+  | 'source'
+  | 'items'
+  | 'date'
+  | 'value'
+  | 'received'
+  | 'pending';
+
 function OrdersScreen() {
+  const [tableSort, setTableSort] = useState<{
+    column: OrderSortColumn;
+    direction: 'asc' | 'desc';
+  } | null>(null);
   const [filters, setFilters] = useState<OrdersFilters>(initialFilters);
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [summary, setSummary] = useState<OrdersSummary>(emptySummary);
@@ -301,6 +315,89 @@ function OrdersScreen() {
     [],
   );
 
+  const sortedOrders = useMemo(() => {
+    if (!tableSort) return orders;
+
+    const valueFor = (order: OrderRow): string | number => {
+      switch (tableSort.column) {
+        case 'order':
+          return order.id;
+        case 'customer':
+          return order.customerName.toLocaleLowerCase();
+        case 'source':
+          return (order.exhibitionName ?? 'Direct order').toLocaleLowerCase();
+        case 'items':
+          return order.itemCount;
+        case 'date':
+          return new Date(order.orderDate.replace(' ', 'T')).getTime() || 0;
+        case 'value':
+          return order.totalValuePaise;
+        case 'received':
+          return order.paymentReceivedPaise;
+        case 'pending':
+          return order.paymentPendingPaise;
+      }
+    };
+
+    return [...orders].sort((a, b) => {
+      const left = valueFor(a);
+      const right = valueFor(b);
+      const comparison =
+        typeof left === 'number' && typeof right === 'number'
+          ? left - right
+          : String(left).localeCompare(String(right), 'en', {
+              numeric: true,
+              sensitivity: 'base',
+            });
+      return tableSort.direction === 'asc' ? comparison : -comparison;
+    });
+  }, [orders, tableSort]);
+
+  function toggleTableSort(column: OrderSortColumn) {
+    if (tableSort?.column === column && tableSort.direction === 'desc') {
+      setTableSort(null);
+      setFilters((current) => ({ ...current, sort: 'newest' }));
+      return;
+    }
+
+    setTableSort({
+      column,
+      direction:
+        tableSort?.column === column && tableSort.direction === 'asc'
+          ? 'desc'
+          : 'asc',
+    });
+  }
+
+  function sortableHeader(
+    label: string,
+    column: OrderSortColumn,
+    numeric = false,
+  ) {
+    const active = tableSort?.column === column;
+    return (
+      <button
+        type='button'
+        className={`orders-sort-header-button ${
+          numeric ? 'orders-sort-header-button--numeric' : ''
+        }`}
+        onClick={() => toggleTableSort(column)}
+        aria-label={`Sort by ${label}`}
+        aria-pressed={active}
+      >
+        <span>{label}</span>
+        <span
+          className={`orders-sort-indicator ${
+            active ? 'orders-sort-indicator--active' : ''
+          }`}
+          aria-hidden='true'
+        >
+          {active ? (tableSort!.direction === 'asc' ? '↑' : '↓') : '↕'}
+        </span>
+      </button>
+    );
+  }
+
   function updateFilter<K extends keyof OrdersFilters>(
     key: K,
     value: OrdersFilters[K],
@@ -344,12 +441,55 @@ function OrdersScreen() {
     })),
   ];
 
+  const columnSortLabels: Record<
+    OrderSortColumn,
+    { asc: string; desc: string }
+  > = {
+    order: { asc: 'Order (low to high)', desc: 'Order (high to low)' },
+    customer: { asc: 'Customer (A–Z)', desc: 'Customer (Z–A)' },
+    source: {
+      asc: 'Exhibition / source (A–Z)',
+      desc: 'Exhibition / source (Z–A)',
+    },
+    items: { asc: 'Items (low to high)', desc: 'Items (high to low)' },
+    date: {
+      asc: 'Order date (oldest first)',
+      desc: 'Order date (newest first)',
+    },
+    value: {
+      asc: 'Order value (low to high)',
+      desc: 'Order value (high to low)',
+    },
+    received: {
+      asc: 'Payment received (low to high)',
+      desc: 'Payment received (high to low)',
+    },
+    pending: {
+      asc: 'Payment pending (low to high)',
+      desc: 'Payment pending (high to low)',
+    },
+  };
+
   const sortDropdownOptions: DropdownOption[] = [
-    { value: 'newest', label: 'Newest first' },
+    { value: 'default', label: 'Default (Newest first)' },
     { value: 'oldest', label: 'Oldest first' },
     { value: 'value-high', label: 'Highest value' },
     { value: 'value-low', label: 'Lowest value' },
+    ...(tableSort
+      ? [
+          {
+            value: 'column-sort',
+            label: columnSortLabels[tableSort.column][tableSort.direction],
+          },
+        ]
+      : []),
   ];
+
+  const sortDropdownValue = tableSort
+    ? 'column-sort'
+    : filters.sort === 'newest'
+      ? 'default'
+      : filters.sort;
 
   async function handleStatusChange(order: OrderRow, value: string) {
     try {
@@ -358,7 +498,9 @@ function OrdersScreen() {
       await loadOrders();
     } catch (err) {
       console.error('Failed to update order status:', err);
-      setError(err instanceof Error ? err.message : 'Could not update order status.');
+      setError(
+        err instanceof Error ? err.message : 'Could not update order status.',
+      );
     }
   }
 
@@ -400,7 +542,9 @@ function OrdersScreen() {
       await loadOrders();
     } catch (err) {
       console.error('Failed to record order payment:', err);
-      setPaymentError(err instanceof Error ? err.message : 'Could not record payment.');
+      setPaymentError(
+        err instanceof Error ? err.message : 'Could not record payment.',
+      );
     } finally {
       setPaymentSaving(false);
     }
@@ -410,7 +554,10 @@ function OrdersScreen() {
     return (
       <OrderDetailsScreen
         orderId={selectedOrderId}
-        onBack={() => { setSelectedOrderId(null); void loadOrders(); }}
+        onBack={() => {
+          setSelectedOrderId(null);
+          void loadOrders();
+        }}
       />
     );
   }
@@ -533,12 +680,18 @@ function OrdersScreen() {
         <CustomDropdown
           label='Sort'
           ariaLabel='Sort orders'
-          value={filters.sort}
+          value={sortDropdownValue}
           options={sortDropdownOptions}
           className='orders-sort-filter'
-          onChange={(value) =>
-            updateFilter('sort', value as OrdersFilters['sort'])
-          }
+          onChange={(value) => {
+            setTableSort(null);
+            updateFilter(
+              'sort',
+              (value === 'default' || value === 'column-sort'
+                ? 'newest'
+                : value) as OrdersFilters['sort'],
+            );
+          }}
         />
 
         <button
@@ -564,14 +717,22 @@ function OrdersScreen() {
           <table className='orders-table'>
             <thead>
               <tr>
-                <th>Order</th>
-                <th>Customer</th>
-                <th>Exhibition / source</th>
-                <th className='orders-number-cell'>Items</th>
-                <th>Order date</th>
-                <th className='orders-number-cell'>Order value</th>
-                <th className='orders-number-cell'>Payment received</th>
-                <th className='orders-number-cell'>Payment pending</th>
+                <th>{sortableHeader('Order', 'order')}</th>
+                <th>{sortableHeader('Customer', 'customer')}</th>
+                <th>{sortableHeader('Exhibition / source', 'source')}</th>
+                <th className='orders-number-cell'>
+                  {sortableHeader('Items', 'items', true)}
+                </th>
+                <th>{sortableHeader('Order date', 'date')}</th>
+                <th className='orders-number-cell'>
+                  {sortableHeader('Order value', 'value', true)}
+                </th>
+                <th className='orders-number-cell'>
+                  {sortableHeader('Payment received', 'received', true)}
+                </th>
+                <th className='orders-number-cell'>
+                  {sortableHeader('Payment pending', 'pending', true)}
+                </th>
                 <th>Status</th>
                 <th>Actions</th>
               </tr>
@@ -580,7 +741,7 @@ function OrdersScreen() {
             <tbody>
               {!loading &&
                 !error &&
-                orders.map((order) => (
+                sortedOrders.map((order) => (
                   <tr key={order.id}>
                     <td className='orders-number'>
                       {formatOrderNumber(order.id)}
@@ -632,16 +793,22 @@ function OrdersScreen() {
                           label: status,
                         }))}
                         className={`orders-row-status-dropdown orders-row-status-dropdown--${order.status.toLowerCase().replace(/ /g, '-')}`}
-                        onChange={(value) => void handleStatusChange(order, value)}
+                        onChange={(value) =>
+                          void handleStatusChange(order, value)
+                        }
                       />
                     </td>
                     <td className='orders-actions-cell'>
-                      {order.status !== 'Cancelled' && order.paymentPendingPaise > 0 && (
-                        <button type='button' className='orders-record-payment'
-                          onClick={() => openPayment(order)}>
-                          Record payment
-                        </button>
-                      )}
+                      {order.status !== 'Cancelled' &&
+                        order.paymentPendingPaise > 0 && (
+                          <button
+                            type='button'
+                            className='orders-record-payment'
+                            onClick={() => openPayment(order)}
+                          >
+                            Record payment
+                          </button>
+                        )}
                       <button
                         type='button'
                         className='orders-row-open'
@@ -676,7 +843,8 @@ function OrdersScreen() {
 
         <footer className='orders-table-footer'>
           Showing {orders.length} of {orders.length} matching orders. Order
-          value is the final order total. Payments and pending balances are tracked per order.
+          value is the final order total. Payments and pending balances are
+          tracked per order.
         </footer>
       </section>
       {createOrderOpen && (
@@ -689,28 +857,125 @@ function OrdersScreen() {
         />
       )}
       {paymentOrder && (
-        <div className='orders-payment-backdrop' role='presentation'
-          onMouseDown={(event) => { if (event.target === event.currentTarget && !paymentSaving) setPaymentOrder(null); }}>
-          <section className='orders-payment-modal' role='dialog' aria-modal='true' aria-labelledby='orders-payment-title'>
+        <div
+          className='orders-payment-backdrop'
+          role='presentation'
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !paymentSaving)
+              setPaymentOrder(null);
+          }}
+        >
+          <section
+            className='orders-payment-modal'
+            role='dialog'
+            aria-modal='true'
+            aria-labelledby='orders-payment-title'
+          >
             <header className='orders-payment-modal-header'>
               <div>
                 <h2 id='orders-payment-title'>Record payment</h2>
-                <p>{formatOrderNumber(paymentOrder.id)} · {paymentOrder.customerName}</p>
+                <p>
+                  {formatOrderNumber(paymentOrder.id)} ·{' '}
+                  {paymentOrder.customerName}
+                </p>
               </div>
-              <button type='button' onClick={() => setPaymentOrder(null)} disabled={paymentSaving} aria-label='Close modal'>×</button>
+              <button
+                type='button'
+                onClick={() => setPaymentOrder(null)}
+                disabled={paymentSaving}
+                aria-label='Close modal'
+              >
+                ×
+              </button>
             </header>
             <div className='orders-payment-balance'>
-              <span>Pending balance</span><strong>{formatMoney(paymentOrder.paymentPendingPaise)}</strong>
+              <span>Pending balance</span>
+              <strong>{formatMoney(paymentOrder.paymentPendingPaise)}</strong>
             </div>
-            {paymentError && <div className='orders-error orders-payment-form-error' role='alert'>{paymentError}</div>}
-            <form className='orders-payment-form' onSubmit={(event) => void submitOrderPayment(event)}>
-              <label><span>Amount (₹) *</span><input required type='number' min='0.01' max={(paymentOrder.paymentPendingPaise / 100).toFixed(2)} step='0.01' value={paymentAmount} onChange={(event) => setPaymentAmount(event.target.value)} placeholder='0.00' /></label>
-              <label><span>Payment date *</span><input required type='date' value={paymentDate} onChange={(event) => setPaymentDate(event.target.value)} /></label>
-              <label><span>Payment method *</span><select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value as PaymentMethod)}>
-                {(['Cash', 'Bank Transfer', 'UPI', 'Cheque', 'Other'] as PaymentMethod[]).map((method) => <option key={method} value={method}>{method}</option>)}
-              </select></label>
-              <label className='orders-payment-notes'><span>Notes (optional)</span><textarea rows={3} maxLength={1000} value={paymentNotes} onChange={(event) => setPaymentNotes(event.target.value)} placeholder='Add a reference or details…' /></label>
-              <footer><button type='button' className='orders-payment-cancel' onClick={() => setPaymentOrder(null)} disabled={paymentSaving}>Cancel</button><button type='submit' className='orders-payment-submit' disabled={paymentSaving}>{paymentSaving ? 'Saving…' : 'Record payment'}</button></footer>
+            {paymentError && (
+              <div
+                className='orders-error orders-payment-form-error'
+                role='alert'
+              >
+                {paymentError}
+              </div>
+            )}
+            <form
+              className='orders-payment-form'
+              onSubmit={(event) => void submitOrderPayment(event)}
+            >
+              <label>
+                <span>Amount (₹) *</span>
+                <input
+                  required
+                  type='number'
+                  min='0.01'
+                  max={(paymentOrder.paymentPendingPaise / 100).toFixed(2)}
+                  step='0.01'
+                  value={paymentAmount}
+                  onChange={(event) => setPaymentAmount(event.target.value)}
+                  placeholder='0.00'
+                />
+              </label>
+              <label>
+                <span>Payment date *</span>
+                <input
+                  required
+                  type='date'
+                  value={paymentDate}
+                  onChange={(event) => setPaymentDate(event.target.value)}
+                />
+              </label>
+              <label>
+                <span>Payment method *</span>
+                <select
+                  value={paymentMethod}
+                  onChange={(event) =>
+                    setPaymentMethod(event.target.value as PaymentMethod)
+                  }
+                >
+                  {(
+                    [
+                      'Cash',
+                      'Bank Transfer',
+                      'UPI',
+                      'Cheque',
+                      'Other',
+                    ] as PaymentMethod[]
+                  ).map((method) => (
+                    <option key={method} value={method}>
+                      {method}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className='orders-payment-notes'>
+                <span>Notes (optional)</span>
+                <textarea
+                  rows={3}
+                  maxLength={1000}
+                  value={paymentNotes}
+                  onChange={(event) => setPaymentNotes(event.target.value)}
+                  placeholder='Add a reference or details…'
+                />
+              </label>
+              <footer>
+                <button
+                  type='button'
+                  className='orders-payment-cancel'
+                  onClick={() => setPaymentOrder(null)}
+                  disabled={paymentSaving}
+                >
+                  Cancel
+                </button>
+                <button
+                  type='submit'
+                  className='orders-payment-submit'
+                  disabled={paymentSaving}
+                >
+                  {paymentSaving ? 'Saving…' : 'Record payment'}
+                </button>
+              </footer>
             </form>
           </section>
         </div>

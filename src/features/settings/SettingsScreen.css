@@ -978,8 +978,8 @@
 .settings-tabs {
     grid-column: 1;
     grid-row   : 2 / span 2;
-    position   : sticky;
-    top        : 16px;
+    position   : static;
+    top        : auto;
     width      : 220px;
     min-width  : 220px;
     align-self : start;
@@ -1547,4 +1547,27 @@
         padding-right: 18px !important;
         padding-left : 18px !important;
     }
+}
+
+/* Wastage method selection */
+.settings-wastage-choice {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+}
+
+.settings-wastage-choice input[type='radio'] {
+    width: 14px;
+    height: 14px;
+    min-height: 0;
+    margin: 0;
+    accent-color: #8b6a3e;
+    flex: 0 0 auto;
+}
+
+.settings-wastage-option.is-selected {
+    border-color: #aa8759;
+    background: #fbf6ef;
+    box-shadow: inset 0 0 0 1px rgb(170 135 89 / 18%);
 }

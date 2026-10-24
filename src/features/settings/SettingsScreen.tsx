@@ -98,6 +98,7 @@ function SettingsScreen({ onDirtyChange }: Props) {
   const [wastagePerGramValue, setWastagePerGramValue] = useState('0.00');
   const [savedWastagePercent, setSavedWastagePercent] = useState('8');
   const [savedWastagePerGram, setSavedWastagePerGram] = useState('0.00');
+  const [wastagePricingMethod, setWastagePricingMethod] = useState<'percent' | 'per_gram'>('percent');
   const [referenceError, setReferenceError] = useState<string | null>(null);
   const [editingRate, setEditingRate] = useState<RateKey | 'wastage' | null>(
     null,
@@ -179,6 +180,9 @@ function SettingsScreen({ onDirtyChange }: Props) {
       );
       setGstRate(String(Number(setting('gst_rate_bp') ?? '300') / 100));
       setBusinessState(setting('business_state') ?? 'Maharashtra');
+      setWastagePricingMethod(
+        setting('wastage_pricing_method') === 'per_gram' ? 'per_gram' : 'percent',
+      );
       setPurities(purityRows);
       setShapes(shapeRows);
       setCombinations(combinationRows);
@@ -229,6 +233,29 @@ function SettingsScreen({ onDirtyChange }: Props) {
       });
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function selectWastagePricingMethod(mode: 'percent' | 'per_gram') {
+    setWastagePricingMethod(mode);
+    try {
+      const db = await getDatabase();
+      await db.execute(
+        `INSERT INTO app_setting (key, value) VALUES ('wastage_pricing_method', ?)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+        [mode],
+      );
+      setNotice({
+        kind: 'success',
+        text: mode === 'percent'
+          ? 'Global wastage rule set to percentage.'
+          : 'Global wastage rule set to fixed charge per gram.',
+      });
+    } catch (error) {
+      setNotice({
+        kind: 'error',
+        text: error instanceof Error ? error.message : 'Could not update the global wastage rule.',
+      });
     }
   }
 
@@ -892,13 +919,21 @@ function SettingsScreen({ onDirtyChange }: Props) {
             </div>
             <div className='settings-wastage-options'>
               <form
-                className='settings-wastage-option'
+                className={`settings-wastage-option${wastagePricingMethod === 'percent' ? ' is-selected' : ''}`}
                 onSubmit={(e) => {
                   e.preventDefault();
                   void saveWastage('percent', wastagePercentValue);
                 }}
               >
-                <strong>Global percentage</strong>
+                <label className='settings-wastage-choice'>
+                  <input
+                    type='radio'
+                    name='global-wastage-pricing-method'
+                    checked={wastagePricingMethod === 'percent'}
+                    onChange={() => void selectWastagePricingMethod('percent')}
+                  />
+                  <strong>Global percentage</strong>
+                </label>
                 <span className='settings-field-caption'>
                   Percentage of gold weight
                 </span>
@@ -928,13 +963,21 @@ function SettingsScreen({ onDirtyChange }: Props) {
                 )}
               </form>
               <form
-                className='settings-wastage-option'
+                className={`settings-wastage-option${wastagePricingMethod === 'per_gram' ? ' is-selected' : ''}`}
                 onSubmit={(e) => {
                   e.preventDefault();
                   void saveWastage('per_gram', wastagePerGramValue);
                 }}
               >
-                <strong>Global fixed charge</strong>
+                <label className='settings-wastage-choice'>
+                  <input
+                    type='radio'
+                    name='global-wastage-pricing-method'
+                    checked={wastagePricingMethod === 'per_gram'}
+                    onChange={() => void selectWastagePricingMethod('per_gram')}
+                  />
+                  <strong>Global fixed charge</strong>
+                </label>
                 <span className='settings-field-caption'>Charge per gram</span>
                 <span className='settings-unit-input'>
                   <span>₹</span>

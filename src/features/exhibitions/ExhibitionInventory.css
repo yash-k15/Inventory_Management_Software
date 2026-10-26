@@ -603,3 +603,108 @@
     width: 100%;
   }
 }
+
+/* Hover preview mirrors the main Inventory table image preview. */
+.exhibition-inventory .exhibition-inventory-image-preview {
+  position: fixed;
+  z-index: 1100;
+  display: block;
+  max-width: min(420px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  pointer-events: none;
+}
+
+.exhibition-inventory .exhibition-inventory-image-preview img {
+  display: block;
+  max-width: min(420px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  width: auto;
+  height: auto;
+  border: 1px solid #e6ddd3;
+  border-radius: 9px;
+  background: transparent;
+  box-shadow: 0 12px 32px rgb(48 40 35 / 24%);
+  object-fit: contain;
+}
+
+/* Serial numbers and pagination for large exhibition inventory lists. */
+.exhibition-inventory .exhibition-inventory-serial-column {
+  width: 58px;
+  min-width: 58px;
+  color: var(--inventory-muted);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.exhibition-inventory .exhibition-inventory-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 12px 17px;
+  border-top: 1px solid #f0e8df;
+  background: #fff;
+  color: var(--inventory-muted);
+  font-size: 12px;
+}
+
+.exhibition-inventory .exhibition-inventory-pagination-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.exhibition-inventory .exhibition-inventory-page-size {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-right: 8px;
+  white-space: nowrap;
+}
+
+.exhibition-inventory .exhibition-inventory-page-size select,
+.exhibition-inventory .exhibition-inventory-pagination-controls button {
+  min-height: 30px;
+  border: 1px solid var(--inventory-border);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--inventory-ink);
+  font: inherit;
+}
+
+.exhibition-inventory .exhibition-inventory-page-size select {
+  padding: 4px 7px;
+}
+
+.exhibition-inventory .exhibition-inventory-pagination-controls button {
+  min-width: 30px;
+  padding: 3px 8px;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.exhibition-inventory .exhibition-inventory-pagination-controls button:disabled {
+  opacity: .4;
+  cursor: not-allowed;
+}
+
+.exhibition-inventory .exhibition-inventory-pagination-controls > span {
+  padding: 0 4px;
+  white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+  .exhibition-inventory .exhibition-inventory-pagination {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .exhibition-inventory .exhibition-inventory-pagination-controls {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+}

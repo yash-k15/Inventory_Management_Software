@@ -1931,3 +1931,199 @@
     width: auto;
   }
 }
+
+/* Shared Interest: pagination and image hover preview */
+.exhibition-shared-interest-serial-heading,
+.exhibition-shared-interest-serial {
+  width: 58px;
+  text-align: center;
+  color: #8a7d72;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.exhibition-shared-interest-image-preview {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.exhibition-shared-interest-image-popover {
+  position: absolute;
+  z-index: 100;
+  left: calc(100% + 12px);
+  top: 50%;
+  display: block;
+  width: 220px;
+  height: 220px;
+  padding: 7px;
+  border: 1px solid #e3d7c9;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 12px 32px rgba(38, 29, 22, .2);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-50%) scale(.96);
+  transform-origin: left center;
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.exhibition-shared-interest-image-popover img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 7px;
+  object-fit: contain;
+}
+
+.exhibition-shared-interest-image-preview:hover .exhibition-shared-interest-image-popover,
+.exhibition-shared-interest-image-preview:focus-within .exhibition-shared-interest-image-popover {
+  opacity: 1;
+  transform: translateY(-50%) scale(1);
+}
+
+.exhibition-shared-interest-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 2px 0;
+  color: #766d65;
+  font-size: 12px;
+}
+
+.exhibition-shared-interest-pagination-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.exhibition-shared-interest-pagination-controls label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #766d65;
+  font-size: 12px;
+}
+
+.exhibition-shared-interest-pagination-controls select,
+.exhibition-shared-interest-pagination-controls button {
+  min-height: 34px;
+  border: 1px solid #ded2c4;
+  border-radius: 8px;
+  background: #fff;
+  color: #302823;
+  font: inherit;
+}
+
+.exhibition-shared-interest-pagination-controls select {
+  padding: 0 8px;
+}
+
+.exhibition-shared-interest-pagination-controls button {
+  min-width: 34px;
+  padding: 0 8px;
+  font-size: 17px;
+  cursor: pointer;
+}
+
+.exhibition-shared-interest-pagination-controls button:hover:not(:disabled) {
+  border-color: #b99a6a;
+  background: #faf6f1;
+}
+
+.exhibition-shared-interest-pagination-controls button:disabled {
+  opacity: .4;
+  cursor: not-allowed;
+}
+
+.exhibition-shared-interest-page-count {
+  padding: 0 4px;
+  white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+  .exhibition-shared-interest-pagination {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .exhibition-shared-interest-pagination-controls {
+    width: 100%;
+  }
+
+  .exhibition-shared-interest-page-count {
+    margin-left: auto;
+  }
+
+  .exhibition-shared-interest-image-popover {
+    width: 180px;
+    height: 180px;
+  }
+}
+
+
+/* Serial number shifts the Shared Interest table's existing column layout */
+.exhibition-shared-interest-table th:nth-child(1),
+.exhibition-shared-interest-table td:nth-child(1) {
+  width: 58px;
+}
+
+.exhibition-shared-interest-table th:nth-child(2),
+.exhibition-shared-interest-table td:nth-child(2) {
+  width: 64px;
+}
+
+.exhibition-shared-interest-table th:nth-child(3),
+.exhibition-shared-interest-table td:nth-child(3) {
+  width: 14%;
+}
+
+.exhibition-shared-interest-table th:nth-child(4),
+.exhibition-shared-interest-table td:nth-child(4) {
+  width: 11%;
+}
+
+.exhibition-shared-interest-table th:nth-child(5),
+.exhibition-shared-interest-table td:nth-child(5) {
+  width: 17%;
+}
+
+.exhibition-shared-interest-table th:nth-child(5) button {
+  text-align: center;
+}
+
+.exhibition-shared-interest-table td:nth-child(5) {
+  text-align: center;
+}
+
+
+/* Shared Interest: keep the serial header aligned with its narrow number column. */
+.exhibition-shared-interest-table th.exhibition-shared-interest-serial-heading,
+.exhibition-shared-interest-table td.exhibition-shared-interest-serial {
+  width: 56px;
+  min-width: 56px;
+  max-width: 56px;
+  box-sizing: border-box;
+}
+
+.exhibition-shared-interest-table th.exhibition-shared-interest-serial-heading {
+  padding-left: 10px;
+  padding-right: 6px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.exhibition-shared-interest-table td.exhibition-shared-interest-serial {
+  padding-left: 10px;
+  padding-right: 6px;
+  text-align: left;
+}
+
+.exhibition-shared-interest-table th:nth-child(2),
+.exhibition-shared-interest-table td:nth-child(2) {
+  width: 58px;
+}

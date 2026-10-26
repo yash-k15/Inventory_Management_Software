@@ -22,6 +22,54 @@ type Props = {
 
 type HistoryTab = 'orders' | 'payments';
 
+type HistoryPaginationProps = {
+  totalItems: number;
+  currentPage: number;
+  pageSize: number;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (size: number) => void;
+};
+
+function HistoryPagination({
+  totalItems,
+  currentPage,
+  pageSize,
+  onPageChange,
+  onPageSizeChange,
+}: HistoryPaginationProps) {
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const firstItem = totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const lastItem = Math.min(currentPage * pageSize, totalItems);
+
+  return (
+    <div className='customer-details-pagination'>
+      <span className='customer-details-pagination-range'>
+        Showing {firstItem}–{lastItem} of {totalItems}
+      </span>
+      <div className='customer-details-pagination-controls'>
+        <label className='customer-details-page-size'>
+          <span>Rows</span>
+          <select
+            value={pageSize}
+            onChange={(event) => onPageSizeChange(Number(event.target.value))}
+            aria-label='Rows per page'
+          >
+            {[10, 25, 50, 100].map((size) => (
+              <option key={size} value={size}>{size}</option>
+            ))}
+          </select>
+        </label>
+        <button type='button' onClick={() => onPageChange(1)} disabled={currentPage === 1} aria-label='First page'>«</button>
+        <button type='button' onClick={() => onPageChange(Math.max(1, currentPage - 1))} disabled={currentPage === 1} aria-label='Previous page'>‹</button>
+        <span className='customer-details-pagination-page'>Page {currentPage} of {totalPages}</span>
+        <button type='button' onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))} disabled={currentPage >= totalPages} aria-label='Next page'>›</button>
+        <button type='button' onClick={() => onPageChange(totalPages)} disabled={currentPage >= totalPages} aria-label='Last page'>»</button>
+      </div>
+    </div>
+  );
+}
+
+
 const currency = new Intl.NumberFormat('en-IN', {
   style: 'currency',
   currency: 'INR',
@@ -57,6 +105,9 @@ export default function CustomerDetailsScreen({
   const [orders, setOrders] = useState<CustomerOrderHistoryRow[]>([]);
   const [payments, setPayments] = useState<CustomerPaymentHistoryRow[]>([]);
   const [activeTab, setActiveTab] = useState<HistoryTab>('orders');
+  const [pageSize, setPageSize] = useState(25);
+  const [ordersPage, setOrdersPage] = useState(1);
+  const [paymentsPage, setPaymentsPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -96,6 +147,26 @@ export default function CustomerDetailsScreen({
   useEffect(() => {
     void loadDetails();
   }, [loadDetails]);
+
+  const ordersTotalPages = Math.max(1, Math.ceil(orders.length / pageSize));
+  const paymentsTotalPages = Math.max(1, Math.ceil(payments.length / pageSize));
+
+  useEffect(() => {
+    setOrdersPage((page) => Math.min(page, ordersTotalPages));
+  }, [ordersTotalPages]);
+
+  useEffect(() => {
+    setPaymentsPage((page) => Math.min(page, paymentsTotalPages));
+  }, [paymentsTotalPages]);
+
+  const paginatedOrders = orders.slice((ordersPage - 1) * pageSize, ordersPage * pageSize);
+  const paginatedPayments = payments.slice((paymentsPage - 1) * pageSize, paymentsPage * pageSize);
+
+  const changePageSize = (size: number) => {
+    setPageSize(size);
+    setOrdersPage(1);
+    setPaymentsPage(1);
+  };
 
   if (loading) {
     return (
@@ -183,7 +254,7 @@ export default function CustomerDetailsScreen({
                 role='tab'
                 aria-selected={activeTab === 'orders'}
                 className={activeTab === 'orders' ? 'is-active' : ''}
-                onClick={() => setActiveTab('orders')}
+                onClick={() => { setActiveTab('orders'); setOrdersPage(1); }}
               >
                 Orders <span>{orders.length}</span>
               </button>
@@ -192,7 +263,7 @@ export default function CustomerDetailsScreen({
                 role='tab'
                 aria-selected={activeTab === 'payments'}
                 className={activeTab === 'payments' ? 'is-active' : ''}
-                onClick={() => setActiveTab('payments')}
+                onClick={() => { setActiveTab('payments'); setPaymentsPage(1); }}
               >
                 Payments <span>{payments.length}</span>
               </button>
@@ -201,10 +272,12 @@ export default function CustomerDetailsScreen({
 
           {activeTab === 'orders' ? (
             orders.length ? (
+              <>
               <div className='customer-details-table-wrap'>
                 <table className='customer-details-table'>
                   <thead>
                     <tr>
+                      <th className='customer-details-serial'>S.No.</th>
                       <th>Order date</th>
                       <th>Order</th>
                       <th>Exhibition</th>
@@ -214,8 +287,9 @@ export default function CustomerDetailsScreen({
                     </tr>
                   </thead>
                   <tbody>
-                    {orders.map((order) => (
+                    {paginatedOrders.map((order, index) => (
                       <tr key={order.id}>
+                        <td className='customer-details-serial'>{(ordersPage - 1) * pageSize + index + 1}</td>
                         <td>{formatDate(order.orderDate)}</td>
                         <td className='customer-details-order-id'>#{order.id}</td>
                         <td>{formatText(order.exhibitionName)}</td>
@@ -231,6 +305,14 @@ export default function CustomerDetailsScreen({
                   </tbody>
                 </table>
               </div>
+              <HistoryPagination
+                totalItems={orders.length}
+                currentPage={ordersPage}
+                pageSize={pageSize}
+                onPageChange={setOrdersPage}
+                onPageSizeChange={changePageSize}
+              />
+              </>
             ) : (
               <div className='customer-details-empty'>
                 <strong>No orders yet</strong>
@@ -238,10 +320,12 @@ export default function CustomerDetailsScreen({
               </div>
             )
           ) : payments.length ? (
+            <>
             <div className='customer-details-table-wrap'>
               <table className='customer-details-table'>
                 <thead>
                   <tr>
+                    <th className='customer-details-serial'>S.No.</th>
                     <th>Payment date</th>
                     <th>Exhibition</th>
                     <th>Method</th>
@@ -250,8 +334,9 @@ export default function CustomerDetailsScreen({
                   </tr>
                 </thead>
                 <tbody>
-                  {payments.map((payment) => (
+                  {paginatedPayments.map((payment, index) => (
                     <tr key={payment.id}>
+                      <td className='customer-details-serial'>{(paymentsPage - 1) * pageSize + index + 1}</td>
                       <td>{formatDate(payment.paymentDate)}</td>
                       <td>{formatText(payment.exhibitionName)}</td>
                       <td>{formatText(payment.paymentMethod)}</td>
@@ -262,6 +347,14 @@ export default function CustomerDetailsScreen({
                 </tbody>
               </table>
             </div>
+            <HistoryPagination
+              totalItems={payments.length}
+              currentPage={paymentsPage}
+              pageSize={pageSize}
+              onPageChange={setPaymentsPage}
+              onPageSizeChange={changePageSize}
+            />
+            </>
           ) : (
             <div className='customer-details-empty'>
               <strong>No payments recorded</strong>

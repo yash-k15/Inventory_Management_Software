@@ -67,6 +67,14 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
     field: 'itemNumber',
     direction: 'asc',
   });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+
+  const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
+  const pageStartIndex = (currentPage - 1) * pageSize;
+  const paginatedItems = items.slice(pageStartIndex, pageStartIndex + pageSize);
+  const firstVisibleItem = items.length === 0 ? 0 : pageStartIndex + 1;
+  const lastVisibleItem = Math.min(pageStartIndex + pageSize, items.length);
 
   const devMenuRef = useRef<HTMLDivElement>(null);
   const sortMenuRef = useRef<HTMLDivElement>(null);
@@ -171,8 +179,16 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
   }, [items]);
 
   useEffect(() => {
+    setCurrentPage(1);
+  }, [filters, sort]);
+
+  useEffect(() => {
     void loadInventory();
   }, [loadInventory]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [currentPage, totalPages]);
 
   useEffect(() => {
     if (!showDevMenu) return;
@@ -242,11 +258,13 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
     )?.label ?? 'Custom sort';
 
   const applySortOption = (field: InventorySortField | null, direction: 'asc' | 'desc') => {
+    setCurrentPage(1);
     setSort(field === null ? { field: 'itemNumber', direction: 'asc' } : { field, direction });
     setShowSortMenu(false);
   };
 
   const handleColumnSort = (field: InventorySortField) => {
+    setCurrentPage(1);
     setSort((current) => {
       if (current.field !== field) {
         return { field, direction: 'asc' };
@@ -269,6 +287,7 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
     key: K,
     value: InventoryFilterValues[K],
   ) => {
+    setCurrentPage(1);
     setFilters((current) => ({
       ...current,
       [key]: value,
@@ -276,6 +295,7 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
   };
 
   const updateFilters = (patch: Partial<InventoryFilterValues>) => {
+    setCurrentPage(1);
     setFilters((current) => ({
       ...current,
       ...patch,
@@ -283,6 +303,7 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
   };
 
   const resetFilters = () => {
+    setCurrentPage(1);
     setFilters({ ...INITIAL_INVENTORY_FILTERS });
   };
 
@@ -580,6 +601,7 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
             <table className='inventory-table'>
               <thead>
                 <tr>
+                  <th scope='col' className='inventory-serial-heading'>S.No.</th>
                   <th scope='col'>
                     <button type='button' className='inventory-sort-heading' onClick={() => handleColumnSort('itemNumber')} aria-label={`Sort by item number${getColumnSortIndicator('itemNumber')}`}>
                       Item{getColumnSortIndicator('itemNumber')}
@@ -622,7 +644,7 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
               </thead>
 
               <tbody>
-                {items.map((item) => {
+                {paginatedItems.map((item, index) => {
                   const purity = formatPurity(
                     item.purityName,
                     item.purityPercentBp,
@@ -634,6 +656,7 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
                       className='inventory-table-row'
                       onClick={() => onViewItem(item.id)}
                     >
+                      <td className='inventory-serial-cell'>{pageStartIndex + index + 1}</td>
                       <td className='inventory-item-column'>
                         <div className='inventory-item-cell'>
                           {imageUrls[item.id] ? (
@@ -758,6 +781,35 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+        {!isLoading && !error && items.length > 0 && (
+          <div className='inventory-pagination' aria-label='Inventory table pagination'>
+            <div className='inventory-pagination-summary'>
+              Showing <strong>{firstVisibleItem}–{lastVisibleItem}</strong> of <strong>{items.length}</strong> items
+            </div>
+            <div className='inventory-pagination-controls'>
+              <label className='inventory-page-size'>
+                Rows per page
+                <select
+                  value={pageSize}
+                  onChange={(event) => {
+                    setPageSize(Number(event.target.value));
+                    setCurrentPage(1);
+                  }}
+                >
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+              </label>
+              <span className='inventory-page-indicator'>Page {currentPage} of {totalPages}</span>
+              <button type='button' className='inventory-page-button' onClick={() => setCurrentPage(1)} disabled={currentPage === 1} aria-label='First page'>«</button>
+              <button type='button' className='inventory-page-button' onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} disabled={currentPage === 1}>Previous</button>
+              <button type='button' className='inventory-page-button' onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))} disabled={currentPage >= totalPages}>Next</button>
+              <button type='button' className='inventory-page-button' onClick={() => setCurrentPage(totalPages)} disabled={currentPage >= totalPages} aria-label='Last page'>»</button>
+            </div>
           </div>
         )}
       </section>

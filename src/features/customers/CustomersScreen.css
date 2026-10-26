@@ -1158,3 +1158,97 @@
     row-gap              : 20px;
   }
 }
+
+/* Customer table serial numbers and pagination, matching Inventory. */
+.customers-table .customers-serial-col {
+  width: 66px;
+  min-width: 66px;
+  text-align: right;
+}
+
+.customers-table .customers-serial-cell {
+  width: 66px;
+  color: #81766c;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.customers-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+  padding: 12px 2px 2px;
+  color: var(--color-text-muted, #766c66);
+  font-size: 12px;
+}
+
+.customers-pagination-summary strong,
+.customers-page-buttons strong {
+  color: var(--color-text, #2c2222);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.customers-pagination-controls,
+.customers-page-size,
+.customers-page-buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.customers-page-size select {
+  min-height: 34px;
+  padding: 5px 28px 5px 9px;
+  color: var(--color-text, #2c2222);
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border, #e5d9ca);
+  border-radius: 7px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.customers-page-buttons button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  color: var(--color-text, #2c2222);
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border, #e5d9ca);
+  border-radius: 7px;
+  font: inherit;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.customers-page-buttons button:hover:not(:disabled) {
+  background: #f7f2eb;
+  border-color: #c9b18d;
+}
+
+.customers-page-buttons button:disabled {
+  opacity: .4;
+  cursor: not-allowed;
+}
+
+@media (max-width: 700px) {
+  .customers-pagination {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .customers-pagination-controls {
+    width: 100%;
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+}

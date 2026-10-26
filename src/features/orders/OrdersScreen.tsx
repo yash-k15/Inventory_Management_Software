@@ -265,6 +265,8 @@ function OrdersScreen() {
     column: OrderSortColumn;
     direction: 'asc' | 'desc';
   } | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [filters, setFilters] = useState<OrdersFilters>(initialFilters);
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [summary, setSummary] = useState<OrdersSummary>(emptySummary);
@@ -352,6 +354,20 @@ function OrdersScreen() {
       return tableSort.direction === 'asc' ? comparison : -comparison;
     });
   }, [orders, tableSort]);
+
+  const totalPages = Math.max(1, Math.ceil(sortedOrders.length / pageSize));
+  const paginatedOrders = useMemo(
+    () => sortedOrders.slice((currentPage - 1) * pageSize, currentPage * pageSize),
+    [sortedOrders, currentPage, pageSize],
+  );
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filters, tableSort, pageSize]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [currentPage, totalPages]);
 
   function toggleTableSort(column: OrderSortColumn) {
     if (tableSort?.column === column && tableSort.direction === 'desc') {
@@ -717,6 +733,7 @@ function OrdersScreen() {
           <table className='orders-table'>
             <thead>
               <tr>
+                <th className='orders-serial-heading'>S.No.</th>
                 <th>{sortableHeader('Order', 'order')}</th>
                 <th>{sortableHeader('Customer', 'customer')}</th>
                 <th>{sortableHeader('Exhibition / source', 'source')}</th>
@@ -741,8 +758,11 @@ function OrdersScreen() {
             <tbody>
               {!loading &&
                 !error &&
-                sortedOrders.map((order) => (
+                paginatedOrders.map((order, index) => (
                   <tr key={order.id}>
+                    <td className='orders-serial-cell'>
+                      {(currentPage - 1) * pageSize + index + 1}
+                    </td>
                     <td className='orders-number'>
                       {formatOrderNumber(order.id)}
                     </td>
@@ -824,7 +844,7 @@ function OrdersScreen() {
 
               {loading && (
                 <tr>
-                  <td colSpan={10} className='orders-table-message'>
+                  <td colSpan={11} className='orders-table-message'>
                     Loading orders…
                   </td>
                 </tr>
@@ -832,7 +852,7 @@ function OrdersScreen() {
 
               {!loading && !error && orders.length === 0 && (
                 <tr>
-                  <td colSpan={10} className='orders-table-message'>
+                  <td colSpan={11} className='orders-table-message'>
                     No orders match these filters.
                   </td>
                 </tr>
@@ -841,10 +861,31 @@ function OrdersScreen() {
           </table>
         </div>
 
-        <footer className='orders-table-footer'>
-          Showing {orders.length} of {orders.length} matching orders. Order
-          value is the final order total. Payments and pending balances are
-          tracked per order.
+        <footer className='orders-table-footer orders-table-pagination'>
+          <span className='orders-pagination-range'>
+            Showing {sortedOrders.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}–
+            {Math.min(currentPage * pageSize, sortedOrders.length)} of {sortedOrders.length} orders
+          </span>
+          <div className='orders-pagination-controls'>
+            <label className='orders-page-size-control'>
+              Rows per page
+              <select
+                value={pageSize}
+                onChange={(event) => setPageSize(Number(event.target.value))}
+                aria-label='Rows per page'
+              >
+                {[10, 25, 50, 100].map((size) => (
+                  <option key={size} value={size}>{size}</option>
+                ))}
+              </select>
+            </label>
+            <span className='orders-pagination-page'>Page {currentPage} of {totalPages}</span>
+            <button type='button' aria-label='First page' title='First page' disabled={currentPage === 1} onClick={() => setCurrentPage(1)}>«</button>
+            <button type='button' aria-label='Previous page' title='Previous page' disabled={currentPage === 1} onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}>‹</button>
+            <button type='button' aria-label='Next page' title='Next page' disabled={currentPage === totalPages} onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}>›</button>
+            <button type='button' aria-label='Last page' title='Last page' disabled={currentPage === totalPages} onClick={() => setCurrentPage(totalPages)}>»</button>
+          </div>
+          <span className='orders-table-footer-note'>Order value is the final order total. Payments and pending balances are tracked per order.</span>
         </footer>
       </section>
       {createOrderOpen && (

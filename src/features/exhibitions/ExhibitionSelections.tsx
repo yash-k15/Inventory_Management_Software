@@ -65,14 +65,14 @@ function Thumbnail({ path, alt }: { path: string | null; alt: string }) {
       dead = true;
     };
   }, [path]);
-  return src ? (
-    <img className='selection-thumbnail' src={src} alt={alt} />
-  ) : (
-    <span
-      className='selection-thumbnail selection-thumbnail--empty'
-      aria-hidden='true'
-    >
-      ◇
+  return (
+    <span className='selection-thumbnail-preview'>
+      {src ? (
+        <img className='selection-thumbnail' src={src} alt={alt} />
+      ) : (
+        <span className='selection-thumbnail selection-thumbnail--empty' aria-hidden='true'>◇</span>
+      )}
+      {src && <span className='selection-thumbnail-preview-popover' aria-hidden='true'><img src={src} alt='' /></span>}
     </span>
   );
 }
@@ -97,6 +97,10 @@ export default function ExhibitionSelections({
   const [orderDetailLoading, setOrderDetailLoading] = useState<number | null>(
     null,
   );
+  const [selectionPage, setSelectionPage] = useState(1);
+  const [ordersPage, setOrdersPage] = useState(1);
+  const [orderDetailPages, setOrderDetailPages] = useState<Record<number, number>>({});
+  const [pageSize, setPageSize] = useState(25);
   const [customers, setCustomers] = useState<SelectionCustomer[]>([]),
     [selectedId, setSelectedId] = useState<number | null>(null),
     [items, setItems] = useState<SelectionRow[]>([]),
@@ -171,6 +175,27 @@ export default function ExhibitionSelections({
         ),
       [active],
     );
+  const selectionPageCount = Math.max(1, Math.ceil(sortedActive.length / pageSize));
+  const visibleSelectionItems = sortedActive.slice((selectionPage - 1) * pageSize, selectionPage * pageSize);
+  const ordersPageCount = Math.max(1, Math.ceil(orders.length / pageSize));
+  const visibleOrders = orders.slice((ordersPage - 1) * pageSize, ordersPage * pageSize);
+  function renderPagination(page: number, pageCount: number, setPage: (page: number) => void, total: number) {
+    const start = total ? (page - 1) * pageSize + 1 : 0;
+    const end = Math.min(page * pageSize, total);
+    return <div className='selection-pagination'>
+      <span>Showing {start}–{end} of {total}</span>
+      <label>Rows <select value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }}>
+        {[10, 25, 50, 100].map((size) => <option key={size} value={size}>{size}</option>)}
+      </select></label>
+      <div className='selection-pagination-buttons'>
+        <button type='button' disabled={page <= 1} onClick={() => setPage(1)} aria-label='First page'>«</button>
+        <button type='button' disabled={page <= 1} onClick={() => setPage(page - 1)} aria-label='Previous page'>‹</button>
+        <span>Page {page} of {pageCount}</span>
+        <button type='button' disabled={page >= pageCount} onClick={() => setPage(page + 1)} aria-label='Next page'>›</button>
+        <button type='button' disabled={page >= pageCount} onClick={() => setPage(pageCount)} aria-label='Last page'>»</button>
+      </div>
+    </div>;
+  }
   async function reload() {
     const rows = await getSelectionCustomers(exhibitionId, customerSearch);
     setCustomers(rows);
@@ -263,6 +288,9 @@ export default function ExhibitionSelections({
   useEffect(() => {
     setSelectedForOrder([]);
     setActiveTab('items');
+    setSelectionPage(1);
+    setOrdersPage(1);
+    setOrderDetailPages({});
   }, [selectedId, exhibitionId]);
 
   useEffect(() => {
@@ -764,7 +792,7 @@ export default function ExhibitionSelections({
                   </div>
                 ) : (
                   <div className='selection-orders-list'>
-                    {orders.map((order) => {
+                    {visibleOrders.map((order) => {
                       const expanded = expandedOrderId === order.id;
                       const detail = orderDetails[order.id];
                       return (
@@ -810,6 +838,7 @@ export default function ExhibitionSelections({
                                 <>
                                   <div className='selection-order-review-table'>
                                     <div className='selection-order-review-heading'>
+                                      <span>S.No.</span>
                                       <span>Item</span>
                                       <span>Gross wt.</span>
                                       <span>Net wt.</span>
@@ -817,11 +846,12 @@ export default function ExhibitionSelections({
                                       <span>Stones</span>
                                       <span>Final price</span>
                                     </div>
-                                    {detail.items.map((item, index) => (
+                                    {detail.items.slice(((orderDetailPages[order.id] ?? 1) - 1) * pageSize, (orderDetailPages[order.id] ?? 1) * pageSize).map((item, index) => (
                                       <div
                                         className='selection-order-review-row'
-                                        key={`${order.id}-${index}`}
+                                        key={`${order.id}-${((orderDetailPages[order.id] ?? 1) - 1) * pageSize + index}`}
                                       >
+                                        <span>{((orderDetailPages[order.id] ?? 1) - 1) * pageSize + index + 1}</span>
                                         <div className='selection-order-review-item'>
                                           <Thumbnail
                                             path={item.imagePath}
@@ -854,6 +884,7 @@ export default function ExhibitionSelections({
                                       </div>
                                     ))}
                                     <div className='selection-order-review-row selection-order-review-total-row'>
+                                      <span />
                                       <strong>Totals</strong>
                                       <strong>
                                         {formatReviewWeight(
@@ -901,6 +932,12 @@ export default function ExhibitionSelections({
                                       </strong>
                                     </div>
                                   </div>
+                                  {detail.items.length > 0 && renderPagination(
+                                    orderDetailPages[order.id] ?? 1,
+                                    Math.max(1, Math.ceil(detail.items.length / pageSize)),
+                                    (page) => setOrderDetailPages((current) => ({ ...current, [order.id]: page })),
+                                    detail.items.length,
+                                  )}
                                   <div className='selection-order-final-total'>
                                     <span>Final order total</span>
                                     <strong>
@@ -939,6 +976,7 @@ export default function ExhibitionSelections({
                   <table className='selection-items-table'>
                     <thead>
                       <tr>
+                        <th>S.No.</th>
                         <th aria-label='Select for order' />
                         {(
                           [
@@ -962,7 +1000,8 @@ export default function ExhibitionSelections({
                             <button
                               type='button'
                               className='selection-sort-button'
-                              onClick={() =>
+                              onClick={() => {
+                                setSelectionPage(1);
                                 setSort((current) => ({
                                   key,
                                   direction:
@@ -970,8 +1009,8 @@ export default function ExhibitionSelections({
                                     current.direction === 'asc'
                                       ? 'desc'
                                       : 'asc',
-                                }))
-                              }
+                                }));
+                              }}
                             >
                               {label}
                               {sort.key === key
@@ -987,8 +1026,9 @@ export default function ExhibitionSelections({
                       </tr>
                     </thead>
                     <tbody>
-                      {sortedActive.map((i) => (
+                      {visibleSelectionItems.map((i, index) => (
                         <tr key={i.id}>
+                          <td className='selection-serial-cell'>{(selectionPage - 1) * pageSize + index + 1}</td>
                           <td className='selection-order-checkbox-cell'>
                             <input
                               type='checkbox'
@@ -1086,7 +1126,7 @@ export default function ExhibitionSelections({
                     </tbody>
                     <tfoot>
                       <tr>
-                        <th colSpan={2}>Totals ({active.length} items)</th>
+                        <th colSpan={3}>Totals ({active.length} items)</th>
                         <th>{weight(totals.gross)} g</th>
                         <th>{totals.net ? `${weight(totals.net)} g` : '—'}</th>
                         <th>{detailTotals(active, 'diamonds')}</th>
@@ -1098,6 +1138,10 @@ export default function ExhibitionSelections({
                   </table>
                 </div>
               )}
+              {activeTab === 'orders' && !ordersLoading && orders.length > 0 &&
+                renderPagination(ordersPage, ordersPageCount, setOrdersPage, orders.length)}
+              {activeTab === 'items' && active.length > 0 &&
+                renderPagination(selectionPage, selectionPageCount, setSelectionPage, sortedActive.length)}
               {removed.length > 0 && (
                 <details className='selection-history'>
                   <summary>Removed items ({removed.length})</summary>

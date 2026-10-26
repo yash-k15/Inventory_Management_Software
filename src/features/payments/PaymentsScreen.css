@@ -53,3 +53,54 @@
 @media (max-width:1200px) { .payments-summary { grid-template-columns:repeat(2,minmax(0,1fr)); } .payments-summary-card:nth-child(2) { border-right:0; } .payments-filters { align-items:stretch; } .payments-search { flex-basis:100%; } }
 @media (max-width:768px) { .payments-page-heading { align-items:flex-start; } .payments-page-title { font-size:32px; } .payments-summary { grid-template-columns:1fr; } .payments-summary-card,.payments-summary-card:nth-child(2) { min-height:96px; border-right:0; border-bottom:1px solid #eee5dc; } .payments-summary-card:last-child { border-bottom:0; } .payments-filter-control { flex:1 1 145px; justify-content:space-between; } .payments-dropdown-trigger { max-width:60%; } .payments-dropdown-menu { max-width:min(320px,88vw); } .payments-reset-button { flex:1 1 100%; text-align:left; } }
 
+
+
+/* Payments table pagination and serial number column. */
+.payments-sno-cell {
+  width: 64px;
+  color: #786e65 !important;
+  font-variant-numeric: tabular-nums;
+}
+.payments-table-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 18px;
+}
+.payments-pagination,
+.payments-page-size,
+.payments-page-buttons {
+  display: flex;
+  align-items: center;
+}
+.payments-pagination { gap: 18px; }
+.payments-page-size { gap: 7px; color: #71675e; white-space: nowrap; }
+.payments-page-size select {
+  height: 30px;
+  padding: 0 7px;
+  border: 1px solid #dcd0c3;
+  border-radius: 7px;
+  background: #fff;
+  color: #342b26;
+  font: inherit;
+}
+.payments-page-buttons { gap: 5px; }
+.payments-page-buttons span { padding: 0 5px; white-space: nowrap; }
+.payments-page-buttons button {
+  width: 29px;
+  height: 29px;
+  border: 1px solid #e1d6ca;
+  border-radius: 7px;
+  background: #fff;
+  color: #604b35;
+  font: inherit;
+  font-size: 16px;
+  cursor: pointer;
+}
+.payments-page-buttons button:hover:not(:disabled) { background: #f6eee3; }
+.payments-page-buttons button:disabled { opacity: .4; cursor: not-allowed; }
+@media (max-width: 768px) {
+  .payments-table-footer { align-items: flex-start; }
+  .payments-pagination { width: 100%; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+}

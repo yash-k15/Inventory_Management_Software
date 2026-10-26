@@ -461,3 +461,96 @@
     font-size: 16px;
   }
 }
+
+
+/* Customer history table serial numbers and pagination */
+.customer-details-table .customer-details-serial {
+  width: 62px;
+  min-width: 62px;
+  color: var(--color-text-muted, #858585);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.customer-details-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 14px;
+  color: var(--color-text-secondary, #686868);
+  font-size: 12px;
+}
+
+.customer-details-pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.customer-details-pagination-controls > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--color-border, #dedede);
+  border-radius: 6px;
+  background: var(--color-surface, #fff);
+  color: var(--color-text, #242424);
+  font: inherit;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.customer-details-pagination-controls > button:hover:not(:disabled) {
+  background: var(--color-background, #f7f7f7);
+}
+
+.customer-details-pagination-controls > button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.customer-details-page-size {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 5px;
+  white-space: nowrap;
+}
+
+.customer-details-page-size select {
+  min-height: 30px;
+  padding: 4px 22px 4px 7px;
+  border: 1px solid var(--color-border, #dedede);
+  border-radius: 6px;
+  background: var(--color-surface, #fff);
+  color: var(--color-text, #242424);
+  font: inherit;
+}
+
+.customer-details-pagination-page {
+  min-width: 78px;
+  text-align: center;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 600px) {
+  .customer-details-pagination {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .customer-details-pagination-controls {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .customer-details-page-size {
+    margin-right: auto;
+  }
+}

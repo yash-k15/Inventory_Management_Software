@@ -91,6 +91,8 @@ function PaymentsScreen({ onViewOrder }: PaymentsScreenProps) {
   const [exhibitionFilter, setExhibitionFilter] = useState('all');
   const [methodFilter, setMethodFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
   const loadPayments = useCallback(async () => {
     setLoading(true); setError(null);
@@ -139,6 +141,14 @@ function PaymentsScreen({ onViewOrder }: PaymentsScreenProps) {
     });
   }, [payments, search, customerFilter, exhibitionFilter, methodFilter, dateFilter]);
 
+  useEffect(() => { setCurrentPage(1); }, [search, customerFilter, exhibitionFilter, methodFilter, dateFilter, pageSize]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredPayments.length / pageSize));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const pageStart = filteredPayments.length ? (safeCurrentPage - 1) * pageSize : 0;
+  const pageEnd = Math.min(pageStart + pageSize, filteredPayments.length);
+  const visiblePayments = filteredPayments.slice(pageStart, pageEnd);
+
   function resetFilters() {
     setSearch(''); setCustomerFilter('all'); setExhibitionFilter('all'); setMethodFilter('all'); setDateFilter('all');
   }
@@ -164,11 +174,29 @@ function PaymentsScreen({ onViewOrder }: PaymentsScreenProps) {
     </section>
 
     {error && <div className="payments-error" role="alert"><span>{error}</span><button type="button" onClick={() => void loadPayments()}>Retry</button></div>}
-    <section className="payments-table-card" aria-label="Payment transactions"><div className="payments-table-scroll"><table className="payments-table"><thead><tr><th>Payment date</th><th>Order</th><th>Customer</th><th>Exhibition / source</th><th>Payment method</th><th>Notes</th><th className="payments-number-cell">Amount received</th></tr></thead><tbody>
-      {!loading && !error && filteredPayments.map((payment) => <tr key={payment.id}><td className="payments-date">{formatDate(payment.paymentDate)}</td><td><div className="payments-primary-cell">{payment.orderId !== null && payment.orderId !== undefined && onViewOrder ? <button type="button" className="payments-order-link" onClick={() => onViewOrder(payment.orderId as number)}>{payment.orderNumber || `Order ${payment.orderId}`}<span aria-hidden="true"> ↗</span></button> : payment.orderNumber || 'Legacy payment'}</div></td><td><div className="payments-primary-cell">{payment.customerName || '—'}</div></td><td><div className="payments-primary-cell">{payment.exhibitionName || (payment.orderId ? 'Direct order' : 'Unallocated legacy payment')}</div></td><td><span className="payments-method-badge">{payment.paymentMethod || 'Not specified'}</span></td><td className="payments-notes" title={payment.notes || undefined}>{payment.notes || '—'}</td><td className="payments-number-cell payments-amount">{formatMoney(payment.amountPaise)}</td></tr>)}
-      {loading && <tr><td colSpan={7} className="payments-table-message">Loading payments…</td></tr>}
-      {!loading && !error && filteredPayments.length === 0 && <tr><td colSpan={7} className="payments-table-message">{payments.length ? 'No payments match these filters.' : 'No payments recorded yet.'}</td></tr>}
-    </tbody></table></div><footer className="payments-table-footer">Showing {filteredPayments.length} of {payments.length} payment transactions.</footer></section>
+    <section className="payments-table-card" aria-label="Payment transactions"><div className="payments-table-scroll"><table className="payments-table"><thead><tr><th className="payments-sno-cell">S.No.</th><th>Payment date</th><th>Order</th><th>Customer</th><th>Exhibition / source</th><th>Payment method</th><th>Notes</th><th className="payments-number-cell">Amount received</th></tr></thead><tbody>
+      {!loading && !error && visiblePayments.map((payment, index) => <tr key={payment.id}><td className="payments-sno-cell">{pageStart + index + 1}</td><td className="payments-date">{formatDate(payment.paymentDate)}</td><td><div className="payments-primary-cell">{payment.orderId !== null && payment.orderId !== undefined && onViewOrder ? <button type="button" className="payments-order-link" onClick={() => onViewOrder(payment.orderId as number)}>{payment.orderNumber || `Order ${payment.orderId}`}<span aria-hidden="true"> ↗</span></button> : payment.orderNumber || 'Legacy payment'}</div></td><td><div className="payments-primary-cell">{payment.customerName || '—'}</div></td><td><div className="payments-primary-cell">{payment.exhibitionName || (payment.orderId ? 'Direct order' : 'Unallocated legacy payment')}</div></td><td><span className="payments-method-badge">{payment.paymentMethod || 'Not specified'}</span></td><td className="payments-notes" title={payment.notes || undefined}>{payment.notes || '—'}</td><td className="payments-number-cell payments-amount">{formatMoney(payment.amountPaise)}</td></tr>)}
+      {loading && <tr><td colSpan={8} className="payments-table-message">Loading payments…</td></tr>}
+      {!loading && !error && filteredPayments.length === 0 && <tr><td colSpan={8} className="payments-table-message">{payments.length ? 'No payments match these filters.' : 'No payments recorded yet.'}</td></tr>}
+    </tbody></table></div>
+      <footer className="payments-table-footer">
+        <span>Showing {filteredPayments.length ? pageStart + 1 : 0}–{pageEnd} of {filteredPayments.length} filtered payments ({payments.length} total).</span>
+        <div className="payments-pagination">
+          <label className="payments-page-size">Rows
+            <select value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))} aria-label="Payments per page">
+              {[10, 25, 50, 100].map((size) => <option key={size} value={size}>{size}</option>)}
+            </select>
+            <span>per page</span>
+          </label>
+          <div className="payments-page-buttons">
+            <button type="button" onClick={() => setCurrentPage(1)} disabled={safeCurrentPage <= 1} aria-label="First page">«</button>
+            <button type="button" onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} disabled={safeCurrentPage <= 1} aria-label="Previous page">‹</button>
+            <span>Page {safeCurrentPage} of {totalPages}</span>
+            <button type="button" onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))} disabled={safeCurrentPage >= totalPages} aria-label="Next page">›</button>
+            <button type="button" onClick={() => setCurrentPage(totalPages)} disabled={safeCurrentPage >= totalPages} aria-label="Last page">»</button>
+          </div>
+        </div>
+      </footer></section>
 
   </section>;
 }

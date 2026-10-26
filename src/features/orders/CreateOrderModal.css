@@ -1069,7 +1069,7 @@
 .create-order-add-more-table .create-order-inventory-row,
 .create-order-add-more-heading {
     display              : grid;
-    grid-template-columns: 20px minmax(125px, 1.15fr) minmax(72px, .55fr) minmax(72px, .55fr) minmax(125px, 1fr) minmax(125px, 1fr);
+    grid-template-columns: 20px 34px minmax(125px, 1.15fr) minmax(72px, .55fr) minmax(72px, .55fr) minmax(125px, 1fr) minmax(125px, 1fr);
     align-items          : center;
     gap                  : 10px;
 }
@@ -2398,7 +2398,7 @@
 .create-order-step2-table .create-order-step2-heading,
 .create-order-step2-table .create-order-inventory-row {
     display: grid;
-    grid-template-columns: 20px minmax(160px, 1.25fr) minmax(70px, .55fr) minmax(70px, .55fr) minmax(120px, 1fr) minmax(120px, 1fr);
+    grid-template-columns: 20px 34px minmax(160px, 1.25fr) minmax(70px, .55fr) minmax(70px, .55fr) minmax(120px, 1fr) minmax(120px, 1fr);
     align-items: center;
     gap: 10px;
 }
@@ -2455,7 +2455,7 @@
 @media (max-width: 760px) {
     .create-order-step2-table .create-order-step2-heading,
     .create-order-step2-table .create-order-inventory-row {
-        grid-template-columns: 18px minmax(120px, 1.2fr) 60px 60px minmax(90px, 1fr) minmax(90px, 1fr);
+        grid-template-columns: 18px 30px minmax(120px, 1.2fr) 60px 60px minmax(90px, 1fr) minmax(90px, 1fr);
         gap: 5px;
     }
 }
@@ -2531,3 +2531,108 @@
     font-size: 11px;
     text-decoration: underline;
 }
+
+
+/* Create-order table pagination and jewelry image hover previews */
+.create-order-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 14px;
+  border-top: 1px solid var(--border-color, #e5e7eb);
+  color: var(--text-muted, #6b7280);
+  font-size: 12px;
+}
+.create-order-pagination label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.create-order-pagination select {
+  min-width: 58px;
+  padding: 5px 8px;
+  border: 1px solid var(--border-color, #d1d5db);
+  border-radius: 6px;
+  background: var(--surface, #fff);
+  color: inherit;
+}
+.create-order-pagination-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.create-order-pagination-actions button {
+  min-width: 28px;
+  height: 28px;
+  padding: 0 7px;
+  border: 1px solid var(--border-color, #d1d5db);
+  border-radius: 6px;
+  background: var(--surface, #fff);
+  color: inherit;
+  cursor: pointer;
+}
+.create-order-pagination-actions button:disabled {
+  opacity: .4;
+  cursor: not-allowed;
+}
+.create-order-thumbnail-preview {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 48px;
+  width: 48px;
+  min-width: 48px;
+  max-width: 48px;
+  height: 48px;
+  min-height: 48px;
+  max-height: 48px;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+}
+
+/* The wrapper is the fixed-size flex item; only the actual image is a hover target. */
+.create-order-thumbnail-preview > .create-order-item-thumbnail {
+  display: block;
+  flex: 0 0 48px;
+  width: 48px;
+  min-width: 48px;
+  max-width: 48px;
+  height: 48px;
+  min-height: 48px;
+  max-height: 48px;
+  margin: 0;
+  object-fit: cover;
+  border-radius: 8px;
+}
+.create-order-thumbnail-popover {
+  position: fixed;
+  z-index: 99999;
+  display: none;
+  width: 240px;
+  height: 240px;
+  padding: 6px;
+  border: 1px solid var(--border-color, #d1d5db);
+  border-radius: 10px;
+  background: var(--surface, #fff);
+  box-shadow: 0 12px 34px rgb(0 0 0 / 20%);
+  pointer-events: none;
+}
+.create-order-thumbnail-popover img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 6px;
+}
+.create-order-thumbnail-popover--visible {
+  display: block;
+}
+@media (max-width: 700px) {
+  .create-order-thumbnail-popover { width: 180px; height: 180px; }
+  .create-order-pagination { align-items: flex-start; }
+}
+
+.create-order-inventory-serial { color: #786e65; font-size: 10px; font-variant-numeric: tabular-nums; }

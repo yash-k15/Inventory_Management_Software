@@ -476,13 +476,13 @@ type SortDirection = 'asc' | 'desc';
 
 function SharedInterest({ exhibitionId }: { exhibitionId: number }) {
   const [items, setItems] = useState<SharedInterestItem[]>([]);
+  const [imageErrors, setImageErrors] = useState<Set<number>>(() => new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [categoryMenuOpen, setCategoryMenuOpen] = useState(false);
   const categoryDropdownRef = useRef<HTMLDivElement>(null);
-  const [imageErrors, setImageErrors] = useState<Set<number>>(() => new Set());
   const [sortKey, setSortKey] =
     useState<SharedInterestSortKey>('customerCount');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');

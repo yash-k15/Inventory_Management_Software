@@ -1,5 +1,7 @@
-import { useEffect, useState } from 'react';
-import { convertFileSrc } from '@tauri-apps/api/core';
+import { useEffect, useState, type MouseEvent } from 'react';
+import { createPortal } from 'react-dom';
+import { convertFileSrc, invoke } from '@tauri-apps/api/core';
+import { appDataDir, join, isAbsolute } from '@tauri-apps/api/path';
 import { getOrderDetails, type OrderDetails, type OrderDetailItem } from './orders.queries';
 import { createPayment } from '../payments/payments.queries';
 import type { PaymentMethod } from '../payments/payments.types';
@@ -19,6 +21,95 @@ const orderNumber = (id: number) => `ORD-${String(id).padStart(4, '0')}`;
 const safeArray = (value: unknown): Record<string, any>[] => Array.isArray(value) ? value.filter((entry) => entry && typeof entry === 'object') : [];
 const getNumber = (value: unknown) => typeof value === 'number' && Number.isFinite(value) ? value : 0;
 const pricingAvailable = (item: OrderDetailItem) => item.pricingBreakdown?.breakdown_available !== false && item.pricingBreakdown?.source !== 'direct' && typeof item.pricingBreakdown?.calculated_total_paise === 'number';
+
+
+function OrderItemImage({ paths, alt }: { paths: (string | null | undefined)[]; alt: string }) {
+  const [src, setSrc] = useState<string | null>(null);
+  const [previewPosition, setPreviewPosition] = useState<{ left: number; top: number } | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setSrc(null);
+    setFailed(false);
+    setPreviewPosition(null);
+    const candidates = [...new Set(paths.map((value) => value?.trim()).filter((value): value is string => Boolean(value)))];
+    if (!candidates.length) return;
+
+    void (async () => {
+      const appData = await appDataDir();
+      let lastError: unknown = null;
+      for (const candidate of candidates) {
+        if (/^(https?:|data:|blob:)/i.test(candidate)) {
+          if (!cancelled) setSrc(candidate);
+          return;
+        }
+        const resolvedCandidates: string[] = [];
+        try {
+          if (await isAbsolute(candidate)) resolvedCandidates.push(candidate);
+          else resolvedCandidates.push(await join(appData, candidate));
+        } catch (pathError) { lastError = pathError; }
+        // Some older records store an absolute path in a file URL or a path relative to the app data directory.
+        if (candidate.startsWith('file://')) resolvedCandidates.push(decodeURIComponent(candidate.replace(/^file:\/\//, '')));
+        for (const resolvedPath of [...new Set(resolvedCandidates)]) {
+          try {
+            await invoke('allow_image_preview', { path: resolvedPath });
+            if (!cancelled) setSrc(convertFileSrc(resolvedPath));
+            return;
+          } catch (imageError) { lastError = imageError; }
+        }
+      }
+      if (!cancelled) {
+        console.error('Could not load order item image from saved paths:', candidates, lastError);
+        setFailed(true);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [paths.join('\u0000')]);
+
+  const showPreview = (event: MouseEvent<HTMLImageElement>) => {
+    if (!src || failed) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const previewWidth = 280;
+    const previewHeight = 360;
+    const gap = 12;
+    const left = rect.right + gap + previewWidth <= window.innerWidth
+      ? rect.right + gap
+      : Math.max(8, rect.left - previewWidth - gap);
+    const top = Math.max(8, Math.min(
+      rect.top + rect.height / 2 - previewHeight / 2,
+      window.innerHeight - previewHeight - 8,
+    ));
+    setPreviewPosition({ left, top });
+  };
+
+  if (!src || failed) {
+    return <span className="od-item-image od-item-image--placeholder">◇</span>;
+  }
+
+  return <>
+    <img
+      className="od-item-image"
+      src={src}
+      alt={alt}
+      onMouseEnter={showPreview}
+      onMouseLeave={() => setPreviewPosition(null)}
+      onError={() => { setFailed(true); setPreviewPosition(null); }}
+      tabIndex={0}
+    />
+    {previewPosition && createPortal(
+      <span
+        className="od-item-image-preview"
+        aria-hidden="true"
+        style={{ left: previewPosition.left, top: previewPosition.top }}
+      >
+        <img src={src} alt="" />
+      </span>,
+      document.body,
+    )}
+  </>;
+}
 
 function snapshotPieces(item: OrderDetailItem, kind: 'diamond' | 'stone', line: Record<string, any>): number | null {
   if (typeof line.pieces === 'number') return line.pieces;
@@ -184,10 +275,8 @@ export default function OrderDetailsScreen({ orderId, onBack, backLabel = 'Order
       <div className="od-item-list">{order.items.map((item) => {
         const expanded = expandedItems.includes(item.id);
         const snapshot = item.itemSnapshot ?? {};
-        const imagePath = item.imageUrl || (typeof snapshot.image_path === 'string' && snapshot.image_path.trim() ? snapshot.image_path : null);
-        const imageSrc = imagePath
-          ? (/^(https?:|data:|blob:)/i.test(imagePath) ? imagePath : convertFileSrc(imagePath))
-          : null;
+        const imagePaths = [typeof snapshot.image_path === 'string' ? snapshot.image_path : null, item.imageUrl];
+
         const diamonds = safeArray(snapshot.diamonds);
         const stones = safeArray(snapshot.stones);
         const goldWeight = item.grossWeightMilli == null ? '—' : `${formatNumber(item.grossWeightMilli / 1000)} g`;
@@ -198,7 +287,7 @@ export default function OrderDetailsScreen({ orderId, onBack, backLabel = 'Order
         const details = [diamonds.length ? `${diamonds.length} diamond type${diamonds.length === 1 ? '' : 's'}` : '', stones.length ? `${stones.length} stone type${stones.length === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · ') || item.details;
         return <article className={`od-item-card ${expanded ? 'od-item-card--expanded' : ''}`} key={item.id}>
           <button type="button" className="od-item-summary" aria-expanded={expanded} onClick={() => setExpandedItems((current) => expanded ? current.filter((id) => id !== item.id) : [...current, item.id])}>
-            {imageSrc ? <img className="od-item-image" src={imageSrc} alt={item.itemNumber} onError={(event) => { const placeholder = document.createElement('span'); placeholder.className = 'od-item-image od-item-image--placeholder'; placeholder.textContent = '◇'; event.currentTarget.replaceWith(placeholder); }} /> : <span className="od-item-image od-item-image--placeholder">◇</span>}
+            <OrderItemImage paths={imagePaths} alt={item.itemNumber} />
             <span className="od-item-main"><strong>{item.itemNumber}</strong><span>{item.category}{snapshot.name ? ` · ${String(snapshot.name)}` : ''}</span><small>{details}</small></span>
             <span className="od-item-weight"><small>Gross wt.</small><strong>{goldWeight}</strong></span><span className="od-item-weight"><small>Net wt.</small><strong>{netWeight}</strong></span><span className="od-item-material"><small>Diamonds</small><strong>{diamondSummary}</strong></span><span className="od-item-material"><small>Stones</small><strong>{stoneSummary}</strong></span>
             <span className="od-item-price"><small>Agreed price</small><strong>{formatMoney(item.agreedPricePaise)}</strong></span><span className={`od-expand-icon ${expanded ? 'od-expand-icon--open' : ''}`}>⌄</span>

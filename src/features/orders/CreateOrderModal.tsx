@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type MouseEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import { getDatabase } from '../../db';
 import { appDataDir, join } from '@tauri-apps/api/path';
@@ -134,6 +135,7 @@ function ItemThumbnail({
   alt: string;
 }) {
   const [src, setSrc] = useState<string | null>(null);
+  const [previewPosition, setPreviewPosition] = useState<{ left: number; top: number } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -155,18 +157,82 @@ function ItemThumbnail({
     };
   }, [path]);
 
-  return src ? (
-    <img className='create-order-item-thumbnail' src={src} alt={alt} />
-  ) : (
-    <span
-      className='create-order-item-thumbnail create-order-item-thumbnail--empty'
-      aria-hidden='true'
-    >
-      ◇
+  const showPreview = (event: MouseEvent<HTMLElement>) => {
+    // Anchor the preview to the actual thumbnail, not its wrapper. In some
+    // table layouts the wrapper can inherit a much wider hit area than the image.
+    const rect = event.currentTarget.getBoundingClientRect();
+    const previewSize = 254; // 240px image + padding and border
+    const gap = 8;
+    const right = rect.right + gap;
+    const left = right + previewSize <= window.innerWidth - 8
+      ? right
+      : Math.max(8, rect.left - previewSize - gap);
+    const top = Math.max(8, Math.min(
+      rect.top + rect.height / 2 - previewSize / 2,
+      window.innerHeight - previewSize - 8,
+    ));
+    setPreviewPosition({ left, top });
+  };
+
+  return (
+    <span className='create-order-thumbnail-preview'>
+      {src ? (
+        <>
+          <img
+            className='create-order-item-thumbnail'
+            src={src}
+            alt={alt}
+            tabIndex={0}
+            onMouseEnter={showPreview}
+            onMouseLeave={() => setPreviewPosition(null)}
+          />
+          {previewPosition && createPortal(
+            <span className='create-order-thumbnail-popover create-order-thumbnail-popover--visible' aria-hidden='true' style={{ left: previewPosition.left, top: previewPosition.top }}>
+              <img src={src} alt='' />
+            </span>,
+            document.body,
+          )}
+        </>
+      ) : (
+        <span className='create-order-item-thumbnail create-order-item-thumbnail--empty' aria-hidden='true'>◇</span>
+      )}
     </span>
   );
 }
 
+
+function CreateOrderPagination({
+  page, pageSize, total, onPageChange, onPageSizeChange,
+}: {
+  page: number;
+  pageSize: number;
+  total: number;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (size: number) => void;
+}) {
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  const safePage = Math.min(page, pageCount);
+  if (total <= 10) return null;
+  const start = (safePage - 1) * pageSize + 1;
+  const end = Math.min(safePage * pageSize, total);
+  return (
+    <div className="create-order-pagination">
+      <span>{start}–{end} of {total}</span>
+      <label>Rows
+        <select value={pageSize} onChange={(event) => { onPageSizeChange(Number(event.target.value)); onPageChange(1); }}>
+          {[10, 25, 50, 100].map((size) => <option key={size} value={size}>{size}</option>)}
+        </select>
+      </label>
+      <div className="create-order-pagination-actions">
+        <button type="button" onClick={() => onPageChange(1)} disabled={safePage === 1} aria-label="First page">«</button>
+        <button type="button" onClick={() => onPageChange(safePage - 1)} disabled={safePage === 1} aria-label="Previous page">‹</button>
+        <span>Page {safePage} of {pageCount}</span>
+        <button type="button" onClick={() => onPageChange(safePage + 1)} disabled={safePage === pageCount} aria-label="Next page">›</button>
+        <button type="button" onClick={() => onPageChange(pageCount)} disabled={safePage === pageCount} aria-label="Last page">»</button>
+      </div>
+    </div>
+  );
+}
 
 export default function CreateOrderModal({
   onClose,
@@ -182,6 +248,14 @@ export default function CreateOrderModal({
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
   const [selectedExhibitionId, setSelectedExhibitionId] = useState('');
   const [selectedItems, setSelectedItems] = useState<SelectedItem[]>([]);
+  const [availablePage, setAvailablePage] = useState(1);
+  const [availablePageSize, setAvailablePageSize] = useState(25);
+  const [selectedPage, setSelectedPage] = useState(1);
+  const [selectedPageSize, setSelectedPageSize] = useState(25);
+  const [pricePage, setPricePage] = useState(1);
+  const [pricePageSize, setPricePageSize] = useState(25);
+  const [reviewPage, setReviewPage] = useState(1);
+  const [reviewPageSize, setReviewPageSize] = useState(25);
   const [customerSearch, setCustomerSearch] = useState('');
   const [exhibitionSearch, setExhibitionSearch] = useState('');
   const [exhibitionCustomerIds, setExhibitionCustomerIds] = useState<number[] | null>(null);
@@ -678,6 +752,19 @@ export default function CreateOrderModal({
     );
   }, [exhibitions, exhibitionSearch]);
 
+  const filteredInventoryItems = useMemo(
+    () => inventory.filter((item) =>
+      (selectedCategoryIds.length === 0 || selectedCategoryIds.includes(item.categoryId)) &&
+      (showMoreItems || !selectedItems.some((selected) => selected.item.id === item.id))
+    ),
+    [inventory, selectedCategoryIds, showMoreItems, selectedItems]
+  );
+  const availablePageItems = filteredInventoryItems.slice((availablePage - 1) * availablePageSize, availablePage * availablePageSize);
+  const selectedPageItems = selectedItems.slice((selectedPage - 1) * selectedPageSize, selectedPage * selectedPageSize);
+  const pricePageItems = selectedItems.slice((pricePage - 1) * pricePageSize, pricePage * pricePageSize);
+  const reviewPageItems = selectedItems.slice((reviewPage - 1) * reviewPageSize, reviewPage * reviewPageSize);
+
+
   useEffect(() => {
     let cancelled = false;
     async function loadExhibitionCustomers() {
@@ -749,6 +836,7 @@ export default function CreateOrderModal({
 
   async function searchInventory(value: string) {
     setInventorySearch(value);
+    setAvailablePage(1);
     try {
       let results: CreateOrderInventoryItem[];
       if (
@@ -1345,12 +1433,13 @@ export default function CreateOrderModal({
                     >
                       {!showMoreItems && (
                         <div className='create-order-step2-heading'>
-                          <span></span><span>Item</span><span>Gross wt.</span><span>Net wt.</span><span>Diamonds</span><span>Stones</span>
+                          <span></span><span>S.No.</span><span>Item</span><span>Gross wt.</span><span>Net wt.</span><span>Diamonds</span><span>Stones</span>
                         </div>
                       )}
                       {showMoreItems && initialItems.length > 0 && (
                         <div className='create-order-add-more-heading'>
                           <span></span>
+                          <span>S.No.</span>
                           <span>Item</span>
                           <span>Gross wt.</span>
                           <span>Net wt.</span>
@@ -1363,7 +1452,7 @@ export default function CreateOrderModal({
                       )}
 
                       {!loading &&
-                        inventory.filter((item) => (selectedCategoryIds.length === 0 || selectedCategoryIds.includes(item.categoryId)) && (showMoreItems || !selectedItems.some((selected) => selected.item.id === item.id))).map((item) => {
+                        availablePageItems.map((item, index) => {
                           const alreadySelected = selectedItems.some(
                             (selected) => selected.item.id === item.id,
                           );
@@ -1388,6 +1477,7 @@ export default function CreateOrderModal({
                                   }
                                 }}
                               />
+                              <span className='create-order-inventory-serial'>{(availablePage - 1) * availablePageSize + index + 1}</span>
                               <div className='create-order-item-identity create-order-add-more-identity'>
                                 <ItemThumbnail path={item.imagePath} alt={item.itemNumber} />
                                 <div className='create-order-inventory-name'>
@@ -1407,8 +1497,7 @@ export default function CreateOrderModal({
                         <p className='create-order-empty'>No eligible items match your search and category filters.</p>
                       )}
                     </div>
-
-
+                    <CreateOrderPagination page={availablePage} pageSize={availablePageSize} total={filteredInventoryItems.length} onPageChange={setAvailablePage} onPageSizeChange={setAvailablePageSize} />
 
                     {!(initialItems.length > 0 && showMoreItems) && (
                       <p className='create-order-helper'>
@@ -1474,7 +1563,7 @@ export default function CreateOrderModal({
                       <span />
                     </div>
 
-                    {selectedItems.map(({ item }) => (
+                    {selectedPageItems.map(({ item }) => (
                       <div className='create-order-selected-row' key={item.id}>
                         <div className='create-order-item-identity create-order-selected-name'>
                           <ItemThumbnail
@@ -1546,6 +1635,7 @@ export default function CreateOrderModal({
                         <span />
                       </div>
                     )}
+                    <CreateOrderPagination page={selectedPage} pageSize={selectedPageSize} total={selectedItems.length} onPageChange={setSelectedPage} onPageSizeChange={setSelectedPageSize} />
                   </div>
                 )}
               </section>
@@ -1596,7 +1686,7 @@ export default function CreateOrderModal({
                     <span>Stones</span>
                     <span>Price (₹)</span>
                   </div>
-                  {selectedItems.map(({ item, price, pricingSource }) => (
+                  {pricePageItems.map(({ item, price, pricingSource }) => (
                     <div className='create-order-review-row' key={item.id}>
                       <div className='create-order-price-review-item'>
                         <input
@@ -1660,6 +1750,7 @@ export default function CreateOrderModal({
                     </div>
                   ))}
                 </div>
+                <CreateOrderPagination page={pricePage} pageSize={pricePageSize} total={selectedItems.length} onPageChange={setPricePage} onPageSizeChange={setPricePageSize} />
                 <div className='create-order-review-total'>
                   <span>Calculated order value</span>
                   <strong>{formatMoney(totalPaise)}</strong>
@@ -1724,7 +1815,7 @@ export default function CreateOrderModal({
                     <span>Stones</span>
                     <span>Final price</span>
                   </div>
-                  {selectedItems.map(({ item, price }) => (
+                  {reviewPageItems.map(({ item, price }) => (
                     <div className='create-order-review-row' key={item.id}>
                       <div className='create-order-item-identity create-order-review-item-name'>
                         <ItemThumbnail
@@ -1786,6 +1877,7 @@ export default function CreateOrderModal({
                     <strong>{formatMoney(totalPaise)}</strong>
                   </div>
                 </div>
+                <CreateOrderPagination page={reviewPage} pageSize={reviewPageSize} total={selectedItems.length} onPageChange={setReviewPage} onPageSizeChange={setReviewPageSize} />
                 <div className='create-order-review-total'>
                   <span>Final order total</span>
                   <strong>{formatMoney(finalTotalPaise)}</strong>

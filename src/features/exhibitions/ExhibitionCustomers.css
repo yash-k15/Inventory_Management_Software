@@ -246,3 +246,70 @@
         margin-left: auto
     }
 }
+
+.exhibition-customers-serial {
+    width: 64px;
+    color: #8b8075 !important;
+    font-size: 12px !important;
+    font-variant-numeric: tabular-nums;
+}
+
+.exhibition-customers-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.exhibition-customers-pagination-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.exhibition-customers-pagination-controls label {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    color: #6e6258;
+}
+
+.exhibition-customers-pagination-controls select,
+.exhibition-customers-pagination-controls button {
+    min-height: 30px;
+    padding: 0 9px;
+    border: 1px solid #ded2c4;
+    border-radius: 7px;
+    background: #fff;
+    color: #302722;
+    font: inherit;
+    font-size: 12px;
+}
+
+.exhibition-customers-pagination-controls button {
+    min-width: 30px;
+    cursor: pointer;
+}
+
+.exhibition-customers-pagination-controls button:disabled {
+    opacity: .4;
+    cursor: not-allowed;
+}
+
+.exhibition-customers-pagination-controls > span {
+    white-space: nowrap;
+    padding: 0 4px;
+}
+
+@media(max-width: 600px) {
+    .exhibition-customers-pagination {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .exhibition-customers-pagination-controls {
+        width: 100%;
+    }
+}

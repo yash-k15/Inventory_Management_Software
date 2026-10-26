@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { MouseEvent } from 'react';
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import { appDataDir, join } from '@tauri-apps/api/path';
 import './ExhibitionInventory.css';
@@ -78,6 +79,8 @@ export default function ExhibitionInventory({
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [activeTab, setActiveTab] = useState<InventoryTab>('registered');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [availableCategoryIds, setAvailableCategoryIds] = useState<number[]>(
     [],
   );
@@ -95,6 +98,17 @@ export default function ExhibitionInventory({
     key: 'itemNumber',
     direction: 'asc',
   });
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [
+    activeTab,
+    filters.search,
+    availableCategoryIds,
+    registeredCategoryIds,
+    sort,
+    pageSize,
+  ]);
 
   const loadItems = useCallback(async () => {
     setLoading(true);
@@ -356,6 +370,14 @@ export default function ExhibitionInventory({
     registered: boolean,
   ) {
     const selected = registered ? registeredSelectedIds : availableSelectedIds;
+    const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
+    const safeCurrentPage = Math.min(currentPage, pageCount);
+    const pageRows = rows.slice(
+      (safeCurrentPage - 1) * pageSize,
+      safeCurrentPage * pageSize,
+    );
+    const firstRow = rows.length ? (safeCurrentPage - 1) * pageSize + 1 : 0;
+    const lastRow = Math.min(safeCurrentPage * pageSize, rows.length);
     const selectable = rows.filter(
       (item) => !registered || item.selectionCount === 0,
     );
@@ -471,6 +493,7 @@ export default function ExhibitionInventory({
                       }}
                     />
                   </th>
+                  <th className='exhibition-inventory-serial-column'>S.No.</th>
                   <th>{sortHeading('Item', 'itemNumber')}</th>
                   <th>{sortHeading('Category', 'categoryName')}</th>
                   <th>{sortHeading('Gold weight', 'grossWeightMilli')}</th>
@@ -483,8 +506,9 @@ export default function ExhibitionInventory({
                 </tr>
               </thead>
               <tbody>
-                {sortedItems.map((item) => (
+                {pageRows.map((item, index) => (
                   <tr key={item.id}>
+                    <td className='exhibition-inventory-serial-column'>{firstRow + index}</td>
                     <td className='exhibition-inventory-check-column'>
                       <input
                         type='checkbox'
@@ -563,6 +587,7 @@ export default function ExhibitionInventory({
               <tfoot>
                 <tr className='exhibition-inventory-totals-row'>
                   <td></td>
+                  <td></td>
                   <td colSpan={2}>Totals ({rows.length} items)</td>
                   <td>{hasGrossWeight ? formatWeight(grossTotal) : '—'}</td>
                   <td>{hasNetWeight ? formatWeight(netTotal) : '—'}</td>
@@ -578,6 +603,32 @@ export default function ExhibitionInventory({
           {rows.length} {registered ? 'registered items' : 'available items'}
           {selected.length ? ` · ${selected.length} selected` : ''}
         </footer>
+        {rows.length > 0 && (
+          <div className='exhibition-inventory-pagination'>
+            <div className='exhibition-inventory-pagination-summary'>
+              Showing {firstRow}–{lastRow} of {rows.length} items
+            </div>
+            <div className='exhibition-inventory-pagination-controls'>
+              <label className='exhibition-inventory-page-size'>
+                Rows per page
+                <select
+                  value={pageSize}
+                  onChange={(event) => setPageSize(Number(event.target.value))}
+                  aria-label='Rows per page'
+                >
+                  {[10, 25, 50, 100].map((size) => (
+                    <option key={size} value={size}>{size}</option>
+                  ))}
+                </select>
+              </label>
+              <button type='button' onClick={() => setCurrentPage(1)} disabled={safeCurrentPage === 1} aria-label='First page'>«</button>
+              <button type='button' onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} disabled={safeCurrentPage === 1} aria-label='Previous page'>‹</button>
+              <span>Page {safeCurrentPage} of {pageCount}</span>
+              <button type='button' onClick={() => setCurrentPage((page) => Math.min(pageCount, page + 1))} disabled={safeCurrentPage === pageCount} aria-label='Next page'>›</button>
+              <button type='button' onClick={() => setCurrentPage(pageCount)} disabled={safeCurrentPage === pageCount} aria-label='Last page'>»</button>
+            </div>
+          </div>
+        )}
         <div className='exhibition-inventory-bulk-actions'>
           <label className='exhibition-inventory-select-visible'>
             <input
@@ -733,6 +784,45 @@ export default function ExhibitionInventory({
 
 function InventoryImage({ path }: { path: string }) {
   const [src, setSrc] = useState<string | null>(null);
+  const [preview, setPreview] = useState<{ left: number; top: number } | null>(null);
+  const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearPreviewTimer = () => {
+    if (previewTimerRef.current !== null) {
+      clearTimeout(previewTimerRef.current);
+      previewTimerRef.current = null;
+    }
+  };
+
+  const handleMouseEnter = (event: MouseEvent<HTMLImageElement>) => {
+    if (!src) return;
+    clearPreviewTimer();
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const previewWidth = Math.min(420, window.innerWidth - 32);
+    const previewHeight = Math.min(560, window.innerHeight - 32);
+    const left =
+      rect.right + previewWidth + 16 <= window.innerWidth
+        ? rect.right + 16
+        : Math.max(16, rect.left - previewWidth - 16);
+    const top = Math.min(
+      Math.max(16, rect.top),
+      Math.max(16, window.innerHeight - previewHeight - 16),
+    );
+
+    previewTimerRef.current = setTimeout(() => {
+      setPreview({ left, top });
+      previewTimerRef.current = null;
+    }, 1500);
+  };
+
+  const handleMouseLeave = () => {
+    clearPreviewTimer();
+    setPreview(null);
+  };
+
+  useEffect(() => () => clearPreviewTimer(), []);
+
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -757,16 +847,35 @@ function InventoryImage({ path }: { path: string }) {
       alive = false;
     };
   }, [path]);
-  return src ? (
-    <img
-      className='exhibition-inventory-item-image'
-      src={src}
-      alt=''
-      onError={() => setSrc(null)}
-    />
-  ) : (
-    <span className='exhibition-inventory-item-image exhibition-inventory-item-image--empty'>
-      ◇
-    </span>
+
+  return (
+    <>
+      {src ? (
+        <img
+          className='exhibition-inventory-item-image'
+          src={src}
+          alt=''
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+          onError={() => {
+            handleMouseLeave();
+            setSrc(null);
+          }}
+        />
+      ) : (
+        <span className='exhibition-inventory-item-image exhibition-inventory-item-image--empty'>
+          ◇
+        </span>
+      )}
+      {preview && src && (
+        <div
+          className='exhibition-inventory-image-preview'
+          style={{ left: preview.left, top: preview.top }}
+          aria-hidden='true'
+        >
+          <img src={src} alt='' />
+        </div>
+      )}
+    </>
   );
 }

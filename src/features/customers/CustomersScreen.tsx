@@ -221,6 +221,8 @@ export default function CustomersScreenRedesigned({
   const [search, setSearch] = useState('');
   const [archiveStatus, setArchiveStatus] =
     useState<CustomerArchiveFilter>('active');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [expandedCustomerId, setExpandedCustomerId] = useState<number | null>(
     null,
   );
@@ -293,6 +295,10 @@ export default function CustomersScreenRedesigned({
     },
     [search, archiveStatus, expandedCustomerId],
   );
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, archiveStatus]);
 
   useEffect(() => {
     void loadCustomers();
@@ -713,6 +719,19 @@ export default function CustomersScreenRedesigned({
     }).format(date);
   }
 
+  const totalPages = Math.max(1, Math.ceil(customers.length / pageSize));
+  const pageStartIndex = (currentPage - 1) * pageSize;
+  const paginatedCustomers = customers.slice(
+    pageStartIndex,
+    pageStartIndex + pageSize,
+  );
+  const firstVisibleCustomer = customers.length === 0 ? 0 : pageStartIndex + 1;
+  const lastVisibleCustomer = Math.min(pageStartIndex + pageSize, customers.length);
+
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [currentPage, totalPages]);
+
   return (
     <section className='customers-v2'>
       {notice && (
@@ -866,6 +885,7 @@ export default function CustomersScreenRedesigned({
           <table className='customers-table'>
             <thead>
               <tr>
+                <th className='customers-serial-col'>S.No.</th>
                 <th className='customers-expand-col'>
                   <span className='sr-only'>Expand</span>
                 </th>
@@ -878,7 +898,7 @@ export default function CustomersScreenRedesigned({
               </tr>
             </thead>
             <tbody>
-              {customers.map((customer) => {
+              {paginatedCustomers.map((customer, index) => {
                 const expanded = expandedCustomerId === customer.id;
 
                 return (
@@ -898,6 +918,9 @@ export default function CustomersScreenRedesigned({
                       tabIndex={0}
                       aria-expanded={expanded}
                     >
+                      <td className='customers-serial-cell'>
+                        {pageStartIndex + index + 1}
+                      </td>
                       <td>
                         <button
                           type='button'
@@ -965,7 +988,7 @@ export default function CustomersScreenRedesigned({
                         key={`details-${customer.id}`}
                         className='customers-details-row'
                       >
-                        <td colSpan={7}>
+                        <td colSpan={8}>
                           <div className='customers-details'>
                             <div className='customers-expanded-grid'>
                               <section className='customers-expanded-section'>
@@ -1167,6 +1190,39 @@ export default function CustomersScreenRedesigned({
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {!error && !loading && customers.length > 0 && (
+        <div className='customers-pagination' aria-label='Customer table pagination'>
+          <div className='customers-pagination-summary'>
+            Showing <strong>{firstVisibleCustomer}–{lastVisibleCustomer}</strong> of{' '}
+            <strong>{customers.length}</strong> customers
+          </div>
+          <div className='customers-pagination-controls'>
+            <label className='customers-page-size'>
+              <span>Rows per page</span>
+              <select
+                value={pageSize}
+                onChange={(event) => {
+                  setPageSize(Number(event.target.value));
+                  setCurrentPage(1);
+                }}
+                aria-label='Rows per page'
+              >
+                {[10, 25, 50, 100].map((size) => (
+                  <option key={size} value={size}>{size}</option>
+                ))}
+              </select>
+            </label>
+            <div className='customers-page-buttons'>
+              <button type='button' onClick={() => setCurrentPage(1)} disabled={currentPage === 1} aria-label='First page'>«</button>
+              <button type='button' onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} disabled={currentPage === 1} aria-label='Previous page'>‹</button>
+              <span>Page <strong>{currentPage}</strong> of <strong>{totalPages}</strong></span>
+              <button type='button' onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))} disabled={currentPage === totalPages} aria-label='Next page'>›</button>
+              <button type='button' onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages} aria-label='Last page'>»</button>
+            </div>
+          </div>
         </div>
       )}
 

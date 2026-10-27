@@ -61,7 +61,7 @@ function formatDetailTotals(
   if (!totals.size) return '—';
   return [...totals.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([unit, amount]) => `${amount.toFixed(3)} ${unit || defaultUnit}`)
+    .map(([unit, amount]) => `${amount.toFixed(unit === 'ct' ? 2 : 3)} ${unit || defaultUnit}`)
     .join(' · ');
 }
 

@@ -334,7 +334,7 @@ export async function getInventoryItems(
       (
         SELECT GROUP_CONCAT(
           ds.code || ': ' ||
-          printf('%.3f', d.weight_milli / 1000.0) || ' ct' ||
+          printf('%.2f', d.weight_milli / 1000.0) || ' ct' ||
           ' (' || COALESCE(d.pieces, 0) || ' pcs)',
           char(10)
         )
@@ -346,7 +346,7 @@ export async function getInventoryItems(
       (
         SELECT GROUP_CONCAT(
           st.tag_label || ': ' ||
-          printf('%.3f', s.weight_milli / 1000.0) || ' ' ||
+          (CASE WHEN st.weight_unit = 'ct' THEN printf('%.2f', s.weight_milli / 1000.0) ELSE printf('%.3f', s.weight_milli / 1000.0) END) || ' ' ||
           st.weight_unit ||
           ' (' || COALESCE(s.pieces, 0) || ' pcs)',
           char(10)

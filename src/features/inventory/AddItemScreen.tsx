@@ -95,6 +95,12 @@ function toMilliUnits(value: string, label: string): number {
   return milli;
 }
 
+function limitDecimalPlaces(value: string, places: number): string {
+  const decimalIndex = value.indexOf('.');
+  if (decimalIndex === -1) return value;
+  return `${value.slice(0, decimalIndex)}.${value.slice(decimalIndex + 1, decimalIndex + 1 + places)}`;
+}
+
 function toOptionalPieces(value: string, label: string): number | null {
   if (!value.trim()) return null;
 
@@ -475,7 +481,7 @@ function AddItemScreen({ onCancel, onCreated, itemId, onUpdated }: Props) {
                     ? ''
                     : String(diamond.combinationId),
                 pieces: diamond.pieces == null ? '' : String(diamond.pieces),
-                weight: (diamond.weightMilli / 1000).toFixed(3),
+                weight: (diamond.weightMilli / 1000).toFixed(2),
               };
             }),
           );
@@ -492,7 +498,11 @@ function AddItemScreen({ onCancel, onCreated, itemId, onUpdated }: Props) {
                 tagLabel: stoneType?.tag_label ?? stone.tagLabel,
                 weightUnit: stoneType?.weight_unit ?? stone.weightUnit,
                 pieces: stone.pieces == null ? '' : String(stone.pieces),
-                weight: (stone.weightMilli / 1000).toFixed(3),
+                weight: (stone.weightMilli / 1000).toFixed(
+                  (stoneType?.weight_unit ?? stone.weightUnit).toLowerCase() === 'ct'
+                    ? 2
+                    : 3,
+                ),
               };
             }),
           );
@@ -1091,13 +1101,13 @@ function AddItemScreen({ onCancel, onCreated, itemId, onUpdated }: Props) {
                                 className='app-input add-item-number-input'
                                 type='number'
                                 min='0'
-                                step='0.001'
+                                step='0.01'
                                 value={diamond.weight}
                                 onChange={(event) =>
                                   updateDiamond(
                                     diamond.shapeId,
                                     'weight',
-                                    event.target.value,
+                                    limitDecimalPlaces(event.target.value, 2),
                                   )
                                 }
                                 onWheel={(event) => event.currentTarget.blur()}
@@ -1250,13 +1260,19 @@ function AddItemScreen({ onCancel, onCreated, itemId, onUpdated }: Props) {
                               className='app-input add-item-number-input'
                               type='number'
                               min='0'
-                              step='0.001'
+                              step={
+                                stone.weightUnit.toLowerCase() === 'ct'
+                                  ? '0.01'
+                                  : '0.001'
+                              }
                               value={stone.weight}
                               onChange={(event) =>
                                 updateStone(
                                   stone.stoneTypeId,
                                   'weight',
-                                  event.target.value,
+                                  stone.weightUnit.toLowerCase() === 'ct'
+                                    ? limitDecimalPlaces(event.target.value, 2)
+                                    : event.target.value,
                                 )
                               }
                               onWheel={(event) => event.currentTarget.blur()}
@@ -1443,7 +1459,7 @@ function AddItemScreen({ onCancel, onCreated, itemId, onUpdated }: Props) {
                 <div>
                   <span>Diamonds</span>
                   <strong>
-                    {totalDiamondPieces} pcs · {totalDiamondWeight.toFixed(3)}{' '}
+                    {totalDiamondPieces} pcs · {totalDiamondWeight.toFixed(2)}{' '}
                     ct
                   </strong>
                 </div>
@@ -1451,7 +1467,9 @@ function AddItemScreen({ onCancel, onCreated, itemId, onUpdated }: Props) {
                   <div>
                     <span>Other stones</span>
                     <strong>
-                      {totalStonePieces} pcs · {totalStoneWeight.toFixed(3)} ct
+                      {totalStonePieces} pcs · {totalStoneWeight.toFixed(
+                        completeStones.every((stone) => stone.weightUnit.toLowerCase() === 'ct') ? 2 : 3,
+                      )} ct
                     </strong>
                   </div>
                 )}

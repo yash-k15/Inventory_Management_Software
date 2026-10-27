@@ -121,6 +121,7 @@ export default function ExhibitionSelections({
     direction: 'asc' | 'desc';
   }>({ key: 'added', direction: 'desc' });
   const scanRef = useRef<HTMLInputElement>(null),
+    scanInProgressRef = useRef(false),
     customer = customers.find((c) => c.id === selectedId) ?? null,
     active = useMemo(() => items.filter((i) => i.status === 'active'), [items]),
     removed = useMemo(
@@ -370,27 +371,55 @@ export default function ExhibitionSelections({
   }
   async function scan() {
     const code = barcode.trim();
-    if (!code) return;
-    setBarcode('');
-    const found =
-      results.find((i) => i.itemNumber.toLowerCase() === code.toLowerCase()) ??
-      (await searchSelectionInventory(exhibitionId, code)).find(
-        (i) => i.itemNumber.toLowerCase() === code.toLowerCase(),
-      );
-    if (!found) {
-      setFeedback({
-        error: true,
-        text: `Barcode ${code} was not found in this exhibition's registered inventory. No item was created.`,
-      });
+    if (!code || scanInProgressRef.current) return;
+    if (!customer) {
+      setFeedback({ error: true, text: 'Select a customer before scanning items.' });
       return;
     }
-    if (
-      active.some((i) => i.inventoryItemId === found.id) ||
-      staged.some((i) => i.id === found.id)
-    )
-      return;
-    setStaged((s) => [...s, found]);
-    setFeedback({ error: false, text: `${found.itemNumber} ready to add.` });
+
+    scanInProgressRef.current = true;
+    setBarcode('');
+    try {
+      const found =
+        results.find((i) => i.itemNumber.toLowerCase() === code.toLowerCase()) ??
+        (await searchSelectionInventory(exhibitionId, code)).find(
+          (i) => i.itemNumber.toLowerCase() === code.toLowerCase(),
+        );
+
+      if (!found) {
+        setFeedback({
+          error: true,
+          text: `Barcode ${code} was not found in this exhibition's registered inventory. No item was created.`,
+        });
+        return;
+      }
+
+      if (active.some((i) => i.inventoryItemId === found.id)) {
+        setFeedback({
+          error: true,
+          text: `${found.itemNumber} is already in this customer's selection.`,
+        });
+        return;
+      }
+
+      if (staged.some((i) => i.id === found.id)) {
+        setFeedback({
+          error: true,
+          text: `${found.itemNumber} is already waiting in the manual-add list. Add or clear that list before scanning it again.`,
+        });
+        return;
+      }
+
+      await add(found, false);
+    } catch (e) {
+      setFeedback({
+        error: true,
+        text: e instanceof Error ? e.message : `Unable to process barcode ${code}.`,
+      });
+    } finally {
+      scanInProgressRef.current = false;
+      if (scanning) scanRef.current?.focus();
+    }
   }
   async function saveBatch() {
     if (!customer || !staged.length) return;
@@ -430,12 +459,6 @@ export default function ExhibitionSelections({
     }
   }
   async function remove(item: SelectionRow) {
-    if (
-      !window.confirm(
-        `Remove ${item.itemNumber} from this customer's selection? The removal remains in history.`,
-      )
-    )
-      return;
     try {
       await removeSelectionItem(item.id);
       setFeedback({

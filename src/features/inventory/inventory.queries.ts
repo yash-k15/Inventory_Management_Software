@@ -345,7 +345,7 @@ export async function getInventoryItems(
 
       (
         SELECT GROUP_CONCAT(
-          st.name || ': ' ||
+          st.tag_label || ': ' ||
           printf('%.3f', s.weight_milli / 1000.0) || ' ' ||
           st.weight_unit ||
           ' (' || COALESCE(s.pieces, 0) || ' pcs)',

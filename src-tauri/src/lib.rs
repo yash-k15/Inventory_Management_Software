@@ -33,6 +33,66 @@ fn allow_image_preview(app: tauri::AppHandle, path: String) -> Result<(), String
         .map_err(|error| format!("Could not authorize image preview: {error}"))
 }
 
+
+#[tauri::command]
+fn print_tag_bitmap(bitmap: Vec<u8>) -> Result<String, String> {
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+
+    const EXPECTED_BITMAP_BYTES: usize = 100 * 104;
+    if bitmap.len() != EXPECTED_BITMAP_BYTES {
+        return Err(format!(
+            "Invalid tag bitmap: expected {EXPECTED_BITMAP_BYTES} bytes, received {}.",
+            bitmap.len()
+        ));
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let mut child = Command::new("lp")
+            .args(["-d", "TSC_TE244", "-o", "raw"])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|error| format!("Could not start macOS printing: {error}"))?;
+
+        let mut job = Vec::with_capacity(128 + EXPECTED_BITMAP_BYTES);
+        job.extend_from_slice(
+            b"SIZE 100 mm,13 mm\r\nGAP 3 mm,0 mm\r\nSPEED 2\r\nDENSITY 13\r\nSET RIBBON ON\r\nDIRECTION 0,0\r\nREFERENCE 0,0\r\nOFFSET 0 mm\r\nSET PEEL OFF\r\nSET CUTTER OFF\r\nSET PARTIAL_CUTTER OFF\r\nSET TEAR ON\r\nCLS\r\nBITMAP 0,0,100,104,1,"
+        );
+        job.extend_from_slice(&bitmap);
+        job.extend_from_slice(b"\r\nPRINT 1,1\r\n");
+
+        if let Some(mut stdin) = child.stdin.take() {
+            stdin.write_all(&job).map_err(|error| format!("Could not send tag data to the print queue: {error}"))?;
+        }
+
+        let output = child.wait_with_output().map_err(|error| format!("Could not finish submitting the print job: {error}"))?;
+        if !output.status.success() {
+            let details = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            return Err(if details.is_empty() {
+                format!("macOS printing failed with status {}.", output.status)
+            } else {
+                format!("macOS printing failed: {details}")
+            });
+        }
+
+        let message = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        Ok(if message.is_empty() {
+            "Tag print job submitted to TSC_TE244.".to_string()
+        } else {
+            message
+        })
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = bitmap;
+        Err("Direct tag printing is currently configured for macOS and the TSC_TE244 queue.".to_string())
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let initial_schema = include_str!("../../src/db/migrations/001_initial_schema.sql");
@@ -96,6 +156,7 @@ pub fn run() {
     let builder = builder.invoke_handler(tauri::generate_handler![
         greet,
         allow_image_preview,
+        print_tag_bitmap,
         item_number::preview_item_number,
         item_number::create_item,
         item_number::update_item,
@@ -116,6 +177,7 @@ pub fn run() {
     let builder = builder.invoke_handler(tauri::generate_handler![
         greet,
         allow_image_preview,
+        print_tag_bitmap,
         item_number::update_item,
         item_number::preview_item_number,
         item_number::create_item,

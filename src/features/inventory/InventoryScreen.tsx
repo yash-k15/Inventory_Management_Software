@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import { appDataDir, join } from '@tauri-apps/api/path';
 import './InventoryScreen.css';
+import JewelryTagPreview from '../tags/JewelryTagPreview';
 
 import InventoryFilters, {
   getActiveInventoryFilterChips,
@@ -48,6 +49,8 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [imageUrls, setImageUrls] = useState<Record<number, string>>({});
   const [previewImage, setPreviewImage] = useState<{ itemId: number; url: string; left: number; top: number } | null>(null);
+  const [selectedTagItemIds, setSelectedTagItemIds] = useState<Set<number>>(() => new Set());
+  const [tagPreviewItems, setTagPreviewItems] = useState<InventoryItem[] | null>(null);
 
   const [filterOptions, setFilterOptions] =
     useState<InventoryFilterOptions | null>(null);
@@ -73,6 +76,9 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
   const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
   const pageStartIndex = (currentPage - 1) * pageSize;
   const paginatedItems = items.slice(pageStartIndex, pageStartIndex + pageSize);
+  const selectedTagItems = items.filter((item) => selectedTagItemIds.has(item.id));
+  const allFilteredItemsSelected = items.length > 0 && items.every((item) => selectedTagItemIds.has(item.id));
+  const someFilteredItemsSelected = items.some((item) => selectedTagItemIds.has(item.id));
   const firstVisibleItem = items.length === 0 ? 0 : pageStartIndex + 1;
   const lastVisibleItem = Math.min(pageStartIndex + pageSize, items.length);
 
@@ -350,6 +356,24 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
     }
   };
 
+  const toggleTagItem = (itemId: number) => {
+    setSelectedTagItemIds((current) => {
+      const next = new Set(current);
+      if (next.has(itemId)) next.delete(itemId);
+      else next.add(itemId);
+      return next;
+    });
+  };
+
+  const toggleAllFilteredTagItems = () => {
+    setSelectedTagItemIds((current) => {
+      const next = new Set(current);
+      if (allFilteredItemsSelected) items.forEach((item) => next.delete(item.id));
+      else items.forEach((item) => next.add(item.id));
+      return next;
+    });
+  };
+
   const activeItemsCount = items.filter((item) => item.isArchived === 0).length;
 
   return (
@@ -480,6 +504,16 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
 
         <button
           type='button'
+          className='inventory-toolbar-button inventory-print-tags-button'
+          onClick={() => setTagPreviewItems(selectedTagItems)}
+          disabled={selectedTagItems.length === 0}
+          title={selectedTagItems.length ? `Preview ${selectedTagItems.length} selected tags` : 'Select items to preview tags'}
+        >
+          Print tags{selectedTagItems.length > 0 ? ` (${selectedTagItems.length})` : ''}
+        </button>
+
+        <button
+          type='button'
           className='inventory-add-button'
           onClick={onAddItem}
         >
@@ -601,7 +635,7 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
             <table className='inventory-table'>
               <thead>
                 <tr>
-                  <th scope='col' className='inventory-serial-heading'>S.No.</th>
+                  <th scope='col' className='inventory-serial-heading inventory-select-heading'><label title={allFilteredItemsSelected ? 'Deselect all filtered items' : 'Select all filtered items'}><input type='checkbox' aria-label='Select all filtered inventory items for tag printing' checked={allFilteredItemsSelected} ref={(element) => { if (element) element.indeterminate = someFilteredItemsSelected && !allFilteredItemsSelected; }} onChange={toggleAllFilteredTagItems} /></label></th>
                   <th scope='col'>
                     <button type='button' className='inventory-sort-heading' onClick={() => handleColumnSort('itemNumber')} aria-label={`Sort by item number${getColumnSortIndicator('itemNumber')}`}>
                       Item{getColumnSortIndicator('itemNumber')}
@@ -640,6 +674,7 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
                   <th scope='col'>IGI</th>
                   <th scope='col'>HUID</th>
                   <th scope='col'>Status</th>
+                  <th scope='col'>Tag selected</th>
                 </tr>
               </thead>
 
@@ -656,7 +691,7 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
                       className='inventory-table-row'
                       onClick={() => onViewItem(item.id)}
                     >
-                      <td className='inventory-serial-cell'>{pageStartIndex + index + 1}</td>
+                      <td className='inventory-serial-cell inventory-select-cell'><input type='checkbox' aria-label={`Select ${item.itemNumber} for tag printing`} checked={selectedTagItemIds.has(item.id)} onClick={(event) => event.stopPropagation()} onChange={() => toggleTagItem(item.id)} /> <span>{pageStartIndex + index + 1}</span></td>
                       <td className='inventory-item-column'>
                         <div className='inventory-item-cell'>
                           {imageUrls[item.id] ? (
@@ -776,6 +811,9 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
                           {item.isArchived === 1 ? 'Archived' : 'Active'}
                         </span>
                       </td>
+                      <td className='inventory-tag-selection-cell'>
+                        {selectedTagItemIds.has(item.id) ? 'Selected' : '—'}
+                      </td>
                     </tr>
                   );
                 })}
@@ -813,6 +851,10 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
           </div>
         )}
       </section>
+
+      {tagPreviewItems && tagPreviewItems.length > 0 && (
+        <JewelryTagPreview items={tagPreviewItems} onClose={() => setTagPreviewItems(null)} />
+      )}
 
       {previewImage && (
         <div

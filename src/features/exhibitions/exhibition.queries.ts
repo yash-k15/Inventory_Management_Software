@@ -367,8 +367,9 @@ export async function getExhibitionInventory(
         CASE WHEN ei.item_id IS NULL THEN 0 ELSE 1 END AS isRegistered,
         (
           SELECT GROUP_CONCAT(
-            ds.name || ' · ' || printf('%.3f', d.weight_milli / 1000.0) || ' ct' ||
-            char(10) || COALESCE(d.pieces, 0) || ' pcs',
+            ds.code || ': ' ||
+            printf('%.3f', d.weight_milli / 1000.0) || ' ct' ||
+            ' (' || COALESCE(d.pieces, 0) || ' pcs)',
             char(10)
           )
           FROM item_diamond d
@@ -377,7 +378,10 @@ export async function getExhibitionInventory(
         ) AS diamondDetails,
         (
           SELECT GROUP_CONCAT(
-            st.name || ' · ' || printf('%.3f', s.weight_milli / 1000.0) || ' ' || st.weight_unit,
+            st.tag_label || ': ' ||
+            printf('%.3f', s.weight_milli / 1000.0) || ' ' ||
+            st.weight_unit ||
+            ' (' || COALESCE(s.pieces, 0) || ' pcs)',
             char(10)
           )
           FROM item_stone s

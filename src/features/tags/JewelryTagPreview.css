@@ -1,0 +1,426 @@
+.tag-preview-overlay {
+  position   : fixed;
+  inset      : 0;
+  z-index    : 1200;
+  display    : grid;
+  place-items: center;
+  padding    : 24px;
+  background : rgb(24 20 17 / 55%);
+}
+
+.tag-preview-dialog {
+  width        : min(1100px, 100%);
+  max-height   : min(90vh, 900px);
+  overflow     : auto;
+  padding      : 24px;
+  border       : 1px solid #e6ddd3;
+  border-radius: 18px;
+  background   : #fffdfb;
+  color        : #302823;
+  box-shadow   : 0 24px 80px rgb(0 0 0 / 24%);
+}
+
+.tag-preview-header,
+.tag-preview-footer {
+  display        : flex;
+  align-items    : flex-start;
+  justify-content: space-between;
+  gap            : 20px;
+}
+
+.tag-preview-header h2 {
+  margin        : 0;
+  font-size     : 24px;
+  font-weight   : 600;
+  letter-spacing: -0.4px;
+}
+
+.tag-preview-header p,
+.tag-preview-footer p {
+  margin   : 6px 0 0;
+  color    : #766d65;
+  font-size: 13px;
+}
+
+.tag-preview-close {
+  width        : 36px;
+  height       : 36px;
+  border       : 1px solid #e2d8ce;
+  border-radius: 9px;
+  background   : #fff;
+  color        : #40362e;
+  font-size    : 25px;
+  cursor       : pointer;
+}
+
+.tag-preview-count-picker {
+  display    : flex;
+  align-items: center;
+  flex-wrap  : wrap;
+  gap        : 8px;
+  margin     : 24px 0 18px;
+}
+
+.tag-preview-count-picker>span {
+  margin-right: 8px;
+  color       : #64584e;
+  font-size   : 13px;
+  font-weight : 600;
+}
+
+.tag-preview-count-picker button {
+  width        : 36px;
+  height       : 36px;
+  border       : 1px solid #ded2c4;
+  border-radius: 9px;
+  background   : #fff;
+  color        : #40362e;
+  font-weight  : 600;
+  cursor       : pointer;
+}
+
+.tag-preview-count-picker button.is-active {
+  border-color: #72533d;
+  background  : #72533d;
+  color       : #fff;
+}
+
+.tag-preview-canvas-wrap {
+  overflow-x   : auto;
+  padding      : 18px;
+  border       : 1px solid #e9e1d8;
+  border-radius: 12px;
+  background   : #f3f0ed;
+}
+
+.tag-preview-scale-note {
+  margin-bottom: 10px;
+  color        : #776e66;
+  font-size    : 12px;
+}
+
+.jewelry-tag-preview {
+  display     : block;
+  width       : 100%;
+  min-width   : 780px;
+  height      : auto;
+  aspect-ratio: 13 / 1;
+  background  : #fff;
+  box-shadow  : 0 2px 8px rgb(0 0 0 / 10%);
+}
+
+.tag-preview-item-code {
+  font-family: Arial, sans-serif;
+  font-size  : 18px;
+
+  fill: #000;
+}
+
+.tag-preview-gold-weight {
+  font-family: 'Arial', sans-serif;
+  font-size  : 18px;
+  font-weight: 400;
+  fill       : #000;
+}
+
+.tag-preview-detail-row {
+  font-family: 'Arial', monospace !important;
+  font-size  : 16px !important;
+  font-weight: 400;
+  fill       : #000;
+}
+
+.tag-preview-front-detail {
+  font-family: 'Arial', sans-serif;
+  font-size  : 18px !important;
+  font-weight: 400;
+  fill       : #000;
+}
+
+.tag-preview-footer {
+  align-items: center;
+  margin-top : 20px;
+}
+
+.tag-preview-footer p {
+  max-width  : 700px;
+  line-height: 1.5;
+}
+
+.tag-preview-done {
+  flex         : 0 0 auto;
+  padding      : 10px 18px;
+  border       : 0;
+  border-radius: 9px;
+  background   : #72533d;
+  color        : #fff;
+  font-weight  : 600;
+  cursor       : pointer;
+}
+
+.tag-preview-footer-actions {
+  display        : flex;
+  justify-content: flex-end;
+  gap            : 8px;
+  width          : 100%;
+}
+
+@media (max-width: 640px) {
+  .tag-preview-overlay {
+    padding: 10px;
+  }
+
+  .tag-preview-dialog {
+    padding: 16px;
+  }
+
+  .tag-preview-header h2 {
+    font-size: 20px;
+  }
+
+  .tag-preview-footer {
+    align-items   : stretch;
+    flex-direction: column;
+  }
+
+  .tag-preview-done {
+    width: 100%;
+  }
+}
+
+/* Multi-tag preview: show five full-width tag cards per page. */
+.tag-preview-dialog {
+  width     : min(1200px, 100%);
+  max-height: min(92vh, 1000px);
+}
+
+.tag-preview-navigation-count {
+  font-weight: 600;
+  color      : #64584e !important;
+}
+
+.tag-preview-items {
+  display       : flex;
+  flex-direction: column;
+  gap           : 14px;
+  margin-top    : 20px;
+}
+
+.tag-preview-item-card {
+  min-width    : 0;
+  padding      : 16px;
+  border       : 1px solid #e6ddd3;
+  border-radius: 12px;
+  background   : #fff;
+}
+
+.tag-preview-item-header {
+  display        : flex;
+  align-items    : center;
+  justify-content: space-between;
+  margin-bottom  : 12px;
+}
+
+.tag-preview-item-header h3 {
+  margin     : 0;
+  color      : #302823;
+  font-size  : 17px;
+  font-weight: 700;
+}
+
+.tag-preview-item-header p {
+  margin   : 3px 0 0;
+  color    : #766d65;
+  font-size: 12px;
+}
+
+.tag-preview-item-card .tag-preview-count-picker {
+  margin: 0 0 12px;
+}
+
+.tag-preview-item-card .tag-preview-count-picker button {
+  width : 32px;
+  height: 32px;
+}
+
+.tag-preview-item-card .tag-preview-canvas-wrap {
+  padding: 10px;
+}
+
+.tag-preview-item-card .jewelry-tag-preview {
+  min-width: 0;
+}
+
+.tag-preview-item-card .tag-preview-scale-note {
+  margin-bottom: 6px;
+}
+
+.tag-preview-item-card .tag-preview-footer {
+  display    : flex;
+  align-items: center;
+  gap        : 12px;
+  margin-top : 10px;
+}
+
+.tag-preview-item-card .tag-preview-footer p {
+  margin: 0;
+}
+
+.tag-preview-item-card .tag-preview-footer-actions {
+  width: auto;
+  flex : 0 0 auto;
+}
+
+.tag-preview-pagination {
+  display        : flex;
+  align-items    : center;
+  justify-content: center;
+  gap            : 16px;
+  padding-top    : 18px;
+  margin-top     : 18px;
+  border-top     : 1px solid #e9e1d8;
+}
+
+.tag-preview-pagination>span {
+  min-width  : 90px;
+  color      : #64584e;
+  font-size  : 13px;
+  font-weight: 600;
+  text-align : center;
+}
+
+.tag-preview-done:disabled {
+  opacity: 0.45;
+  cursor : not-allowed;
+}
+
+.tag-preview-secondary {
+  border    : 1px solid #ded2c4;
+  background: #fff;
+  color     : #40362e;
+}
+
+@media (max-width: 640px) {
+  .tag-preview-item-card {
+    padding: 10px;
+  }
+
+  .tag-preview-item-card .tag-preview-footer {
+    align-items   : stretch;
+    flex-direction: column;
+  }
+
+  .tag-preview-item-card .tag-preview-footer-actions {
+    width: 100%;
+  }
+
+  .tag-preview-pagination {
+    gap: 8px;
+  }
+
+  .tag-preview-pagination .tag-preview-done {
+    width  : auto;
+    padding: 9px 12px;
+  }
+}
+
+/* Keep off-page cards mounted so the single print action can print every tag. */
+.tag-preview-item-card.is-hidden {
+  display: none;
+}
+
+.tag-preview-pagination {
+  flex-wrap: wrap;
+}
+
+.tag-preview-print-all {
+  margin-left: auto;
+}
+
+.tag-preview-item-card .tag-preview-footer {
+  display   : block;
+  margin-top: 8px;
+}
+
+.tag-preview-item-card .tag-preview-footer p {
+  max-width  : none;
+  line-height: 1.4;
+}
+
+@media (max-width: 640px) {
+  .tag-preview-print-all {
+    margin-left: 0;
+  }
+}
+
+/* Keep the item identity, detail controls, and remove action on one header row. */
+.tag-preview-item-header {
+  display        : flex;
+  align-items    : center;
+  justify-content: space-between;
+  gap            : 16px;
+}
+
+.tag-preview-card-controls {
+  display        : flex;
+  align-items    : center;
+  justify-content: center;
+  gap            : 12px;
+  flex           : 1;
+  min-width      : 0;
+}
+
+.tag-preview-remove-item {
+  margin-left: auto;
+}
+
+.tag-preview-item-card .tag-preview-count-picker {
+  margin: 0;
+}
+
+.tag-preview-item-card .tag-preview-count-picker>span {
+  white-space: nowrap;
+}
+
+.tag-preview-remove-item {
+  display      : inline-grid;
+  place-items  : center;
+  flex         : 0 0 32px;
+  width        : 32px;
+  height       : 32px;
+  border       : 1px solid #e6d8ce;
+  border-radius: 50%;
+  background   : #fff;
+  color        : #72533d;
+  font-size    : 23px;
+  line-height  : 1;
+  cursor       : pointer;
+}
+
+.tag-preview-remove-item:hover {
+  border-color: #b42318;
+  background  : #fff5f4;
+  color       : #b42318;
+}
+
+@media (max-width: 640px) {
+
+  .tag-preview-item-header,
+  .tag-preview-card-controls {
+    align-items: flex-start;
+  }
+
+  .tag-preview-item-header {
+    flex-direction: column;
+  }
+
+  .tag-preview-card-controls {
+    width          : 100%;
+    flex           : 0 0 auto;
+    justify-content: space-between;
+  }
+
+  .tag-preview-item-card .tag-preview-count-picker {
+    flex-wrap: wrap;
+  }
+}

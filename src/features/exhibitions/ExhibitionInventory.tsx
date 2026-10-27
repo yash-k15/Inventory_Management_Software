@@ -3,6 +3,8 @@ import type { MouseEvent } from 'react';
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import { appDataDir, join } from '@tauri-apps/api/path';
 import './ExhibitionInventory.css';
+import JewelryTagPreview from '../tags/JewelryTagPreview';
+import type { InventoryItem } from '../inventory/inventory.types';
 import type { ExhibitionInventoryRow } from './exhibition.queries';
 import {
   getExhibitionInventory,
@@ -87,12 +89,9 @@ export default function ExhibitionInventory({
   const [registeredCategoryIds, setRegisteredCategoryIds] = useState<number[]>(
     [],
   );
-  const [availableSelectedIds, setAvailableSelectedIds] = useState<number[]>(
-    [],
-  );
-  const [registeredSelectedIds, setRegisteredSelectedIds] = useState<number[]>(
-    [],
-  );
+  // One shared row selection drives both tag printing and inventory actions.
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [showTagPreview, setShowTagPreview] = useState(false);
   const [busy, setBusy] = useState(false);
   const [sort, setSort] = useState<SortState>({
     key: 'itemNumber',
@@ -140,6 +139,21 @@ export default function ExhibitionInventory({
   const registeredItems = useMemo(
     () => items.filter((item) => Boolean(item.isRegistered)),
     [items],
+  );
+  const tagPreviewItems = useMemo<InventoryItem[]>(
+    () =>
+      items
+        .filter((item) => selectedIds.includes(item.id))
+        .map((item) => ({
+          ...item,
+          diamondDetails: item.diamondDetails,
+          stoneDetails: item.stoneDetails,
+          purityName: null,
+          purityPercentBp: null,
+          notes: null,
+          customValues: '',
+        })),
+    [items, selectedIds],
   );
   const matchesSearch = useCallback(
     (item: ExhibitionInventoryRow) => {
@@ -199,11 +213,8 @@ export default function ExhibitionInventory({
     [registeredItems, registeredCategoryIds, matchesSearch],
   );
 
-  function toggleSelected(id: number, checked: boolean, registered: boolean) {
-    const setter = registered
-      ? setRegisteredSelectedIds
-      : setAvailableSelectedIds;
-    setter((ids) =>
+  function toggleSelected(id: number, checked: boolean) {
+    setSelectedIds((ids) =>
       checked
         ? ids.includes(id)
           ? ids
@@ -224,7 +235,7 @@ export default function ExhibitionInventory({
         kind: 'success',
         text: `${added} item${added === 1 ? '' : 's'} registered for this exhibition.`,
       });
-      setAvailableSelectedIds([]);
+      setSelectedIds([]);
       await loadItems();
       await onInventoryChanged?.();
     } catch (error) {
@@ -276,7 +287,7 @@ export default function ExhibitionInventory({
           failed += 1;
         }
       }
-      setRegisteredSelectedIds([]);
+      setSelectedIds([]);
       await loadItems();
       if (removed > 0) await onInventoryChanged?.();
       if (failed) {
@@ -369,7 +380,7 @@ export default function ExhibitionInventory({
     rows: ExhibitionInventoryRow[],
     registered: boolean,
   ) {
-    const selected = registered ? registeredSelectedIds : availableSelectedIds;
+    const selected = selectedIds;
     const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
     const safeCurrentPage = Math.min(currentPage, pageCount);
     const pageRows = rows.slice(
@@ -378,18 +389,20 @@ export default function ExhibitionInventory({
     );
     const firstRow = rows.length ? (safeCurrentPage - 1) * pageSize + 1 : 0;
     const lastRow = Math.min(safeCurrentPage * pageSize, rows.length);
+    // Checked items with active customer selections remain printable, but are
+    // excluded from removal counts and removal actions.
     const selectable = rows.filter(
       (item) => !registered || item.selectionCount === 0,
     );
-    const selectedVisibleCount = rows.filter((item) =>
-      selected.includes(item.id),
-    ).length;
     const selectedVisibleIds = rows
       .filter((item) => selected.includes(item.id))
       .map((item) => item.id);
+    const removableSelectedIds = rows
+      .filter((item) => selected.includes(item.id) && (!registered || item.selectionCount === 0))
+      .map((item) => item.id);
+    const selectedVisibleCount = removableSelectedIds.length;
     const allSelected =
-      selectable.length > 0 &&
-      selectable.every((item) => selected.includes(item.id));
+      rows.length > 0 && rows.every((item) => selected.includes(item.id));
     const grossTotal = rows.reduce(
       (sum, item) => sum + (item.grossWeightMilli ?? 0),
       0,
@@ -472,25 +485,14 @@ export default function ExhibitionInventory({
                       aria-label='Select all visible items'
                       type='checkbox'
                       checked={allSelected}
-                      disabled={!selectable.length || busy || exhibitionEnded}
-                      onChange={(event) => {
-                        const setter = registered
-                          ? setRegisteredSelectedIds
-                          : setAvailableSelectedIds;
-                        setter((ids) =>
+                      disabled={!rows.length || busy || exhibitionEnded}
+                      onChange={(event) =>
+                        setSelectedIds((ids) =>
                           event.target.checked
-                            ? [
-                                ...new Set([
-                                  ...ids,
-                                  ...selectable.map((item) => item.id),
-                                ]),
-                              ]
-                            : ids.filter(
-                                (id) =>
-                                  !selectable.some((item) => item.id === id),
-                              ),
-                        );
-                      }}
+                            ? [...new Set([...ids, ...rows.map((item) => item.id)])]
+                            : ids.filter((id) => !rows.some((item) => item.id === id)),
+                        )
+                      }
                     />
                   </th>
                   <th className='exhibition-inventory-serial-column'>S.No.</th>
@@ -508,31 +510,23 @@ export default function ExhibitionInventory({
               <tbody>
                 {pageRows.map((item, index) => (
                   <tr key={item.id}>
-                    <td className='exhibition-inventory-serial-column'>{firstRow + index}</td>
                     <td className='exhibition-inventory-check-column'>
                       <input
                         type='checkbox'
                         aria-label={`Select ${item.itemNumber}`}
                         checked={selected.includes(item.id)}
-                        disabled={
-                          busy ||
-                          exhibitionEnded ||
-                          (registered && item.selectionCount > 0)
-                        }
+                        disabled={busy || exhibitionEnded}
                         title={
                           registered && item.selectionCount > 0
-                            ? 'Remove active customer selections first'
+                            ? 'Can be printed, but cannot be removed while customer selections are active'
                             : undefined
                         }
                         onChange={(event) =>
-                          toggleSelected(
-                            item.id,
-                            event.target.checked,
-                            registered,
-                          )
+                          toggleSelected(item.id, event.target.checked)
                         }
                       />
                     </td>
+                    <td className='exhibition-inventory-serial-column'>{firstRow + index}</td>
                     <td>
                       <div className='exhibition-inventory-item-cell'>
                         {item.imagePath ? (
@@ -634,28 +628,26 @@ export default function ExhibitionInventory({
             <input
               type='checkbox'
               checked={allSelected}
-              disabled={!selectable.length || busy || exhibitionEnded}
-              onChange={(event) => {
-                const setter = registered
-                  ? setRegisteredSelectedIds
-                  : setAvailableSelectedIds;
-                setter((ids) =>
+              disabled={!rows.length || busy || exhibitionEnded}
+              onChange={(event) =>
+                setSelectedIds((ids) =>
                   event.target.checked
-                    ? [
-                        ...new Set([
-                          ...ids,
-                          ...selectable.map((item) => item.id),
-                        ]),
-                      ]
-                    : ids.filter(
-                        (id) => !selectable.some((item) => item.id === id),
-                      ),
-                );
-              }}
+                    ? [...new Set([...ids, ...rows.map((item) => item.id)])]
+                    : ids.filter((id) => !rows.some((item) => item.id === id)),
+                )
+              }
             />{' '}
             Select all visible
           </label>
           <div className='exhibition-inventory-bulk-buttons'>
+            <button
+              type='button'
+              className='exhibition-overview-primary'
+              disabled={!selectedIds.length || loading || showTagPreview}
+              onClick={() => setShowTagPreview(true)}
+            >
+              Print tags ({selectedIds.length})
+            </button>
             {registered ? (
               <>
                 <button
@@ -674,7 +666,7 @@ export default function ExhibitionInventory({
                         ? 'Items with active customer selections cannot be removed.'
                         : 'Items cannot be removed while the exhibition is active.'
                   }
-                  onClick={() => void handleUnregisterMany(selectedVisibleIds)}
+                  onClick={() => void handleUnregisterMany(removableSelectedIds)}
                 >
                   Remove selected ({selectedVisibleCount})
                 </button>
@@ -730,6 +722,7 @@ export default function ExhibitionInventory({
   }
 
   return (
+    <>
     <section className='exhibition-inventory'>
       {exhibitionEnded && (
         <p className='exhibition-inventory-frozen'>
@@ -779,6 +772,16 @@ export default function ExhibitionInventory({
         {renderInventoryTable(sortedItems, activeTab === 'registered')}
       </div>
     </section>
+    {showTagPreview && tagPreviewItems.length > 0 && (
+      <JewelryTagPreview
+        items={tagPreviewItems}
+        onClose={() => {
+          setShowTagPreview(false);
+          setSelectedIds([]);
+        }}
+      />
+    )}
+    </>
   );
 }
 

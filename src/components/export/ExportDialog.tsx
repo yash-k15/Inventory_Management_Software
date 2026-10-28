@@ -17,6 +17,8 @@ type Props<T> = {
   configuration: ExportConfiguration<T>;
   /** Column keys selected when the dialog first opens. If omitted, each column's defaultVisible setting is used. */
   defaultSelectedColumns?: string[];
+  /** When supplied and non-empty, export only these explicitly selected records. */
+  selectedRows?: T[];
   onClose: () => void;
 };
 
@@ -224,7 +226,7 @@ function createDetailedColumns<T>(
   });
 }
 
-function ExportDialog<T>({ configuration, defaultSelectedColumns, onClose }: Props<T>) {
+function ExportDialog<T>({ configuration, defaultSelectedColumns, selectedRows, onClose }: Props<T>) {
   const [step, setStep] = useState<1 | 2>(1);
   const [format, setFormat] = useState<ExportFormat>('xlsx');
   const [scope, setScope] = useState<ExportScope>('filtered');
@@ -305,7 +307,9 @@ function ExportDialog<T>({ configuration, defaultSelectedColumns, onClose }: Pro
       }),
     [columns, separateDiamonds, separateStones],
   );
-  const previewRows = configuration.filteredRows.slice(0, 5);
+  const hasSelectedRows = Boolean(selectedRows?.length);
+  const rowsForPreview = hasSelectedRows ? selectedRows! : configuration.filteredRows;
+  const previewRows = rowsForPreview.slice(0, 5);
   const previewTotalsRow = includeTotals
     ? buildTotalsRow(
         previewRows,
@@ -399,8 +403,9 @@ function ExportDialog<T>({ configuration, defaultSelectedColumns, onClose }: Pro
     setBusy(true);
     setError(null);
     try {
-      const rows =
-        scope === 'all'
+      const rows = hasSelectedRows
+        ? selectedRows!
+        : scope === 'all'
           ? await configuration.getAllRows()
           : configuration.filteredRows;
       const selected = activeColumns.map(
@@ -687,16 +692,22 @@ function ExportDialog<T>({ configuration, defaultSelectedColumns, onClose }: Pro
                 <label>
                   Records
                   <select
-                    value={scope}
+                    value={hasSelectedRows ? 'selected' : scope}
+                    disabled={hasSelectedRows}
                     onChange={(event) =>
                       setScope(event.target.value as ExportScope)
                     }
                   >
-                    <option value='filtered'>
-                      Current filtered results (
-                      {configuration.filteredRows.length})
-                    </option>
-                    <option value='all'>All inventory records</option>
+                    {hasSelectedRows ? (
+                      <option value='selected'>Selected items ({selectedRows!.length})</option>
+                    ) : (
+                      <>
+                        <option value='filtered'>
+                          Current filtered results ({configuration.filteredRows.length})
+                        </option>
+                        <option value='all'>All inventory records</option>
+                      </>
+                    )}
                   </select>
                 </label>
                 {(format === 'pdf' || format === 'print') && (
@@ -851,8 +862,7 @@ function ExportDialog<T>({ configuration, defaultSelectedColumns, onClose }: Pro
                 <div>
                   <h3>Preview</h3>
                   <p>
-                    Sample of the first five filtered records. The final output
-                    uses your selected record scope.
+                    Sample of the first five records. The final output uses your selected record scope.
                   </p>
                 </div>
               </div>
@@ -927,9 +937,11 @@ function ExportDialog<T>({ configuration, defaultSelectedColumns, onClose }: Pro
         )}
         <footer className='export-footer'>
           <span>
-            {scope === 'all'
-              ? 'All inventory records'
-              : 'Current filtered results'}
+            {hasSelectedRows
+              ? `Selected items (${selectedRows!.length})`
+              : scope === 'all'
+                ? 'All inventory records'
+                : 'Current filtered results'}
             {' · '}
             {activeColumns.length} columns
           </span>

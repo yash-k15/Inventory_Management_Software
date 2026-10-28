@@ -1033,6 +1033,7 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
                 { field: 'itemNumber', direction: 'asc' },
               ),
           }}
+          selectedRows={selectedTagItems.length > 0 ? selectedTagItems : undefined}
           defaultSelectedColumns={[
             'itemNumber',
             'grossWeight',

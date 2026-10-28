@@ -3,6 +3,8 @@ import type { MouseEvent } from 'react';
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import { appDataDir, join } from '@tauri-apps/api/path';
 import './ExhibitionInventory.css';
+import ExportDialog from '../../components/export/ExportDialog';
+import { EXHIBITION_INVENTORY_EXPORT_COLUMNS } from './ExhibitionInventory.export';
 import JewelryTagPreview from '../tags/JewelryTagPreview';
 import type { InventoryItem } from '../inventory/inventory.types';
 import type { ExhibitionInventoryRow } from './exhibition.queries';
@@ -92,6 +94,7 @@ export default function ExhibitionInventory({
   // One shared row selection drives both tag printing and inventory actions.
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [showTagPreview, setShowTagPreview] = useState(false);
+  const [showExportDialog, setShowExportDialog] = useState(false);
   const [busy, setBusy] = useState(false);
   const [sort, setSort] = useState<SortState>({
     key: 'itemNumber',
@@ -453,17 +456,27 @@ export default function ExhibitionInventory({
               </button>
             ))}
           </div>
-          <label className='exhibition-inventory-search exhibition-inventory-search--inline'>
-            <span aria-hidden='true'>⌕</span>
-            <input
-              value={filters.search}
-              onChange={(e) =>
-                setFilters((f) => ({ ...f, search: e.target.value }))
-              }
-              placeholder='Search inventory…'
-              aria-label='Search inventory'
-            />
-          </label>
+          <div className='exhibition-inventory-search-row'>
+            <label className='exhibition-inventory-search exhibition-inventory-search--inline'>
+              <span aria-hidden='true'>⌕</span>
+              <input
+                value={filters.search}
+                onChange={(e) =>
+                  setFilters((f) => ({ ...f, search: e.target.value }))
+                }
+                placeholder='Search inventory…'
+                aria-label='Search inventory'
+              />
+            </label>
+            <button
+              type='button'
+              className='exhibition-overview-secondary'
+              onClick={() => setShowExportDialog(true)}
+              disabled={loading || !sortedItems.length}
+            >
+              Export
+            </button>
+          </div>
         </div>
         {loading ? (
           <div className='exhibition-inventory-empty'>Loading inventory…</div>
@@ -772,6 +785,45 @@ export default function ExhibitionInventory({
         {renderInventoryTable(sortedItems, activeTab === 'registered')}
       </div>
     </section>
+    {showExportDialog && (
+      <ExportDialog
+        configuration={{
+          title: activeTab === 'registered' ? 'Registered Exhibition Inventory' : 'Available Exhibition Inventory',
+          filename: activeTab === 'registered' ? 'registered-exhibition-inventory.xlsx' : 'available-exhibition-inventory.xlsx',
+          columns: EXHIBITION_INVENTORY_EXPORT_COLUMNS,
+          filteredRows: sortedItems,
+          getAllRows: async () => {
+            const source = activeTab === 'registered' ? registeredItems : availableItems;
+            return [...source].sort((a, b) => {
+              const valueFor = (item: ExhibitionInventoryRow): string | number => {
+                if (sort.key === 'diamondDetails' || sort.key === 'stoneDetails') {
+                  const totals = parseDetailWeights(item[sort.key]);
+                  return [...totals.entries()].reduce((sum, [unit, amount]) =>
+                    sum + (unit === 'ct' ? amount * 0.2 : unit === 'mg' ? amount / 1000 : amount), 0);
+                }
+                const value = item[sort.key];
+                return value == null ? '' : typeof value === 'number' ? value : String(value).toLocaleLowerCase();
+              };
+              const left = valueFor(a);
+              const right = valueFor(b);
+              const result = typeof left === 'number' && typeof right === 'number'
+                ? left - right
+                : String(left).localeCompare(String(right), undefined, { numeric: true, sensitivity: 'base' });
+              return (sort.direction === 'asc' ? result : -result);
+            });
+          },
+        }}
+        defaultSelectedColumns={[
+          'itemNumber',
+          'grossWeight',
+          'netWeight',
+          'diamondDetails',
+          'stoneDetails',
+          'igiCertificateNumber',
+        ]}
+        onClose={() => setShowExportDialog(false)}
+      />
+    )}
     {showTagPreview && tagPreviewItems.length > 0 && (
       <JewelryTagPreview
         items={tagPreviewItems}

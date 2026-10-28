@@ -301,6 +301,8 @@ export interface ExhibitionInventoryRow {
   isArchived: number;
   isRegistered: number;
   selectionCount: number;
+  diamondBreakdown?: Array<{ shapeCode: string; weightMilli: number; pieces: number }>;
+  stoneBreakdown?: Array<{ tagLabel: string; weightUnit: 'ct' | 'g'; weightMilli: number; pieces: number }>;
 }
 
 export interface ExhibitionInventoryFilters {
@@ -350,7 +352,7 @@ export async function getExhibitionInventory(
   const whereClause = conditions.length
     ? `WHERE ${conditions.join(' AND ')}`
     : '';
-  return database.select<ExhibitionInventoryRow[]>(
+  const rows = await database.select<ExhibitionInventoryRow[]>(
     `
       SELECT
         i.id,
@@ -402,6 +404,26 @@ export async function getExhibitionInventory(
     `,
     [exhibitionId, exhibitionId, ...params.slice(1)],
   );
+
+  return rows.map((row) => ({
+    ...row,
+    diamondBreakdown: row.diamondDetails
+      ? row.diamondDetails.split(/\r?\n/).flatMap((line) => {
+          const match = line.match(/^(.+?):\s*([\d,.]+)\s*ct\s*\((\d+)\s*pcs\)$/i);
+          return match
+            ? [{ shapeCode: match[1].trim(), weightMilli: Math.round(Number(match[2].replace(/,/g, '')) * 1000), pieces: Number(match[3]) }]
+            : [];
+        })
+      : [],
+    stoneBreakdown: row.stoneDetails
+      ? row.stoneDetails.split(/\r?\n/).flatMap((line) => {
+          const match = line.match(/^(.+?):\s*([\d,.]+)\s*(ct|g)\s*\((\d+)\s*pcs\)$/i);
+          return match
+            ? [{ tagLabel: match[1].trim(), weightUnit: match[3].toLowerCase() as 'ct' | 'g', weightMilli: Math.round(Number(match[2].replace(/,/g, '')) * 1000), pieces: Number(match[4]) }]
+            : [];
+        })
+      : [],
+  }));
 }
 
 export async function registerExhibitionItems(

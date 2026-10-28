@@ -56,7 +56,6 @@ function buildTotalsRow<T>(
     label: string;
     outputLabel: string;
     value: (row: T) => unknown;
-    total?: (rows: T[]) => string | number | null | undefined;
   }>,
 ): string[] {
   const totals = columns.map(() => '');
@@ -87,12 +86,7 @@ function buildTotalsRow<T>(
   sumWeightColumn('netWeight');
 
   columns.forEach((column, index) => {
-    if (column.total) {
-      const total = column.total(rows);
-      if (total !== null && total !== undefined && total !== '') {
-        totals[index] = String(total);
-      }
-    } else if (column.key === 'diamondDetails') {
+    if (column.key === 'diamondDetails') {
       const byShape = new Map<string, { weightMilli: number; pieces: number }>();
       rows.forEach((row) => {
         (getBreakdown(row).diamondBreakdown ?? []).forEach((entry) => {
@@ -319,12 +313,11 @@ function ExportDialog<T>({ configuration, defaultSelectedColumns, selectedRows, 
   const previewTotalsRow = includeTotals
     ? buildTotalsRow(
         previewRows,
-        activeColumns.map(({ key, label, value, outputLabel, total }) => ({
+        activeColumns.map(({ key, label, value, outputLabel }) => ({
           key,
           label,
           value,
           outputLabel,
-          total,
         })),
       )
     : null;
@@ -416,35 +409,22 @@ function ExportDialog<T>({ configuration, defaultSelectedColumns, selectedRows, 
           ? await configuration.getAllRows()
           : configuration.filteredRows;
       const selected = activeColumns.map(
-        ({ key, label, value, outputLabel, total }) => ({
+        ({ key, label, value, outputLabel }) => ({
           key,
           label,
           value: key === '__serial' ? (row: T) => rows.indexOf(row) + 1 : value,
           outputLabel,
-          total,
         }),
       );
       const totalsRow = includeTotals ? buildTotalsRow(rows, selected) : null;
-      const baseName = configuration.filename
-        .replace(/\.(xlsx|csv|pdf)$/i, '')
-        .replace(/[<>:\"/\\|?*\x00-\x1F]/g, '-')
-        .replace(/\s+/g, '-')
-        .replace(/-+/g, '-')
-        .replace(/^-|-$/g, '');
-      const now = new Date();
-      const exportDate = [
-        now.getFullYear(),
-        String(now.getMonth() + 1).padStart(2, '0'),
-        String(now.getDate()).padStart(2, '0'),
-      ].join('-');
-      const datedBaseName = `${baseName}-${exportDate}`;
+      const baseName = configuration.filename.replace(/\.(xlsx|csv|pdf)$/i, '');
       if (format === 'csv') {
         const csv = buildCsv(rows, selected);
         const csvWithTotals = totalsRow
           ? `${csv}\r\n${totalsRow.map(escapeCsv).join(',')}`
           : csv;
         await saveExportFile(
-          `${datedBaseName}.csv`,
+          `${baseName}.csv`,
           'csv',
           new TextEncoder().encode('\uFEFF' + csvWithTotals),
         );
@@ -545,7 +525,7 @@ function ExportDialog<T>({ configuration, defaultSelectedColumns, selectedRows, 
           type: 'array',
         }) as ArrayBuffer;
         await saveExportFile(
-          `${datedBaseName}.xlsx`,
+          `${baseName}.xlsx`,
           'xlsx',
           new Uint8Array(workbookBytes),
         );
@@ -559,12 +539,6 @@ function ExportDialog<T>({ configuration, defaultSelectedColumns, selectedRows, 
           40,
           53,
         );
-        // jsPDF's built-in fonts do not include the Indian rupee glyph. Use
-        // an ASCII-safe currency label in PDFs so it never renders as a wrong
-        // character; Excel/CSV and the on-screen preview retain the ₹ symbol.
-        const pdfCellText = (value: unknown) =>
-          cellText(value).replace(/₹/g, 'Rs. ');
-
         autoTable(pdf, {
           startY: 66,
           head: [selected.map((column) => column.outputLabel)],
@@ -573,10 +547,10 @@ function ExportDialog<T>({ configuration, defaultSelectedColumns, selectedRows, 
               selected.map((column) =>
                 column.key === '__serial'
                   ? String(rowIndex + 1)
-                  : pdfCellText(column.value(row)),
+                  : cellText(column.value(row)),
               ),
             ),
-            ...(totalsRow ? [totalsRow.map(pdfCellText)] : []),
+            ...(totalsRow ? [totalsRow] : []),
           ],
           didParseCell: (data) => {
             if (totalsRow && data.section === 'body' && data.row.index === rows.length) {
@@ -627,7 +601,7 @@ function ExportDialog<T>({ configuration, defaultSelectedColumns, selectedRows, 
           tableWidth: 'auto',
         });
         await saveExportFile(
-          `${datedBaseName}.pdf`,
+          `${baseName}.pdf`,
           'pdf',
           new Uint8Array(pdf.output('arraybuffer')),
         );

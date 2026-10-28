@@ -35,6 +35,41 @@ fn allow_image_preview(app: tauri::AppHandle, path: String) -> Result<(), String
 
 
 #[tauri::command]
+fn write_export_file(path: String, bytes: Vec<u8>) -> Result<(), String> {
+    std::fs::write(std::path::Path::new(&path), bytes)
+        .map_err(|error| format!("Could not save export file: {error}"))
+}
+
+
+#[tauri::command]
+fn open_print_preview(bytes: Vec<u8>) -> Result<(), String> {
+    use std::process::Command;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[cfg(target_os = "macos")]
+    {
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|error| format!("Could not create print preview filename: {error}"))?
+            .as_millis();
+        let path = std::env::temp_dir().join(format!("inventory-print-{timestamp}.pdf"));
+        std::fs::write(&path, bytes)
+            .map_err(|error| format!("Could not prepare print preview PDF: {error}"))?;
+        Command::new("open")
+            .arg(&path)
+            .spawn()
+            .map_err(|error| format!("Could not open the print preview PDF: {error}"))?;
+        Ok(())
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (bytes, Command::new("open"));
+        Err("Opening a print preview is currently configured for macOS.".to_string())
+    }
+}
+
+#[tauri::command]
 fn print_tag_bitmap(bitmap: Vec<u8>) -> Result<String, String> {
     use std::io::Write;
     use std::process::{Command, Stdio};
@@ -157,6 +192,8 @@ pub fn run() {
         greet,
         allow_image_preview,
         print_tag_bitmap,
+        write_export_file,
+        open_print_preview,
         item_number::preview_item_number,
         item_number::create_item,
         item_number::update_item,
@@ -178,6 +215,8 @@ pub fn run() {
         greet,
         allow_image_preview,
         print_tag_bitmap,
+        write_export_file,
+        open_print_preview,
         item_number::update_item,
         item_number::preview_item_number,
         item_number::create_item,

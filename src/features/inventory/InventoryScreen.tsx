@@ -3,6 +3,8 @@ import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import { appDataDir, join } from '@tauri-apps/api/path';
 import './InventoryScreen.css';
 import JewelryTagPreview from '../tags/JewelryTagPreview';
+import ExportDialog from '../../components/export/ExportDialog';
+import { INVENTORY_EXPORT_COLUMNS } from './inventory.export';
 
 import InventoryFilters, {
   getActiveInventoryFilterChips,
@@ -48,9 +50,19 @@ type Props = {
 function InventoryScreen({ onAddItem, onViewItem }: Props) {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [imageUrls, setImageUrls] = useState<Record<number, string>>({});
-  const [previewImage, setPreviewImage] = useState<{ itemId: number; url: string; left: number; top: number } | null>(null);
-  const [selectedTagItemIds, setSelectedTagItemIds] = useState<Set<number>>(() => new Set());
-  const [tagPreviewItems, setTagPreviewItems] = useState<InventoryItem[] | null>(null);
+  const [previewImage, setPreviewImage] = useState<{
+    itemId: number;
+    url: string;
+    left: number;
+    top: number;
+  } | null>(null);
+  const [selectedTagItemIds, setSelectedTagItemIds] = useState<Set<number>>(
+    () => new Set(),
+  );
+  const [tagPreviewItems, setTagPreviewItems] = useState<
+    InventoryItem[] | null
+  >(null);
+  const [showExportDialog, setShowExportDialog] = useState(false);
 
   const [filterOptions, setFilterOptions] =
     useState<InventoryFilterOptions | null>(null);
@@ -76,15 +88,22 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
   const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
   const pageStartIndex = (currentPage - 1) * pageSize;
   const paginatedItems = items.slice(pageStartIndex, pageStartIndex + pageSize);
-  const selectedTagItems = items.filter((item) => selectedTagItemIds.has(item.id));
-  const allFilteredItemsSelected = items.length > 0 && items.every((item) => selectedTagItemIds.has(item.id));
-  const someFilteredItemsSelected = items.some((item) => selectedTagItemIds.has(item.id));
+  const selectedTagItems = items.filter((item) =>
+    selectedTagItemIds.has(item.id),
+  );
+  const allFilteredItemsSelected =
+    items.length > 0 && items.every((item) => selectedTagItemIds.has(item.id));
+  const someFilteredItemsSelected = items.some((item) =>
+    selectedTagItemIds.has(item.id),
+  );
   const firstVisibleItem = items.length === 0 ? 0 : pageStartIndex + 1;
   const lastVisibleItem = Math.min(pageStartIndex + pageSize, items.length);
 
   const devMenuRef = useRef<HTMLDivElement>(null);
   const sortMenuRef = useRef<HTMLDivElement>(null);
-  const imagePreviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const imagePreviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
 
   const clearImagePreviewTimer = () => {
     if (imagePreviewTimerRef.current !== null) {
@@ -102,9 +121,10 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
     const rect = event.currentTarget.getBoundingClientRect();
     const previewWidth = Math.min(420, window.innerWidth - 32);
     const previewHeight = Math.min(560, window.innerHeight - 32);
-    const left = rect.right + previewWidth + 16 <= window.innerWidth
-      ? rect.right + 16
-      : Math.max(16, rect.left - previewWidth - 16);
+    const left =
+      rect.right + previewWidth + 16 <= window.innerWidth
+        ? rect.right + 16
+        : Math.max(16, rect.left - previewWidth - 16);
     const top = Math.min(
       Math.max(16, rect.top),
       Math.max(16, window.innerHeight - previewHeight - 16),
@@ -246,7 +266,11 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
     };
   }, [showSortMenu]);
 
-  const sortOptions: { label: string; field: InventorySortField | null; direction: 'asc' | 'desc' }[] = [
+  const sortOptions: {
+    label: string;
+    field: InventorySortField | null;
+    direction: 'asc' | 'desc';
+  }[] = [
     { label: 'Default', field: null, direction: 'asc' },
     { label: 'Latest', field: 'recentlyAdded', direction: 'desc' },
     { label: 'Oldest', field: 'recentlyAdded', direction: 'asc' },
@@ -263,9 +287,16 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
         : option.field === sort.field && option.direction === sort.direction,
     )?.label ?? 'Custom sort';
 
-  const applySortOption = (field: InventorySortField | null, direction: 'asc' | 'desc') => {
+  const applySortOption = (
+    field: InventorySortField | null,
+    direction: 'asc' | 'desc',
+  ) => {
     setCurrentPage(1);
-    setSort(field === null ? { field: 'itemNumber', direction: 'asc' } : { field, direction });
+    setSort(
+      field === null
+        ? { field: 'itemNumber', direction: 'asc' }
+        : { field, direction },
+    );
     setShowSortMenu(false);
   };
 
@@ -368,7 +399,8 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
   const toggleAllFilteredTagItems = () => {
     setSelectedTagItemIds((current) => {
       const next = new Set(current);
-      if (allFilteredItemsSelected) items.forEach((item) => next.delete(item.id));
+      if (allFilteredItemsSelected)
+        items.forEach((item) => next.delete(item.id));
       else items.forEach((item) => next.add(item.id));
       return next;
     });
@@ -427,21 +459,33 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
           </button>
 
           {showSortMenu && (
-            <div className='inventory-sort-panel' role='dialog' aria-label='Sort inventory'>
+            <div
+              className='inventory-sort-panel'
+              role='dialog'
+              aria-label='Sort inventory'
+            >
               {sortOptions.map((option) => {
-                const isActive = option.field === null
-                  ? sort.field === 'itemNumber' && sort.direction === 'asc'
-                  : sort.field === option.field && sort.direction === option.direction;
+                const isActive =
+                  option.field === null
+                    ? sort.field === 'itemNumber' && sort.direction === 'asc'
+                    : sort.field === option.field &&
+                      sort.direction === option.direction;
                 return (
                   <button
                     key={option.label}
                     type='button'
                     className={`inventory-sort-option${isActive ? ' is-active' : ''}`}
                     aria-pressed={isActive}
-                    onClick={() => applySortOption(option.field, option.direction)}
+                    onClick={() =>
+                      applySortOption(option.field, option.direction)
+                    }
                   >
                     <span>{option.label}</span>
-                    {isActive && <span className='inventory-sort-check' aria-hidden='true'>✓</span>}
+                    {isActive && (
+                      <span className='inventory-sort-check' aria-hidden='true'>
+                        ✓
+                      </span>
+                    )}
                   </button>
                 );
               })}
@@ -504,12 +548,27 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
 
         <button
           type='button'
+          className='inventory-toolbar-button inventory-export-button'
+          onClick={() => setShowExportDialog(true)}
+          disabled={isLoading || Boolean(error)}
+          title='Export or print inventory records'
+        >
+          Export<span aria-hidden='true'>⤓</span>
+        </button>
+
+        <button
+          type='button'
           className='inventory-toolbar-button inventory-print-tags-button'
           onClick={() => setTagPreviewItems(selectedTagItems)}
           disabled={selectedTagItems.length === 0}
-          title={selectedTagItems.length ? `Preview ${selectedTagItems.length} selected tags` : 'Select items to preview tags'}
+          title={
+            selectedTagItems.length
+              ? `Preview ${selectedTagItems.length} selected tags`
+              : 'Select items to preview tags'
+          }
         >
-          Print tags{selectedTagItems.length > 0 ? ` (${selectedTagItems.length})` : ''}
+          Print tags
+          {selectedTagItems.length > 0 ? ` (${selectedTagItems.length})` : ''}
         </button>
 
         <button
@@ -635,39 +694,92 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
             <table className='inventory-table'>
               <thead>
                 <tr>
-                  <th scope='col' className='inventory-serial-heading inventory-select-heading'><label title={allFilteredItemsSelected ? 'Deselect all filtered items' : 'Select all filtered items'}><input type='checkbox' aria-label='Select all filtered inventory items for tag printing' checked={allFilteredItemsSelected} ref={(element) => { if (element) element.indeterminate = someFilteredItemsSelected && !allFilteredItemsSelected; }} onChange={toggleAllFilteredTagItems} /></label></th>
+                  <th
+                    scope='col'
+                    className='inventory-serial-heading inventory-select-heading'
+                  >
+                    <label
+                      title={
+                        allFilteredItemsSelected
+                          ? 'Deselect all filtered items'
+                          : 'Select all filtered items'
+                      }
+                    >
+                      <input
+                        type='checkbox'
+                        aria-label='Select all filtered inventory items for tag printing'
+                        checked={allFilteredItemsSelected}
+                        ref={(element) => {
+                          if (element)
+                            element.indeterminate =
+                              someFilteredItemsSelected &&
+                              !allFilteredItemsSelected;
+                        }}
+                        onChange={toggleAllFilteredTagItems}
+                      />
+                    </label>
+                  </th>
                   <th scope='col'>
-                    <button type='button' className='inventory-sort-heading' onClick={() => handleColumnSort('itemNumber')} aria-label={`Sort by item number${getColumnSortIndicator('itemNumber')}`}>
+                    <button
+                      type='button'
+                      className='inventory-sort-heading'
+                      onClick={() => handleColumnSort('itemNumber')}
+                      aria-label={`Sort by item number${getColumnSortIndicator('itemNumber')}`}
+                    >
                       Item{getColumnSortIndicator('itemNumber')}
                     </button>
                   </th>
                   <th scope='col'>
-                    <button type='button' className='inventory-sort-heading' onClick={() => handleColumnSort('category')}>
+                    <button
+                      type='button'
+                      className='inventory-sort-heading'
+                      onClick={() => handleColumnSort('category')}
+                    >
                       Category{getColumnSortIndicator('category')}
                     </button>
                   </th>
                   <th scope='col'>
-                    <button type='button' className='inventory-sort-heading' onClick={() => handleColumnSort('grossWeight')}>
+                    <button
+                      type='button'
+                      className='inventory-sort-heading'
+                      onClick={() => handleColumnSort('grossWeight')}
+                    >
                       Gross wt.{getColumnSortIndicator('grossWeight')}
                     </button>
                   </th>
                   <th scope='col'>
-                    <button type='button' className='inventory-sort-heading' onClick={() => handleColumnSort('netWeight')}>
+                    <button
+                      type='button'
+                      className='inventory-sort-heading'
+                      onClick={() => handleColumnSort('netWeight')}
+                    >
                       Net wt.{getColumnSortIndicator('netWeight')}
                     </button>
                   </th>
                   <th scope='col'>
-                    <button type='button' className='inventory-sort-heading' onClick={() => handleColumnSort('diamondWeight')}>
+                    <button
+                      type='button'
+                      className='inventory-sort-heading'
+                      onClick={() => handleColumnSort('diamondWeight')}
+                    >
                       Diamonds{getColumnSortIndicator('diamondWeight')}
                     </button>
                   </th>
                   <th scope='col'>
-                    <button type='button' className='inventory-sort-heading' onClick={() => handleColumnSort('stoneWeight')}>
+                    <button
+                      type='button'
+                      className='inventory-sort-heading'
+                      onClick={() => handleColumnSort('stoneWeight')}
+                    >
                       Other stones{getColumnSortIndicator('stoneWeight')}
                     </button>
                   </th>
                   <th scope='col'>
-                    <button type='button' className='inventory-sort-heading' onClick={() => handleColumnSort('purity')}>
+                    <button
+                      type='button'
+                      className='inventory-sort-heading'
+                      onClick={() => handleColumnSort('purity')}
+                    >
                       Purity{getColumnSortIndicator('purity')}
                     </button>
                   </th>
@@ -691,7 +803,16 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
                       className='inventory-table-row'
                       onClick={() => onViewItem(item.id)}
                     >
-                      <td className='inventory-serial-cell inventory-select-cell'><input type='checkbox' aria-label={`Select ${item.itemNumber} for tag printing`} checked={selectedTagItemIds.has(item.id)} onClick={(event) => event.stopPropagation()} onChange={() => toggleTagItem(item.id)} /> <span>{pageStartIndex + index + 1}</span></td>
+                      <td className='inventory-serial-cell inventory-select-cell'>
+                        <input
+                          type='checkbox'
+                          aria-label={`Select ${item.itemNumber} for tag printing`}
+                          checked={selectedTagItemIds.has(item.id)}
+                          onClick={(event) => event.stopPropagation()}
+                          onChange={() => toggleTagItem(item.id)}
+                        />{' '}
+                        <span>{pageStartIndex + index + 1}</span>
+                      </td>
                       <td className='inventory-item-column'>
                         <div className='inventory-item-cell'>
                           {imageUrls[item.id] ? (
@@ -699,7 +820,13 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
                               className='inventory-item-image'
                               src={imageUrls[item.id]}
                               alt={`${item.itemNumber} jewelry design`}
-                              onMouseEnter={(event) => handleImageMouseEnter(item.id, imageUrls[item.id], event)}
+                              onMouseEnter={(event) =>
+                                handleImageMouseEnter(
+                                  item.id,
+                                  imageUrls[item.id],
+                                  event,
+                                )
+                              }
                               onMouseLeave={handleImageMouseLeave}
                               onError={(event) => {
                                 event.currentTarget.style.display = 'none';
@@ -822,9 +949,16 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
           </div>
         )}
         {!isLoading && !error && items.length > 0 && (
-          <div className='inventory-pagination' aria-label='Inventory table pagination'>
+          <div
+            className='inventory-pagination'
+            aria-label='Inventory table pagination'
+          >
             <div className='inventory-pagination-summary'>
-              Showing <strong>{firstVisibleItem}–{lastVisibleItem}</strong> of <strong>{items.length}</strong> items
+              Showing{' '}
+              <strong>
+                {firstVisibleItem}–{lastVisibleItem}
+              </strong>{' '}
+              of <strong>{items.length}</strong> items
             </div>
             <div className='inventory-pagination-controls'>
               <label className='inventory-page-size'>
@@ -842,18 +976,80 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
                   <option value={100}>100</option>
                 </select>
               </label>
-              <span className='inventory-page-indicator'>Page {currentPage} of {totalPages}</span>
-              <button type='button' className='inventory-page-button' onClick={() => setCurrentPage(1)} disabled={currentPage === 1} aria-label='First page'>«</button>
-              <button type='button' className='inventory-page-button' onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} disabled={currentPage === 1}>Previous</button>
-              <button type='button' className='inventory-page-button' onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))} disabled={currentPage >= totalPages}>Next</button>
-              <button type='button' className='inventory-page-button' onClick={() => setCurrentPage(totalPages)} disabled={currentPage >= totalPages} aria-label='Last page'>»</button>
+              <span className='inventory-page-indicator'>
+                Page {currentPage} of {totalPages}
+              </span>
+              <button
+                type='button'
+                className='inventory-page-button'
+                onClick={() => setCurrentPage(1)}
+                disabled={currentPage === 1}
+                aria-label='First page'
+              >
+                «
+              </button>
+              <button
+                type='button'
+                className='inventory-page-button'
+                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                disabled={currentPage === 1}
+              >
+                Previous
+              </button>
+              <button
+                type='button'
+                className='inventory-page-button'
+                onClick={() =>
+                  setCurrentPage((page) => Math.min(totalPages, page + 1))
+                }
+                disabled={currentPage >= totalPages}
+              >
+                Next
+              </button>
+              <button
+                type='button'
+                className='inventory-page-button'
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={currentPage >= totalPages}
+                aria-label='Last page'
+              >
+                »
+              </button>
             </div>
           </div>
         )}
       </section>
 
+      {showExportDialog && (
+        <ExportDialog
+          configuration={{
+            title: 'Inventory Export',
+            filename: 'inventory.xlsx',
+            columns: INVENTORY_EXPORT_COLUMNS,
+            filteredRows: items,
+            getAllRows: () =>
+              getInventoryItems(
+                { ...INITIAL_INVENTORY_FILTERS },
+                { field: 'itemNumber', direction: 'asc' },
+              ),
+          }}
+          defaultSelectedColumns={[
+            'itemNumber',
+            'grossWeight',
+            'netWeight',
+            'diamondDetails',
+            'stoneDetails',
+            'igiCertificateNumber',
+          ]}
+          onClose={() => setShowExportDialog(false)}
+        />
+      )}
+
       {tagPreviewItems && tagPreviewItems.length > 0 && (
-        <JewelryTagPreview items={tagPreviewItems} onClose={() => setTagPreviewItems(null)} />
+        <JewelryTagPreview
+          items={tagPreviewItems}
+          onClose={() => setTagPreviewItems(null)}
+        />
       )}
 
       {previewImage && (

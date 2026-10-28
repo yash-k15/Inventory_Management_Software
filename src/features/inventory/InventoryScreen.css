@@ -969,3 +969,6 @@
   border-color: #79582f;
   background: #f6efe5;
 }
+
+.inventory-export-button{border-color:#957044;color:#79582f;font-weight:600}
+.inventory-export-button:hover:not(:disabled){border-color:#79582f;background:#f6efe5}

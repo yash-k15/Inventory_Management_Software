@@ -366,7 +366,81 @@ export async function getInventoryItems(
       i.item_number COLLATE NOCASE ASC
   `;
 
-  return database.select<InventoryItem[]>(sql, params);
+  const items = await database.select<InventoryItem[]>(sql, params);
+  if (!items.length) return items;
+
+  const itemIds = items.map((item) => item.id);
+  const placeholders = itemIds.map(() => '?').join(', ');
+
+  const [diamondRows, stoneRows] = await Promise.all([
+    database.select<Array<{
+      itemId: number;
+      shapeCode: string;
+      weightMilli: number;
+      pieces: number;
+    }>>(
+      `SELECT
+         d.item_id AS itemId,
+         ds.code AS shapeCode,
+         COALESCE(SUM(d.weight_milli), 0) AS weightMilli,
+         COALESCE(SUM(COALESCE(d.pieces, 0)), 0) AS pieces
+       FROM item_diamond d
+       JOIN diamond_shape ds ON ds.id = d.shape_id
+       WHERE d.item_id IN (${placeholders})
+       GROUP BY d.item_id, d.shape_id, ds.code
+       ORDER BY ds.sort_order ASC, ds.code COLLATE NOCASE ASC`,
+      itemIds,
+    ),
+    database.select<Array<{
+      itemId: number;
+      tagLabel: string;
+      weightUnit: 'ct' | 'g';
+      weightMilli: number;
+      pieces: number;
+    }>>(
+      `SELECT
+         s.item_id AS itemId,
+         st.tag_label AS tagLabel,
+         st.weight_unit AS weightUnit,
+         COALESCE(SUM(s.weight_milli), 0) AS weightMilli,
+         COALESCE(SUM(COALESCE(s.pieces, 0)), 0) AS pieces
+       FROM item_stone s
+       JOIN stone_type st ON st.id = s.stone_type_id
+       WHERE s.item_id IN (${placeholders})
+       GROUP BY s.item_id, s.stone_type_id, st.tag_label, st.weight_unit
+       ORDER BY st.sort_order ASC, st.tag_label COLLATE NOCASE ASC`,
+      itemIds,
+    ),
+  ]);
+
+  const diamondsByItem = new Map<number, NonNullable<InventoryItem['diamondBreakdown']>>();
+  for (const diamond of diamondRows) {
+    const list = diamondsByItem.get(diamond.itemId) ?? [];
+    list.push({
+      shapeCode: diamond.shapeCode,
+      weightMilli: diamond.weightMilli,
+      pieces: diamond.pieces,
+    });
+    diamondsByItem.set(diamond.itemId, list);
+  }
+
+  const stonesByItem = new Map<number, NonNullable<InventoryItem['stoneBreakdown']>>();
+  for (const stone of stoneRows) {
+    const list = stonesByItem.get(stone.itemId) ?? [];
+    list.push({
+      tagLabel: stone.tagLabel,
+      weightUnit: stone.weightUnit,
+      weightMilli: stone.weightMilli,
+      pieces: stone.pieces,
+    });
+    stonesByItem.set(stone.itemId, list);
+  }
+
+  return items.map((item) => ({
+    ...item,
+    diamondBreakdown: diamondsByItem.get(item.id) ?? [],
+    stoneBreakdown: stonesByItem.get(item.id) ?? [],
+  }));
 }
 
 export async function getInventoryCategories(): Promise<

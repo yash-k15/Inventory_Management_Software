@@ -111,6 +111,19 @@ export interface InventoryFilterOptions {
   stoneTypes: InventoryStoneTypeOption[];
 }
 
+export interface InventoryDiamondBreakdown {
+  shapeCode: string;
+  weightMilli: number;
+  pieces: number;
+}
+
+export interface InventoryStoneBreakdown {
+  tagLabel: string;
+  weightUnit: InventoryStoneWeightUnit;
+  weightMilli: number;
+  pieces: number;
+}
+
 export interface InventoryItem {
   id: number;
   itemNumber: string;
@@ -132,4 +145,6 @@ export interface InventoryItem {
   createdAt?: string;
   diamondDetails: string | null;
   stoneDetails: string | null;
+  diamondBreakdown?: InventoryDiamondBreakdown[];
+  stoneBreakdown?: InventoryStoneBreakdown[];
 }

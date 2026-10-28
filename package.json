@@ -15,8 +15,12 @@
     "@tauri-apps/plugin-opener": "^2",
     "@tauri-apps/plugin-sql": "^2.5.0",
     "bwip-js": "^4.11.4",
+    "jspdf": "^3.0.4",
+    "jspdf-autotable": "^5.0.9",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "xlsx": "^0.18.5",
+    "xlsx-js-style": "^1.2.0"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",

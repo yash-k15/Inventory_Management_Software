@@ -554,3 +554,59 @@
     margin-right: auto;
   }
 }
+
+
+/* Customer history export action */
+.customer-details-history-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.customer-details-export-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 8px 13px;
+  border: 1px solid #a87540;
+  border-radius: 9px;
+  background: var(--color-surface, #fff);
+  color: #8a5a2b;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.customer-details-export-button:hover:not(:disabled) {
+  background: #fbf7f1;
+}
+
+.customer-details-export-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+@media (max-width: 760px) {
+  .customer-details-history-actions {
+    width: 100%;
+    justify-content: space-between;
+    gap: 8px;
+  }
+}
+
+@media (max-width: 420px) {
+  .customer-details-history-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .customer-details-export-button {
+    align-self: flex-start;
+  }
+}

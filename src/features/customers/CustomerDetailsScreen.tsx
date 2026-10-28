@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
+import ExportDialog from '../../components/export/ExportDialog';
+import type { ExportConfiguration } from '../../components/export/export.types';
 import {
   getCustomerDetailsSummary,
   getCustomerOrderHistory,
@@ -105,6 +107,7 @@ export default function CustomerDetailsScreen({
   const [orders, setOrders] = useState<CustomerOrderHistoryRow[]>([]);
   const [payments, setPayments] = useState<CustomerPaymentHistoryRow[]>([]);
   const [activeTab, setActiveTab] = useState<HistoryTab>('orders');
+  const [isExportOpen, setIsExportOpen] = useState(false);
   const [pageSize, setPageSize] = useState(25);
   const [ordersPage, setOrdersPage] = useState(1);
   const [paymentsPage, setPaymentsPage] = useState(1);
@@ -248,24 +251,39 @@ export default function CustomerDetailsScreen({
               <h2>History</h2>
               <p>Orders and payments recorded for this customer.</p>
             </div>
-            <div className='customer-details-tabs' role='tablist' aria-label='Customer history'>
+            <div className='customer-details-history-actions'>
+              <div className='customer-details-tabs' role='tablist' aria-label='Customer history'>
+                <button
+                  type='button'
+                  role='tab'
+                  aria-selected={activeTab === 'orders'}
+                  className={activeTab === 'orders' ? 'is-active' : ''}
+                  onClick={() => { setActiveTab('orders'); setOrdersPage(1); }}
+                >
+                  Orders <span>{orders.length}</span>
+                </button>
+                <button
+                  type='button'
+                  role='tab'
+                  aria-selected={activeTab === 'payments'}
+                  className={activeTab === 'payments' ? 'is-active' : ''}
+                  onClick={() => { setActiveTab('payments'); setPaymentsPage(1); }}
+                >
+                  Payments <span>{payments.length}</span>
+                </button>
+              </div>
               <button
                 type='button'
-                role='tab'
-                aria-selected={activeTab === 'orders'}
-                className={activeTab === 'orders' ? 'is-active' : ''}
-                onClick={() => { setActiveTab('orders'); setOrdersPage(1); }}
+                className='customer-details-export-button'
+                onClick={() => setIsExportOpen(true)}
+                disabled={activeTab === 'orders' ? orders.length === 0 : payments.length === 0}
               >
-                Orders <span>{orders.length}</span>
-              </button>
-              <button
-                type='button'
-                role='tab'
-                aria-selected={activeTab === 'payments'}
-                className={activeTab === 'payments' ? 'is-active' : ''}
-                onClick={() => { setActiveTab('payments'); setPaymentsPage(1); }}
-              >
-                Payments <span>{payments.length}</span>
+                <svg aria-hidden='true' width='15' height='15' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round'>
+                  <path d='M12 3v12' />
+                  <path d='m7 10 5 5 5-5' />
+                  <path d='M5 19h14' />
+                </svg>
+                Export
               </button>
             </div>
           </div>
@@ -413,6 +431,55 @@ export default function CustomerDetailsScreen({
           </section>
         </aside>
       </div>
+      {isExportOpen && activeTab === 'orders' && (
+        <ExportDialog<CustomerOrderHistoryRow>
+          configuration={{
+            title: `${customer.businessName} — Orders History`,
+            filename: `${customer.businessName.trim().replace(/[^a-zA-Z0-9_-]+/g, '-')}-order-history.xlsx`,
+            columns: [
+              { key: 'orderDate', label: 'Order Date', value: (order) => formatDate(order.orderDate) },
+              { key: 'orderNumber', label: 'Order', value: (order) => `#${order.id}` },
+              { key: 'exhibition', label: 'Exhibition', value: (order) => formatText(order.exhibitionName) },
+              {
+                key: 'items',
+                label: 'Items',
+                value: (order) => order.itemCount,
+                total: (rows) => rows.reduce((sum, order) => sum + order.itemCount, 0),
+              },
+              { key: 'status', label: 'Status', value: (order) => order.status },
+              {
+                key: 'orderValue',
+                label: 'Order Value',
+                value: (order) => formatMoneyPaise(order.totalValuePaise),
+                total: (rows) => formatMoneyPaise(
+                  rows.reduce((sum, order) => sum + order.totalValuePaise, 0),
+                ),
+              },
+            ],
+            filteredRows: orders,
+            getAllRows: async () => orders,
+          } satisfies ExportConfiguration<CustomerOrderHistoryRow>}
+          onClose={() => setIsExportOpen(false)}
+        />
+      )}
+      {isExportOpen && activeTab === 'payments' && (
+        <ExportDialog<CustomerPaymentHistoryRow>
+          configuration={{
+            title: `${customer.businessName} — Payments History`,
+            filename: `${customer.businessName.trim().replace(/[^a-zA-Z0-9_-]+/g, '-')}-payment-history.xlsx`,
+            columns: [
+              { key: 'paymentDate', label: 'Payment Date', value: (payment) => formatDate(payment.paymentDate) },
+              { key: 'exhibition', label: 'Exhibition', value: (payment) => formatText(payment.exhibitionName) },
+              { key: 'paymentMethod', label: 'Method', value: (payment) => formatText(payment.paymentMethod) },
+              { key: 'notes', label: 'Notes', value: (payment) => formatText(payment.notes) },
+              { key: 'amount', label: 'Amount', value: (payment) => formatMoneyPaise(payment.amountPaise) },
+            ],
+            filteredRows: payments,
+            getAllRows: async () => payments,
+          } satisfies ExportConfiguration<CustomerPaymentHistoryRow>}
+          onClose={() => setIsExportOpen(false)}
+        />
+      )}
     </section>
   );
 }

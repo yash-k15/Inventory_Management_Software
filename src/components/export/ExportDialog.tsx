@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { getDatabase } from '../../db';
 import { save } from '@tauri-apps/plugin-dialog';
 import * as XLSX from 'xlsx-js-style';
 import jsPDF from 'jspdf';
@@ -57,6 +56,7 @@ function buildTotalsRow<T>(
     label: string;
     outputLabel: string;
     value: (row: T) => unknown;
+    total?: (rows: T[]) => string | number | null | undefined;
   }>,
 ): string[] {
   const totals = columns.map(() => '');
@@ -70,9 +70,6 @@ function buildTotalsRow<T>(
     'itemCount',
     'calculatedTotal',
     'orderValue',
-    'totalValue',
-    'paymentReceived',
-    'paymentPending',
     'itemPrice',
   ]);
   const sumWeightColumn = (key: 'grossWeight' | 'netWeight') => {
@@ -95,7 +92,7 @@ function buildTotalsRow<T>(
 
   // Order export rows keep their money values in integer paise. Sum those
   // source values directly instead of parsing the formatted currency strings.
-  const sumOrderColumn = (key: 'itemCount' | 'calculatedTotal' | 'orderValue' | 'totalValue' | 'paymentReceived' | 'paymentPending' | 'itemPrice') => {
+  const sumOrderColumn = (key: 'itemCount' | 'calculatedTotal' | 'orderValue' | 'itemPrice') => {
     const index = columns.findIndex((column) => column.key === key);
     if (index < 0) return;
 
@@ -108,13 +105,7 @@ function buildTotalsRow<T>(
             ? source.calculatedTotalPaise
             : key === 'itemPrice'
               ? source.itemPricePaise
-              : key === 'totalValue'
-                ? source.totalValuePaise
-                : key === 'paymentReceived'
-                  ? source.paymentReceivedPaise
-                  : key === 'paymentPending'
-                    ? source.paymentPendingPaise
-                    : source.totalPaise;
+              : source.totalPaise;
       const value = Number(rawValue ?? 0);
       return total + (Number.isFinite(value) ? value : 0);
     }, 0);
@@ -135,9 +126,6 @@ function buildTotalsRow<T>(
   sumOrderColumn('itemCount');
   sumOrderColumn('calculatedTotal');
   sumOrderColumn('orderValue');
-  sumOrderColumn('totalValue');
-  sumOrderColumn('paymentReceived');
-  sumOrderColumn('paymentPending');
   sumOrderColumn('itemPrice');
 
   columns.forEach((column, index) => {
@@ -209,8 +197,16 @@ function buildTotalsRow<T>(
     }
   });
 
+  columns.forEach((column, index) => {
+    if (column.total) {
+      const total = column.total(rows);
+      totals[index] = total == null ? '' : String(total);
+    }
+  });
+
   const labelIndex = columns.findIndex(
     (column) =>
+      !column.total &&
       !totalableKeys.has(column.key) &&
       !column.key.startsWith('__diamond_type_') &&
       !column.key.startsWith('__stone_type_'),
@@ -225,139 +221,70 @@ function buildTotalsRow<T>(
   return totals;
 }
 
-type SystemDiamondType = {
-  code: string;
-  sortOrder: number;
-};
-
-type SystemStoneType = {
-  tagLabel: string;
-  weightUnit: 'ct' | 'g';
-  sortOrder: number;
-};
-
-type SystemDetailTypes = {
-  diamonds: SystemDiamondType[];
-  stones: SystemStoneType[];
-};
-
-async function getSystemDetailTypes(): Promise<SystemDetailTypes> {
-  const db = await getDatabase();
-  const [diamonds, stones] = await Promise.all([
-    db.select<SystemDiamondType[]>(`
-      SELECT code, sort_order AS sortOrder
-      FROM diamond_shape
-      WHERE is_archived = 0
-      ORDER BY sort_order ASC, code COLLATE NOCASE ASC
-    `),
-    db.select<SystemStoneType[]>(`
-      SELECT tag_label AS tagLabel,
-             weight_unit AS weightUnit,
-             sort_order AS sortOrder
-      FROM stone_type
-      WHERE is_archived = 0
-      ORDER BY sort_order ASC, tag_label COLLATE NOCASE ASC
-    `),
-  ]);
-
-  return { diamonds, stones };
-}
-
 function createDetailedColumns<T>(
   rows: T[],
   category: 'diamonds' | 'stones',
-  systemTypes: SystemDetailTypes,
 ): ExportColumn<T>[] {
   if (category === 'diamonds') {
-    const types = new Map<string, SystemDiamondType>();
+    const diamondCodes = [
+      ...new Set(
+        rows.flatMap((row) =>
+          (getBreakdown(row).diamondBreakdown ?? []).map(
+            (entry) => entry.shapeCode,
+          ),
+        ),
+      ),
+    ];
 
-    systemTypes.diamonds.forEach((type) => {
-      types.set(type.code.trim().toLocaleLowerCase(), type);
-    });
-
-    // Include types present in historical item snapshots even if their system
-    // entry has since been archived. Active system types remain the source of
-    // the available columns, including types with no values in these rows.
-    rows.forEach((row) => {
-      (getBreakdown(row).diamondBreakdown ?? []).forEach((entry) => {
-        const normalizedCode = entry.shapeCode.trim().toLocaleLowerCase();
-        if (!types.has(normalizedCode)) {
-          types.set(normalizedCode, {
-            code: entry.shapeCode,
-            sortOrder: Number.MAX_SAFE_INTEGER,
-          });
-        }
-      });
-    });
-
-    return [...types.values()]
-      .sort((a, b) => a.sortOrder - b.sortOrder || a.code.localeCompare(b.code, 'en', { numeric: true }))
-      .map(({ code: shapeCode }) => ({
-        key: `__diamond_type_${normalizedTypeKey(shapeCode)}`,
-        label: `D ${shapeCode}`,
-        defaultVisible: true,
-        value: (row: T) => {
-          const entry = (getBreakdown(row).diamondBreakdown ?? []).find(
-            (item) => item.shapeCode.trim().toLocaleLowerCase() === shapeCode.trim().toLocaleLowerCase(),
-          );
-          return entry
-            ? `${(entry.weightMilli / 1000).toFixed(2)} ct (${entry.pieces} pcs)`
-            : '';
-        },
-      }));
+    return diamondCodes.map((shapeCode) => ({
+      key: `__diamond_type_${shapeCode.trim().replace(/[^a-zA-Z0-9_-]+/g, '_')}`,
+      label: `D ${shapeCode}`,
+      defaultVisible: true,
+      value: (row: T) => {
+        const entry = (getBreakdown(row).diamondBreakdown ?? []).find(
+          (item) => item.shapeCode === shapeCode,
+        );
+        return entry
+          ? `${(entry.weightMilli / 1000).toFixed(2)} ct (${entry.pieces} pcs)`
+          : '';
+      },
+    }));
   }
 
-  const types = new Map<string, SystemStoneType>();
-
-  systemTypes.stones.forEach((type) => {
-    types.set(type.tagLabel.trim().toLocaleLowerCase(), type);
-  });
-
-  // Preserve archived stone types used by existing snapshots so their values
-  // are still exportable, without hardcoding any stone labels.
+  const stoneTypes = new Map<string, 'ct' | 'g'>();
   rows.forEach((row) => {
     (getBreakdown(row).stoneBreakdown ?? []).forEach((entry) => {
-      const normalizedLabel = entry.tagLabel.trim().toLocaleLowerCase();
-      if (!types.has(normalizedLabel)) {
-        types.set(normalizedLabel, {
-          tagLabel: entry.tagLabel,
-          weightUnit: entry.weightUnit,
-          sortOrder: Number.MAX_SAFE_INTEGER,
-        });
-      }
+      if (!stoneTypes.has(entry.tagLabel))
+        stoneTypes.set(entry.tagLabel, entry.weightUnit);
     });
   });
 
-  return [...types.values()]
-    .sort((a, b) => a.sortOrder - b.sortOrder || a.tagLabel.localeCompare(b.tagLabel, 'en', { numeric: true }))
-    .map(({ tagLabel, weightUnit }) => {
-      const keyPart = normalizedTypeKey(tagLabel);
-      return {
-        key: `__stone_type_${keyPart}`,
-        label: tagLabel,
-        defaultVisible: true,
-        value: (row: T) => {
-          const entry = (getBreakdown(row).stoneBreakdown ?? []).find(
-            (item) => item.tagLabel.trim().toLocaleLowerCase() === tagLabel.trim().toLocaleLowerCase(),
-          );
-          const unit = entry?.weightUnit ?? weightUnit;
-          return entry
-            ? `${(entry.weightMilli / 1000).toFixed(unit === 'ct' ? 2 : 3)} ${unit} (${entry.pieces} pcs)`
-            : '';
-        },
-      };
-    });
+  return [...stoneTypes.entries()].map(([tagLabel, weightUnit]) => {
+    const keyPart = tagLabel.trim().replace(/[^a-zA-Z0-9_-]+/g, '_');
+    return {
+      key: `__stone_type_${keyPart}`,
+      label: tagLabel,
+      defaultVisible: true,
+      value: (row: T) => {
+        const entry = (getBreakdown(row).stoneBreakdown ?? []).find(
+          (item) => item.tagLabel === tagLabel,
+        );
+        return entry
+          ? `${(entry.weightMilli / 1000).toFixed(weightUnit === 'ct' ? 2 : 3)} ${weightUnit} (${entry.pieces} pcs)`
+          : '';
+      },
+    };
+  });
 }
 
 function replaceDetailedColumns<T>(
   current: ConfiguredColumn<T>[],
   category: 'diamonds' | 'stones',
   rows: T[],
-  systemTypes: SystemDetailTypes,
 ): ConfiguredColumn<T>[] {
   const prefix = category === 'diamonds' ? '__diamond_type_' : '__stone_type_';
   const parentKey = category === 'diamonds' ? 'diamondDetails' : 'stoneDetails';
-  const generated = createDetailedColumns(rows, category, systemTypes);
+  const generated = createDetailedColumns(rows, category);
   const existingByKey = new Map(
     current
       .filter((column) => column.key.startsWith(prefix))
@@ -482,11 +409,12 @@ function ExportDialog<T>({ configuration, defaultSelectedColumns, selectedRows, 
   const previewTotalsRow = includeTotals
     ? buildTotalsRow(
         previewRows,
-        activeColumns.map(({ key, label, value, outputLabel }) => ({
+        activeColumns.map(({ key, label, value, outputLabel, total }) => ({
           key,
           label,
           value,
           outputLabel,
+          total,
         })),
       )
     : null;
@@ -525,13 +453,8 @@ function ExportDialog<T>({ configuration, defaultSelectedColumns, selectedRows, 
 
     setBusy(true);
     try {
-      const [rowsForExport, systemTypes] = await Promise.all([
-        getRowsForScope(),
-        getSystemDetailTypes(),
-      ]);
-      setColumns((current) =>
-        replaceDetailedColumns(current, category, rowsForExport, systemTypes),
-      );
+      const rowsForExport = await getRowsForScope();
+      setColumns((current) => replaceDetailedColumns(current, category, rowsForExport));
 
       if (category === 'diamonds') setSeparateDiamonds(true);
       else setSeparateStones(true);
@@ -556,11 +479,12 @@ function ExportDialog<T>({ configuration, defaultSelectedColumns, selectedRows, 
     try {
       const rows = await getRowsForScope();
       const selected = activeColumns.map(
-        ({ key, label, value, outputLabel }) => ({
+        ({ key, label, value, outputLabel, total }) => ({
           key,
           label,
           value: key === '__serial' ? (row: T) => rows.indexOf(row) + 1 : value,
           outputLabel,
+          total,
         }),
       );
       const totalsRow = includeTotals ? buildTotalsRow(rows, selected) : null;
@@ -588,10 +512,12 @@ function ExportDialog<T>({ configuration, defaultSelectedColumns, selectedRows, 
             column.key === '__serial'
               ? String(rowIndex + 1)
               : cellText(column.value(row));
-          // Inventory and selection detail strings already contain line breaks
-          // from their query/export mappers. Keep them intact instead of
-          // matching a hardcoded list of jewelry type labels here.
-          return value;
+          if (column.key !== 'diamondDetails' && column.key !== 'stoneDetails')
+            return value;
+          return value.replace(
+            /\)\s*(?=(?:RD|P\/M|T\/B|R\s*ST|G\s*ST|PEARL)\s*:)/gi,
+            ')\n',
+          );
         };
         const data = [
           selected.map((column) => column.outputLabel),
@@ -846,17 +772,14 @@ function ExportDialog<T>({ configuration, defaultSelectedColumns, selectedRows, 
                       setBusy(true);
                       setError(null);
                       try {
-                        const [rowsForExport, systemTypes] = await Promise.all([
-                          getRowsForScope(nextScope),
-                          getSystemDetailTypes(),
-                        ]);
+                        const rowsForExport = await getRowsForScope(nextScope);
                         setColumns((current) => {
                           let next = current;
                           if (separateDiamonds) {
-                            next = replaceDetailedColumns(next, 'diamonds', rowsForExport, systemTypes);
+                            next = replaceDetailedColumns(next, 'diamonds', rowsForExport);
                           }
                           if (separateStones) {
-                            next = replaceDetailedColumns(next, 'stones', rowsForExport, systemTypes);
+                            next = replaceDetailedColumns(next, 'stones', rowsForExport);
                           }
                           return next;
                         });
@@ -874,7 +797,7 @@ function ExportDialog<T>({ configuration, defaultSelectedColumns, selectedRows, 
                         <option value='filtered'>
                           Current filtered results ({configuration.filteredRows.length})
                         </option>
-                        <option value='all'>All records</option>
+                        <option value='all'>All inventory records</option>
                       </>
                     )}
                   </select>
@@ -1091,7 +1014,7 @@ function ExportDialog<T>({ configuration, defaultSelectedColumns, selectedRows, 
                     <span>
                       {includeTotals
                         ? 'Totals for the five preview records are shown above.'
-                        : 'Add totals for supported numeric and currency columns to the exported file.'}
+                        : 'Add weight and piece-count totals to the exported file.'}
                     </span>
                   </span>
                 </label>
@@ -1109,7 +1032,7 @@ function ExportDialog<T>({ configuration, defaultSelectedColumns, selectedRows, 
             {hasSelectedRows
               ? `Selected items (${selectedRows!.length})`
               : scope === 'all'
-                ? 'All records'
+                ? 'All inventory records'
                 : 'Current filtered results'}
             {' · '}
             {activeColumns.length} columns

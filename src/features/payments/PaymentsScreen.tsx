@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getPayments, getPaymentSummary } from './payments.queries';
+import ExportDialog from '../../components/export/ExportDialog';
+import { PAYMENT_EXPORT_COLUMNS } from './payments.export';
 import type { PaymentRow, PaymentSummary } from './payments.types';
 import './PaymentsScreen.css';
 
@@ -93,6 +95,8 @@ function PaymentsScreen({ onViewOrder }: PaymentsScreenProps) {
   const [dateFilter, setDateFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+  const [selectedPaymentIds, setSelectedPaymentIds] = useState<number[]>([]);
+  const [showExportDialog, setShowExportDialog] = useState(false);
 
   const loadPayments = useCallback(async () => {
     setLoading(true); setError(null);
@@ -148,6 +152,24 @@ function PaymentsScreen({ onViewOrder }: PaymentsScreenProps) {
   const pageStart = filteredPayments.length ? (safeCurrentPage - 1) * pageSize : 0;
   const pageEnd = Math.min(pageStart + pageSize, filteredPayments.length);
   const visiblePayments = filteredPayments.slice(pageStart, pageEnd);
+  const selectedPayments = useMemo(
+    () => payments.filter((payment) => selectedPaymentIds.includes(payment.id)),
+    [payments, selectedPaymentIds],
+  );
+  const allVisibleSelected = visiblePayments.length > 0 && visiblePayments.every((payment) => selectedPaymentIds.includes(payment.id));
+
+  function togglePaymentSelection(paymentId: number, checked: boolean) {
+    setSelectedPaymentIds((current) => checked
+      ? (current.includes(paymentId) ? current : [...current, paymentId])
+      : current.filter((id) => id !== paymentId));
+  }
+
+  function toggleVisiblePayments(checked: boolean) {
+    const visibleIds = new Set(visiblePayments.map((payment) => payment.id));
+    setSelectedPaymentIds((current) => checked
+      ? [...new Set([...current, ...visibleIds])]
+      : current.filter((id) => !visibleIds.has(id)));
+  }
 
   function resetFilters() {
     setSearch(''); setCustomerFilter('all'); setExhibitionFilter('all'); setMethodFilter('all'); setDateFilter('all');
@@ -157,7 +179,13 @@ function PaymentsScreen({ onViewOrder }: PaymentsScreenProps) {
     <header className="payments-page-heading"><div>
       <h1 className="payments-page-title">Payments</h1>
       <p className="payments-page-description">A history of payments recorded against orders.</p>
-    </div></header>
+    </div>
+      <div className="payments-heading-actions">
+        {selectedPaymentIds.length > 0 && <span className="payments-selection-count">{selectedPaymentIds.length} selected</span>}
+        {selectedPaymentIds.length > 0 && <button type="button" className="payments-clear-selection" onClick={() => setSelectedPaymentIds([])}>Clear selection</button>}
+        <button type="button" className="payments-export-button" onClick={() => setShowExportDialog(true)}><span aria-hidden="true">⇩</span> Export</button>
+      </div>
+    </header>
 
     <section className="payments-summary" aria-label="Payment summary">
       <div className="payments-summary-card"><span className="payments-summary-label">Total received</span><strong className="payments-summary-value">{formatMoney(summary.totalReceivedPaise)}</strong><span className="payments-summary-note">All recorded payment transactions</span></div>
@@ -174,9 +202,9 @@ function PaymentsScreen({ onViewOrder }: PaymentsScreenProps) {
     </section>
 
     {error && <div className="payments-error" role="alert"><span>{error}</span><button type="button" onClick={() => void loadPayments()}>Retry</button></div>}
-    <section className="payments-table-card" aria-label="Payment transactions"><div className="payments-table-scroll"><table className="payments-table"><thead><tr><th className="payments-sno-cell">S.No.</th><th>Payment date</th><th>Order</th><th>Customer</th><th>Exhibition / source</th><th>Payment method</th><th>Notes</th><th className="payments-number-cell">Amount received</th></tr></thead><tbody>
-      {!loading && !error && visiblePayments.map((payment, index) => <tr key={payment.id}><td className="payments-sno-cell">{pageStart + index + 1}</td><td className="payments-date">{formatDate(payment.paymentDate)}</td><td><div className="payments-primary-cell">{payment.orderId !== null && payment.orderId !== undefined && onViewOrder ? <button type="button" className="payments-order-link" onClick={() => onViewOrder(payment.orderId as number)}>{payment.orderNumber || `Order ${payment.orderId}`}<span aria-hidden="true"> ↗</span></button> : payment.orderNumber || 'Legacy payment'}</div></td><td><div className="payments-primary-cell">{payment.customerName || '—'}</div></td><td><div className="payments-primary-cell">{payment.exhibitionName || (payment.orderId ? 'Direct order' : 'Unallocated legacy payment')}</div></td><td><span className="payments-method-badge">{payment.paymentMethod || 'Not specified'}</span></td><td className="payments-notes" title={payment.notes || undefined}>{payment.notes || '—'}</td><td className="payments-number-cell payments-amount">{formatMoney(payment.amountPaise)}</td></tr>)}
-      {loading && <tr><td colSpan={8} className="payments-table-message">Loading payments…</td></tr>}
+    <section className="payments-table-card" aria-label="Payment transactions"><div className="payments-table-scroll"><table className="payments-table"><thead><tr><th className="payments-checkbox-cell"><input type="checkbox" aria-label="Select all payments on this page" checked={allVisibleSelected} onChange={(event) => toggleVisiblePayments(event.target.checked)} /></th><th className="payments-sno-cell">S.No.</th><th>Payment date</th><th>Order</th><th>Customer</th><th>Exhibition / source</th><th>Payment method</th><th>Notes</th><th className="payments-number-cell">Amount received</th></tr></thead><tbody>
+      {!loading && !error && visiblePayments.map((payment, index) => <tr key={payment.id} className={selectedPaymentIds.includes(payment.id) ? 'payments-row-selected' : ''}><td className="payments-checkbox-cell"><input type="checkbox" aria-label={`Select payment ${payment.id}`} checked={selectedPaymentIds.includes(payment.id)} onChange={(event) => togglePaymentSelection(payment.id, event.target.checked)} /></td><td className="payments-sno-cell">{pageStart + index + 1}</td><td className="payments-date">{formatDate(payment.paymentDate)}</td><td><div className="payments-primary-cell">{payment.orderId !== null && payment.orderId !== undefined && onViewOrder ? <button type="button" className="payments-order-link" onClick={() => onViewOrder(payment.orderId as number)}>{payment.orderNumber || `Order ${payment.orderId}`}<span aria-hidden="true"> ↗</span></button> : payment.orderNumber || 'Legacy payment'}</div></td><td><div className="payments-primary-cell">{payment.customerName || '—'}</div></td><td><div className="payments-primary-cell">{payment.exhibitionName || (payment.orderId ? 'Direct order' : 'Unallocated legacy payment')}</div></td><td><span className="payments-method-badge">{payment.paymentMethod || 'Not specified'}</span></td><td className="payments-notes" title={payment.notes || undefined}>{payment.notes || '—'}</td><td className="payments-number-cell payments-amount">{formatMoney(payment.amountPaise)}</td></tr>)}
+      {loading && <tr><td colSpan={9} className="payments-table-message">Loading payments…</td></tr>}
       {!loading && !error && filteredPayments.length === 0 && <tr><td colSpan={8} className="payments-table-message">{payments.length ? 'No payments match these filters.' : 'No payments recorded yet.'}</td></tr>}
     </tbody></table></div>
       <footer className="payments-table-footer">
@@ -198,6 +226,17 @@ function PaymentsScreen({ onViewOrder }: PaymentsScreenProps) {
         </div>
       </footer></section>
 
+    {showExportDialog && <ExportDialog<PaymentRow>
+      configuration={{
+        title: 'Payments Export',
+        filename: 'payments.xlsx',
+        columns: PAYMENT_EXPORT_COLUMNS,
+        filteredRows: filteredPayments,
+        getAllRows: getPayments,
+      }}
+      selectedRows={selectedPayments.length > 0 ? selectedPayments : undefined}
+      onClose={() => setShowExportDialog(false)}
+    />}
   </section>;
 }
 

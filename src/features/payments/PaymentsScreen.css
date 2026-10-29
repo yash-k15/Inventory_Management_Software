@@ -104,3 +104,68 @@
   .payments-table-footer { align-items: flex-start; }
   .payments-pagination { width: 100%; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
 }
+
+/* Payment selection and export actions. */
+.payments-heading-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+.payments-selection-count {
+  color: #6f4a23;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.payments-clear-selection {
+  min-height: 38px;
+  padding: 0 11px;
+  border: 1px solid #e4d5c2;
+  border-radius: 9px;
+  background: #fff;
+  color: #80603b;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.payments-clear-selection:hover { background: #fbf7f1; }
+.payments-export-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 39px;
+  padding: 0 15px;
+  border: 1px solid #7a542d;
+  border-radius: 9px;
+  background: #76502d;
+  color: #fff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.payments-export-button:hover { background: #624124; }
+.payments-checkbox-cell {
+  width: 42px;
+  min-width: 42px;
+  padding-right: 4px !important;
+  padding-left: 14px !important;
+  text-align: center !important;
+}
+.payments-checkbox-cell input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: #8a5f2e;
+  cursor: pointer;
+  vertical-align: middle;
+}
+.payments-table tbody tr.payments-row-selected { background: #fbf4e9; }
+.payments-table tbody tr.payments-row-selected:hover { background: #f7eddd; }
+@media (max-width: 768px) {
+  .payments-page-heading { flex-wrap: wrap; }
+  .payments-heading-actions { width: 100%; justify-content: flex-start; }
+}

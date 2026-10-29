@@ -18,7 +18,7 @@ import {
 import CustomerPickerModal from './CustomerPickerModal';
 import CreateOrderModal from '../orders/CreateOrderModal';
 import ExportDialog from '../../components/export/ExportDialog';
-import { SELECTION_EXPORT_COLUMNS, SELECTION_ORDER_EXPORT_COLUMNS } from './selection.export';
+import { SELECTION_EXPORT_COLUMNS, SELECTION_ORDER_EXPORT_COLUMNS, SELECTION_ORDER_ITEM_EXPORT_COLUMNS, toSelectionOrderItemExportRow, type SelectionOrderItemExportRow } from './selection.export';
 import './ExhibitionSelections.css';
 function weight(n: number | null) {
   return n == null ? '—' : `${(n / 1000).toFixed(3)}`;
@@ -91,6 +91,9 @@ export default function ExhibitionSelections({
   const [selectedForOrder, setSelectedForOrder] = useState<number[]>([]);
   const [createOrderOpen, setCreateOrderOpen] = useState(false);
   const [showExportDialog, setShowExportDialog] = useState(false);
+  const [showDetailedOrdersExportDialog, setShowDetailedOrdersExportDialog] = useState(false);
+  const [detailedOrderExportRows, setDetailedOrderExportRows] = useState<SelectionOrderItemExportRow[]>([]);
+  const [preparingDetailedExport, setPreparingDetailedExport] = useState(false);
   const [orders, setOrders] = useState<SelectionOrderSummary[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
@@ -530,6 +533,32 @@ export default function ExhibitionSelections({
     }
   }
 
+  const prepareDetailedOrdersExport = async () => {
+    setPreparingDetailedExport(true);
+    try {
+      const detailResults = await Promise.all(
+        orders.map(async (order) => ({
+          order,
+          detail: await getSelectionOrderDetail(order.id),
+        })),
+      );
+      const rows = detailResults.flatMap(({ order, detail }) =>
+        detail?.items.map((item) => toSelectionOrderItemExportRow(order, item)) ?? [],
+      );
+      if (!rows.length) {
+        setDetailedOrderExportRows([]);
+        setFeedback({ error: true, text: 'There are no item details to export for these orders.' });
+        return;
+      }
+      setDetailedOrderExportRows(rows);
+      setShowDetailedOrdersExportDialog(true);
+    } catch (error) {
+      setFeedback({ error: true, text: error instanceof Error ? error.message : 'Unable to prepare detailed order export.' });
+    } finally {
+      setPreparingDetailedExport(false);
+    }
+  };
+
   return (
     <section className='exhibition-selections'>
       <aside className='selection-customer-panel'>
@@ -788,10 +817,17 @@ export default function ExhibitionSelections({
                 </div>
                 <div className='selection-table-actions'>
                   {((activeTab === 'items' && active.length > 0) || (activeTab === 'orders' && orders.length > 0)) && (
-                    <button type='button' className='selection-button' onClick={() => setShowExportDialog(true)}>
-                      <svg viewBox='0 0 20 20' aria-hidden='true'><path d='M10 2.5v9m0 0 3.5-3.5M10 11.5 6.5 8M3.5 12.5v4h13v-4' fill='none' stroke='currentColor' strokeWidth='1.5' strokeLinecap='round' strokeLinejoin='round' /></svg>
-                      Export
-                    </button>
+                    <>
+                      <button type='button' className='selection-button' onClick={() => setShowExportDialog(true)}>
+                        <svg viewBox='0 0 20 20' aria-hidden='true'><path d='M10 2.5v9m0 0 3.5-3.5M10 11.5 6.5 8M3.5 12.5v4h13v-4' fill='none' stroke='currentColor' strokeWidth='1.5' strokeLinecap='round' strokeLinejoin='round' /></svg>
+                        Export
+                      </button>
+                      {activeTab === 'orders' && (
+                        <button type='button' className='selection-button' onClick={() => void prepareDetailedOrdersExport()} disabled={preparingDetailedExport}>
+                          {preparingDetailedExport ? 'Preparing…' : 'Export with item details'}
+                        </button>
+                      )}
+                    </>
                   )}
                 {activeTab === 'items' && (
                   <div className='selection-order-actions'>
@@ -1214,6 +1250,18 @@ export default function ExhibitionSelections({
             getAllRows: async () => orders,
           }}
           onClose={() => setShowExportDialog(false)}
+        />
+      )}
+      {showDetailedOrdersExportDialog && customer && (
+        <ExportDialog<SelectionOrderItemExportRow>
+          configuration={{
+            title: `${customer.businessName} — Orders with Item Details`,
+            filename: `${customer.businessName.trim().replace(/[^a-zA-Z0-9_-]+/g, '-')}-orders-with-items.xlsx`,
+            columns: SELECTION_ORDER_ITEM_EXPORT_COLUMNS,
+            filteredRows: detailedOrderExportRows,
+            getAllRows: async () => detailedOrderExportRows,
+          }}
+          onClose={() => setShowDetailedOrdersExportDialog(false)}
         />
       )}
       {createOrderOpen && customer && (

@@ -742,23 +742,58 @@ export async function getSelectionOrderDetail(
     try {
       const parsed: unknown = JSON.parse(value);
       if (!Array.isArray(parsed)) return [];
-      return parsed.map((d: any) => ({
-        label: String(d.label ?? d.shape ?? d.stone ?? '—'),
-        pieces: d.pieces == null ? null : Number(d.pieces),
+      return parsed.map((detail: any) => ({
+        label: String(
+          detail.label ??
+          detail.shapeCode ??
+          detail.shape_code ??
+          detail.shape ??
+          detail.tagLabel ??
+          detail.tag_label ??
+          detail.stone ??
+          '—',
+        ),
+        pieces: detail.pieces == null ? null : Number(detail.pieces),
         weight_milli:
-          d.weight_milli == null
-            ? d.weightMilli == null
+          detail.weight_milli == null
+            ? detail.weightMilli == null
               ? null
-              : Number(d.weightMilli)
-            : Number(d.weight_milli),
+              : Number(detail.weightMilli)
+            : Number(detail.weight_milli),
         weight_unit:
-          d.weight_unit === 'g' ? 'g' :
-          d.weight_unit === 'ct' ? 'ct' : null,
+          detail.weight_unit === 'g' || detail.weightUnit === 'g' ? 'g' :
+          detail.weight_unit === 'ct' || detail.weightUnit === 'ct' ? 'ct' : null,
       }));
     } catch {
       return [];
     }
   };
+
+  // Match Inventory's export data: use configured diamond shape codes and
+  // stone tag labels while preserving weights and pieces from the order snapshot.
+  const [diamondShapes, stoneTypes] = await Promise.all([
+    db.select<Array<{ code: string; name: string }>>(
+      `SELECT code, name FROM diamond_shape`,
+    ),
+    db.select<Array<{ name: string; tagLabel: string; weightUnit: 'ct' | 'g' }>>(
+      `SELECT name, tag_label AS tagLabel, weight_unit AS weightUnit FROM stone_type`,
+    ),
+  ]);
+
+  const normalize = (value: string) => value.trim().toLocaleLowerCase();
+  const diamondCodeByLabel = new Map<string, string>();
+  diamondShapes.forEach(({ code, name }) => {
+    diamondCodeByLabel.set(normalize(code), code);
+    diamondCodeByLabel.set(normalize(name), code);
+  });
+
+  const stoneByLabel = new Map<string, { tagLabel: string; weightUnit: 'ct' | 'g' }>();
+  stoneTypes.forEach(({ name, tagLabel, weightUnit }) => {
+    const entry = { tagLabel, weightUnit };
+    stoneByLabel.set(normalize(name), entry);
+    stoneByLabel.set(normalize(tagLabel), entry);
+  });
+
   return {
     ...orders[0],
     items: rows.map((row) => ({
@@ -767,8 +802,21 @@ export async function getSelectionOrderDetail(
       imagePath: row.imagePath,
       grossWeightMilli: row.grossWeightMilli,
       netWeightMilli: row.netWeightMilli,
-      diamonds: parse(row.diamondsJson),
-      stones: parse(row.stonesJson),
+      diamonds: parse(row.diamondsJson).map((detail) => ({
+        ...detail,
+        label: diamondCodeByLabel.get(normalize(detail.label)) ?? detail.label,
+        weight_unit: 'ct',
+      })),
+      stones: parse(row.stonesJson).map((detail) => {
+        const reference = stoneByLabel.get(normalize(detail.label));
+        return {
+          ...detail,
+          label: reference?.tagLabel ?? detail.label,
+          // Older order snapshots omit stone units, so use the configured
+          // stone type unit only when the snapshot has no explicit unit.
+          weight_unit: detail.weight_unit ?? reference?.weightUnit ?? 'ct',
+        };
+      }),
       pricePaise: row.pricePaise,
     })),
   };

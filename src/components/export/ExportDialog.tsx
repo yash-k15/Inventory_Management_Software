@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { getDatabase } from '../../db';
 import { save } from '@tauri-apps/plugin-dialog';
 import * as XLSX from 'xlsx-js-style';
 import jsPDF from 'jspdf';
@@ -69,6 +70,7 @@ function buildTotalsRow<T>(
     'itemCount',
     'calculatedTotal',
     'orderValue',
+    'itemPrice',
   ]);
   const sumWeightColumn = (key: 'grossWeight' | 'netWeight') => {
     const index = columns.findIndex((column) => column.key === key);
@@ -90,7 +92,7 @@ function buildTotalsRow<T>(
 
   // Order export rows keep their money values in integer paise. Sum those
   // source values directly instead of parsing the formatted currency strings.
-  const sumOrderColumn = (key: 'itemCount' | 'calculatedTotal' | 'orderValue') => {
+  const sumOrderColumn = (key: 'itemCount' | 'calculatedTotal' | 'orderValue' | 'itemPrice') => {
     const index = columns.findIndex((column) => column.key === key);
     if (index < 0) return;
 
@@ -101,7 +103,9 @@ function buildTotalsRow<T>(
           ? source.itemCount
           : key === 'calculatedTotal'
             ? source.calculatedTotalPaise
-            : source.totalPaise;
+            : key === 'itemPrice'
+              ? source.itemPricePaise
+              : source.totalPaise;
       const value = Number(rawValue ?? 0);
       return total + (Number.isFinite(value) ? value : 0);
     }, 0);
@@ -122,6 +126,7 @@ function buildTotalsRow<T>(
   sumOrderColumn('itemCount');
   sumOrderColumn('calculatedTotal');
   sumOrderColumn('orderValue');
+  sumOrderColumn('itemPrice');
 
   columns.forEach((column, index) => {
     if (column.key === 'diamondDetails') {
@@ -208,60 +213,163 @@ function buildTotalsRow<T>(
   return totals;
 }
 
+type SystemDiamondType = {
+  code: string;
+  sortOrder: number;
+};
+
+type SystemStoneType = {
+  tagLabel: string;
+  weightUnit: 'ct' | 'g';
+  sortOrder: number;
+};
+
+type SystemDetailTypes = {
+  diamonds: SystemDiamondType[];
+  stones: SystemStoneType[];
+};
+
+async function getSystemDetailTypes(): Promise<SystemDetailTypes> {
+  const db = await getDatabase();
+  const [diamonds, stones] = await Promise.all([
+    db.select<SystemDiamondType[]>(`
+      SELECT code, sort_order AS sortOrder
+      FROM diamond_shape
+      WHERE is_archived = 0
+      ORDER BY sort_order ASC, code COLLATE NOCASE ASC
+    `),
+    db.select<SystemStoneType[]>(`
+      SELECT tag_label AS tagLabel,
+             weight_unit AS weightUnit,
+             sort_order AS sortOrder
+      FROM stone_type
+      WHERE is_archived = 0
+      ORDER BY sort_order ASC, tag_label COLLATE NOCASE ASC
+    `),
+  ]);
+
+  return { diamonds, stones };
+}
+
 function createDetailedColumns<T>(
   rows: T[],
   category: 'diamonds' | 'stones',
+  systemTypes: SystemDetailTypes,
 ): ExportColumn<T>[] {
   if (category === 'diamonds') {
-    const diamondCodes = [
-      ...new Set(
-        rows.flatMap((row) =>
-          (getBreakdown(row).diamondBreakdown ?? []).map(
-            (entry) => entry.shapeCode,
-          ),
-        ),
-      ),
-    ];
+    const types = new Map<string, SystemDiamondType>();
 
-    return diamondCodes.map((shapeCode) => ({
-      key: `__diamond_type_${shapeCode.trim().replace(/[^a-zA-Z0-9_-]+/g, '_')}`,
-      label: `D ${shapeCode}`,
-      defaultVisible: true,
-      value: (row: T) => {
-        const entry = (getBreakdown(row).diamondBreakdown ?? []).find(
-          (item) => item.shapeCode === shapeCode,
-        );
-        return entry
-          ? `${(entry.weightMilli / 1000).toFixed(2)} ct (${entry.pieces} pcs)`
-          : '';
-      },
-    }));
+    systemTypes.diamonds.forEach((type) => {
+      types.set(type.code.trim().toLocaleLowerCase(), type);
+    });
+
+    // Include types present in historical item snapshots even if their system
+    // entry has since been archived. Active system types remain the source of
+    // the available columns, including types with no values in these rows.
+    rows.forEach((row) => {
+      (getBreakdown(row).diamondBreakdown ?? []).forEach((entry) => {
+        const normalizedCode = entry.shapeCode.trim().toLocaleLowerCase();
+        if (!types.has(normalizedCode)) {
+          types.set(normalizedCode, {
+            code: entry.shapeCode,
+            sortOrder: Number.MAX_SAFE_INTEGER,
+          });
+        }
+      });
+    });
+
+    return [...types.values()]
+      .sort((a, b) => a.sortOrder - b.sortOrder || a.code.localeCompare(b.code, 'en', { numeric: true }))
+      .map(({ code: shapeCode }) => ({
+        key: `__diamond_type_${normalizedTypeKey(shapeCode)}`,
+        label: `D ${shapeCode}`,
+        defaultVisible: true,
+        value: (row: T) => {
+          const entry = (getBreakdown(row).diamondBreakdown ?? []).find(
+            (item) => item.shapeCode.trim().toLocaleLowerCase() === shapeCode.trim().toLocaleLowerCase(),
+          );
+          return entry
+            ? `${(entry.weightMilli / 1000).toFixed(2)} ct (${entry.pieces} pcs)`
+            : '';
+        },
+      }));
   }
 
-  const stoneTypes = new Map<string, 'ct' | 'g'>();
+  const types = new Map<string, SystemStoneType>();
+
+  systemTypes.stones.forEach((type) => {
+    types.set(type.tagLabel.trim().toLocaleLowerCase(), type);
+  });
+
+  // Preserve archived stone types used by existing snapshots so their values
+  // are still exportable, without hardcoding any stone labels.
   rows.forEach((row) => {
     (getBreakdown(row).stoneBreakdown ?? []).forEach((entry) => {
-      if (!stoneTypes.has(entry.tagLabel))
-        stoneTypes.set(entry.tagLabel, entry.weightUnit);
+      const normalizedLabel = entry.tagLabel.trim().toLocaleLowerCase();
+      if (!types.has(normalizedLabel)) {
+        types.set(normalizedLabel, {
+          tagLabel: entry.tagLabel,
+          weightUnit: entry.weightUnit,
+          sortOrder: Number.MAX_SAFE_INTEGER,
+        });
+      }
     });
   });
 
-  return [...stoneTypes.entries()].map(([tagLabel, weightUnit]) => {
-    const keyPart = tagLabel.trim().replace(/[^a-zA-Z0-9_-]+/g, '_');
+  return [...types.values()]
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.tagLabel.localeCompare(b.tagLabel, 'en', { numeric: true }))
+    .map(({ tagLabel, weightUnit }) => {
+      const keyPart = normalizedTypeKey(tagLabel);
+      return {
+        key: `__stone_type_${keyPart}`,
+        label: tagLabel,
+        defaultVisible: true,
+        value: (row: T) => {
+          const entry = (getBreakdown(row).stoneBreakdown ?? []).find(
+            (item) => item.tagLabel.trim().toLocaleLowerCase() === tagLabel.trim().toLocaleLowerCase(),
+          );
+          const unit = entry?.weightUnit ?? weightUnit;
+          return entry
+            ? `${(entry.weightMilli / 1000).toFixed(unit === 'ct' ? 2 : 3)} ${unit} (${entry.pieces} pcs)`
+            : '';
+        },
+      };
+    });
+}
+
+function replaceDetailedColumns<T>(
+  current: ConfiguredColumn<T>[],
+  category: 'diamonds' | 'stones',
+  rows: T[],
+  systemTypes: SystemDetailTypes,
+): ConfiguredColumn<T>[] {
+  const prefix = category === 'diamonds' ? '__diamond_type_' : '__stone_type_';
+  const parentKey = category === 'diamonds' ? 'diamondDetails' : 'stoneDetails';
+  const generated = createDetailedColumns(rows, category, systemTypes);
+  const existingByKey = new Map(
+    current
+      .filter((column) => column.key.startsWith(prefix))
+      .map((column) => [column.key, column]),
+  );
+
+  const detailedColumns: ConfiguredColumn<T>[] = generated.map((column) => {
+    const existing = existingByKey.get(column.key);
     return {
-      key: `__stone_type_${keyPart}`,
-      label: tagLabel,
-      defaultVisible: true,
-      value: (row: T) => {
-        const entry = (getBreakdown(row).stoneBreakdown ?? []).find(
-          (item) => item.tagLabel === tagLabel,
-        );
-        return entry
-          ? `${(entry.weightMilli / 1000).toFixed(weightUnit === 'ct' ? 2 : 3)} ${weightUnit} (${entry.pieces} pcs)`
-          : '';
-      },
+      ...column,
+      outputLabel: existing?.outputLabel ?? column.label,
+      included: existing?.included ?? column.defaultVisible !== false,
     };
   });
+
+  const withoutOldDetails = current.filter((column) => !column.key.startsWith(prefix));
+  const parentIndex = withoutOldDetails.findIndex((column) => column.key === parentKey);
+  const insertionIndex = parentIndex >= 0 ? parentIndex + 1 : withoutOldDetails.length;
+
+  return [
+    ...withoutOldDetails.slice(0, insertionIndex),
+    ...detailedColumns,
+    ...withoutOldDetails.slice(insertionIndex),
+  ];
 }
 
 function ExportDialog<T>({ configuration, defaultSelectedColumns, selectedRows, onClose }: Props<T>) {
@@ -346,6 +454,17 @@ function ExportDialog<T>({ configuration, defaultSelectedColumns, selectedRows, 
     [columns, separateDiamonds, separateStones],
   );
   const hasSelectedRows = Boolean(selectedRows?.length);
+
+  // Use the same record-scope rules for dynamic detail columns and final export:
+  // explicit selections take priority, otherwise use all rows or filtered rows.
+  const getRowsForScope = async (
+    requestedScope: ExportScope = scope,
+  ): Promise<T[]> => {
+    if (hasSelectedRows) return selectedRows!;
+    if (requestedScope === 'all') return configuration.getAllRows();
+    return configuration.filteredRows;
+  };
+
   const rowsForPreview = hasSelectedRows ? selectedRows! : configuration.filteredRows;
   const previewRows = rowsForPreview.slice(0, 5);
   const previewTotalsRow = includeTotals
@@ -394,31 +513,13 @@ function ExportDialog<T>({ configuration, defaultSelectedColumns, selectedRows, 
 
     setBusy(true);
     try {
-      const allRows = await configuration.getAllRows();
-      const detailedColumns = createDetailedColumns(allRows, category).map(
-        (column) => ({
-          ...column,
-          outputLabel: column.label,
-          included: column.defaultVisible !== false,
-        }),
+      const [rowsForExport, systemTypes] = await Promise.all([
+        getRowsForScope(),
+        getSystemDetailTypes(),
+      ]);
+      setColumns((current) =>
+        replaceDetailedColumns(current, category, rowsForExport, systemTypes),
       );
-      const groupKey =
-        category === 'diamonds' ? 'diamondDetails' : 'stoneDetails';
-      const dynamicPrefix =
-        category === 'diamonds' ? '__diamond_type_' : '__stone_type_';
-
-      setColumns((current) => {
-        const withoutOldDynamic = current.filter(
-          (column) => !column.key.startsWith(dynamicPrefix),
-        );
-        const groupIndex = withoutOldDynamic.findIndex(
-          (column) => column.key === groupKey,
-        );
-        const insertAt =
-          groupIndex < 0 ? withoutOldDynamic.length : groupIndex + 1;
-        withoutOldDynamic.splice(insertAt, 0, ...detailedColumns);
-        return withoutOldDynamic;
-      });
 
       if (category === 'diamonds') setSeparateDiamonds(true);
       else setSeparateStones(true);
@@ -441,11 +542,7 @@ function ExportDialog<T>({ configuration, defaultSelectedColumns, selectedRows, 
     setBusy(true);
     setError(null);
     try {
-      const rows = hasSelectedRows
-        ? selectedRows!
-        : scope === 'all'
-          ? await configuration.getAllRows()
-          : configuration.filteredRows;
+      const rows = await getRowsForScope();
       const selected = activeColumns.map(
         ({ key, label, value, outputLabel }) => ({
           key,
@@ -479,12 +576,10 @@ function ExportDialog<T>({ configuration, defaultSelectedColumns, selectedRows, 
             column.key === '__serial'
               ? String(rowIndex + 1)
               : cellText(column.value(row));
-          if (column.key !== 'diamondDetails' && column.key !== 'stoneDetails')
-            return value;
-          return value.replace(
-            /\)\s*(?=(?:RD|P\/M|T\/B|R\s*ST|G\s*ST|PEARL)\s*:)/gi,
-            ')\n',
-          );
+          // Inventory and selection detail strings already contain line breaks
+          // from their query/export mappers. Keep them intact instead of
+          // matching a hardcoded list of jewelry type labels here.
+          return value;
         };
         const data = [
           selected.map((column) => column.outputLabel),
@@ -732,9 +827,33 @@ function ExportDialog<T>({ configuration, defaultSelectedColumns, selectedRows, 
                   <select
                     value={hasSelectedRows ? 'selected' : scope}
                     disabled={hasSelectedRows}
-                    onChange={(event) =>
-                      setScope(event.target.value as ExportScope)
-                    }
+                    onChange={async (event) => {
+                      const nextScope = event.target.value as ExportScope;
+                      setScope(nextScope);
+                      if (!separateDiamonds && !separateStones) return;
+                      setBusy(true);
+                      setError(null);
+                      try {
+                        const [rowsForExport, systemTypes] = await Promise.all([
+                          getRowsForScope(nextScope),
+                          getSystemDetailTypes(),
+                        ]);
+                        setColumns((current) => {
+                          let next = current;
+                          if (separateDiamonds) {
+                            next = replaceDetailedColumns(next, 'diamonds', rowsForExport, systemTypes);
+                          }
+                          if (separateStones) {
+                            next = replaceDetailedColumns(next, 'stones', rowsForExport, systemTypes);
+                          }
+                          return next;
+                        });
+                      } catch (err) {
+                        setError(err instanceof Error ? err.message : 'Unable to refresh detailed columns.');
+                      } finally {
+                        setBusy(false);
+                      }
+                    }} 
                   >
                     {hasSelectedRows ? (
                       <option value='selected'>Selected items ({selectedRows!.length})</option>

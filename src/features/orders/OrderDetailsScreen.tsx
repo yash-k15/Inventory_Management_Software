@@ -5,6 +5,7 @@ import { appDataDir, join, isAbsolute } from '@tauri-apps/api/path';
 import { getOrderDetails, type OrderDetails, type OrderDetailItem } from './orders.queries';
 import { createPayment } from '../payments/payments.queries';
 import type { PaymentMethod } from '../payments/payments.types';
+import { exportOrderExcel, exportOrderPdf } from './orders.export';
 import './OrderDetailsScreen.css';
 
 interface Props { orderId: number; onBack: () => void; backLabel?: string; }
@@ -202,6 +203,9 @@ export default function OrderDetailsScreen({ orderId, onBack, backLabel = 'Order
   const [paymentNotes, setPaymentNotes] = useState('');
   const [paymentSaving, setPaymentSaving] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportBusy, setExportBusy] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;
     setLoading(true); setError(null); setExpandedItems([]);
@@ -256,11 +260,27 @@ export default function OrderDetailsScreen({ orderId, onBack, backLabel = 'Order
     }
   }
 
+  async function runOrderExport(format: 'xlsx' | 'pdf') {
+    if (!order) return;
+    setExportBusy(true);
+    setExportError(null);
+    try {
+      if (format === 'xlsx') await exportOrderExcel(order);
+      else await exportOrderPdf(order);
+      setExportOpen(false);
+    } catch (err) {
+      console.error(`Failed to export order as ${format}:`, err);
+      setExportError(err instanceof Error ? err.message : 'Could not export this order.');
+    } finally {
+      setExportBusy(false);
+    }
+  }
+
   if (loading) return <section className="order-details-screen"><button className="order-details-back" onClick={onBack}>← {backLabel}</button><p className="order-details-message">Loading order details…</p></section>;
   if (!order) return <section className="order-details-screen"><button className="order-details-back" onClick={onBack}>← {backLabel}</button><p className="order-details-message" role="alert">{error || 'Order not found.'}</p></section>;
   const isDirect = order.exhibitionId === null;
   return <section className="order-details-screen">
-    <button type="button" className="order-details-back" onClick={onBack}>← {backLabel}</button>
+    <div className="od-top-actions"><button type="button" className="order-details-back" onClick={onBack}>← {backLabel}</button><button type="button" className="od-export-button" onClick={() => { setExportError(null); setExportOpen(true); }}>Export order</button></div>
     <header className="order-details-heading">
       <div className="order-details-title-row"><h1>{orderNumber(order.id)}</h1><span className={`order-detail-badge order-detail-status order-detail-status--${order.status.toLowerCase().replace(/ /g, '-')}`}>{order.status}</span><span className={`order-detail-badge ${isDirect ? 'order-detail-source--direct' : 'order-detail-source--exhibition'}`}>{isDirect ? 'Direct' : 'Exhibition'}</span></div>
       <p>{order.customerName} · {order.items.length} {order.items.length === 1 ? 'item' : 'items'} · {isDirect ? 'created directly' : 'from exhibition selections'} · Created {formatDate(order.createdAt)}</p>
@@ -299,6 +319,18 @@ export default function OrderDetailsScreen({ orderId, onBack, backLabel = 'Order
     </section>
     <OrderPriceBreakdown items={order.items} totalValuePaise={order.totalValuePaise} />
     {order.notes && <section className="order-detail-card od-notes-card"><h2>Notes</h2><p>{order.notes}</p></section>}
+    {exportOpen && <div className="od-export-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !exportBusy) setExportOpen(false); }}>
+      <section className="od-export-modal" role="dialog" aria-modal="true" aria-labelledby="od-export-title">
+        <header><div><h2 id="od-export-title">Export {orderNumber(order.id)}</h2><p>Choose a format for this order’s details and saved pricing information.</p></div><button type="button" onClick={() => setExportOpen(false)} disabled={exportBusy} aria-label="Close export dialog">×</button></header>
+        <div className="od-export-options">
+          <button type="button" onClick={() => void runOrderExport('xlsx')} disabled={exportBusy}><span className="od-export-option-icon">XLSX</span><span><strong>Excel workbook</strong><small>Order summary, item details, and price breakdown in separate worksheets.</small></span></button>
+          <button type="button" onClick={() => void runOrderExport('pdf')} disabled={exportBusy}><span className="od-export-option-icon od-export-option-icon--pdf">PDF</span><span><strong>PDF order report</strong><small>Printable customer/order summary with items, totals, and pricing breakdown.</small></span></button>
+        </div>
+        {exportError && <p className="od-export-error" role="alert">{exportError}</p>}
+        {exportBusy && <p className="od-export-progress">Preparing export…</p>}
+        <footer><button type="button" onClick={() => setExportOpen(false)} disabled={exportBusy}>Cancel</button></footer>
+      </section>
+    </div>}
     {paymentOpen && <div className="orders-payment-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !paymentSaving) setPaymentOpen(false); }}>
       <section className="orders-payment-modal" role="dialog" aria-modal="true" aria-labelledby="od-payment-title">
         <header className="orders-payment-modal-header">

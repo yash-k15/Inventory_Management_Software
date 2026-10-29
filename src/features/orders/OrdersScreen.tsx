@@ -13,6 +13,8 @@ import type { PaymentMethod } from '../payments/payments.types';
 import './OrdersScreen.css';
 import CreateOrderModal from './CreateOrderModal';
 import OrderDetailsScreen from './OrderDetailsScreen';
+import ExportDialog from '../../components/export/ExportDialog';
+import { ORDER_EXPORT_COLUMNS } from './orders-list.export';
 
 const initialFilters: OrdersFilters = {
   search: '',
@@ -269,6 +271,8 @@ function OrdersScreen() {
   const [pageSize, setPageSize] = useState(25);
   const [filters, setFilters] = useState<OrdersFilters>(initialFilters);
   const [orders, setOrders] = useState<OrderRow[]>([]);
+  const [selectedOrderIds, setSelectedOrderIds] = useState<Set<number>>(() => new Set());
+  const [showExportDialog, setShowExportDialog] = useState(false);
   const [summary, setSummary] = useState<OrdersSummary>(emptySummary);
   const [options, setOptions] = useState<OrderFilterOptions>(emptyOptions);
   const [loading, setLoading] = useState(true);
@@ -360,6 +364,38 @@ function OrdersScreen() {
     () => sortedOrders.slice((currentPage - 1) * pageSize, currentPage * pageSize),
     [sortedOrders, currentPage, pageSize],
   );
+
+  const selectedOrdersForExport = useMemo(
+    () => sortedOrders.filter((order) => selectedOrderIds.has(order.id)),
+    [sortedOrders, selectedOrderIds],
+  );
+  const allCurrentPageSelected =
+    paginatedOrders.length > 0 &&
+    paginatedOrders.every((order) => selectedOrderIds.has(order.id));
+  const someCurrentPageSelected = paginatedOrders.some((order) =>
+    selectedOrderIds.has(order.id),
+  );
+
+  function toggleOrderSelection(orderId: number) {
+    setSelectedOrderIds((current) => {
+      const next = new Set(current);
+      if (next.has(orderId)) next.delete(orderId);
+      else next.add(orderId);
+      return next;
+    });
+  }
+
+  function toggleCurrentPageSelection() {
+    setSelectedOrderIds((current) => {
+      const next = new Set(current);
+      if (allCurrentPageSelected) {
+        paginatedOrders.forEach((order) => next.delete(order.id));
+      } else {
+        paginatedOrders.forEach((order) => next.add(order.id));
+      }
+      return next;
+    });
+  }
 
   useEffect(() => {
     setCurrentPage(1);
@@ -586,14 +622,25 @@ function OrdersScreen() {
           <p className='orders-page-description'>{headingDescription}</p>
         </div>
 
-        <button
-          type='button'
-          className='orders-create-button'
-          onClick={() => setCreateOrderOpen(true)}
-          title='Create order — coming in the next implementation step'
-        >
-          <span aria-hidden='true'>+</span> Create order
-        </button>
+        <div className='orders-heading-actions'>
+          <button
+            type='button'
+            className='orders-export-button'
+            onClick={() => setShowExportDialog(true)}
+            disabled={loading || Boolean(error)}
+            title={selectedOrdersForExport.length > 0 ? `Export ${selectedOrdersForExport.length} selected orders` : 'Export filtered orders'}
+          >
+            Export{selectedOrdersForExport.length > 0 ? ` (${selectedOrdersForExport.length})` : ''}
+          </button>
+          <button
+            type='button'
+            className='orders-create-button'
+            onClick={() => setCreateOrderOpen(true)}
+            title='Create order — coming in the next implementation step'
+          >
+            <span aria-hidden='true'>+</span> Create order
+          </button>
+        </div>
       </header>
 
       <section className='orders-summary' aria-label='Order summary'>
@@ -733,6 +780,20 @@ function OrdersScreen() {
           <table className='orders-table'>
             <thead>
               <tr>
+                <th className='orders-select-heading'>
+                  <input
+                    type='checkbox'
+                    aria-label='Select all orders on this page'
+                    title={allCurrentPageSelected ? 'Deselect current page' : 'Select current page'}
+                    checked={allCurrentPageSelected}
+                    ref={(element) => {
+                      if (element) {
+                        element.indeterminate = someCurrentPageSelected && !allCurrentPageSelected;
+                      }
+                    }}
+                    onChange={toggleCurrentPageSelection}
+                  />
+                </th>
                 <th className='orders-serial-heading'>S.No.</th>
                 <th>{sortableHeader('Order', 'order')}</th>
                 <th>{sortableHeader('Customer', 'customer')}</th>
@@ -760,6 +821,15 @@ function OrdersScreen() {
                 !error &&
                 paginatedOrders.map((order, index) => (
                   <tr key={order.id}>
+                    <td className='orders-select-cell'>
+                      <input
+                        type='checkbox'
+                        aria-label={`Select ${formatOrderNumber(order.id)} for export`}
+                        checked={selectedOrderIds.has(order.id)}
+                        onClick={(event) => event.stopPropagation()}
+                        onChange={() => toggleOrderSelection(order.id)}
+                      />
+                    </td>
                     <td className='orders-serial-cell'>
                       {(currentPage - 1) * pageSize + index + 1}
                     </td>
@@ -844,7 +914,7 @@ function OrdersScreen() {
 
               {loading && (
                 <tr>
-                  <td colSpan={11} className='orders-table-message'>
+                  <td colSpan={12} className='orders-table-message'>
                     Loading orders…
                   </td>
                 </tr>
@@ -852,7 +922,7 @@ function OrdersScreen() {
 
               {!loading && !error && orders.length === 0 && (
                 <tr>
-                  <td colSpan={11} className='orders-table-message'>
+                  <td colSpan={12} className='orders-table-message'>
                     No orders match these filters.
                   </td>
                 </tr>
@@ -888,6 +958,29 @@ function OrdersScreen() {
           <span className='orders-table-footer-note'>Order value is the final order total. Payments and pending balances are tracked per order.</span>
         </footer>
       </section>
+      {showExportDialog && (
+        <ExportDialog
+          configuration={{
+            title: 'Orders Export',
+            filename: 'orders.xlsx',
+            columns: ORDER_EXPORT_COLUMNS,
+            filteredRows: sortedOrders,
+            getAllRows: () =>
+              getOrders({
+                ...initialFilters,
+                status: 'All',
+                search: '',
+                customerId: 'all',
+                exhibitionId: 'all',
+                dateRange: 'all',
+                sort: 'newest',
+              }),
+          }}
+          selectedRows={selectedOrdersForExport.length > 0 ? selectedOrdersForExport : undefined}
+          onClose={() => setShowExportDialog(false)}
+        />
+      )}
+
       {createOrderOpen && (
         <CreateOrderModal
           onClose={() => setCreateOrderOpen(false)}

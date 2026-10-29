@@ -83,7 +83,7 @@ const orderItemDetails = (entries: Array<{
   label: string;
   pieces: number | null;
   weight_milli: number | null;
-  weight_unit: 'ct' | 'g' | null;
+  weight_unit?: 'ct' | 'g' | null;
 }>) => entries.map((entry) => {
   const unit = entry.weight_unit ?? 'ct';
   const weight = entry.weight_milli == null

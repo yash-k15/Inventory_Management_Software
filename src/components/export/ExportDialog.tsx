@@ -70,6 +70,9 @@ function buildTotalsRow<T>(
     'itemCount',
     'calculatedTotal',
     'orderValue',
+    'totalValue',
+    'paymentReceived',
+    'paymentPending',
     'itemPrice',
   ]);
   const sumWeightColumn = (key: 'grossWeight' | 'netWeight') => {
@@ -92,7 +95,7 @@ function buildTotalsRow<T>(
 
   // Order export rows keep their money values in integer paise. Sum those
   // source values directly instead of parsing the formatted currency strings.
-  const sumOrderColumn = (key: 'itemCount' | 'calculatedTotal' | 'orderValue' | 'itemPrice') => {
+  const sumOrderColumn = (key: 'itemCount' | 'calculatedTotal' | 'orderValue' | 'totalValue' | 'paymentReceived' | 'paymentPending' | 'itemPrice') => {
     const index = columns.findIndex((column) => column.key === key);
     if (index < 0) return;
 
@@ -105,7 +108,13 @@ function buildTotalsRow<T>(
             ? source.calculatedTotalPaise
             : key === 'itemPrice'
               ? source.itemPricePaise
-              : source.totalPaise;
+              : key === 'totalValue'
+                ? source.totalValuePaise
+                : key === 'paymentReceived'
+                  ? source.paymentReceivedPaise
+                  : key === 'paymentPending'
+                    ? source.paymentPendingPaise
+                    : source.totalPaise;
       const value = Number(rawValue ?? 0);
       return total + (Number.isFinite(value) ? value : 0);
     }, 0);
@@ -126,6 +135,9 @@ function buildTotalsRow<T>(
   sumOrderColumn('itemCount');
   sumOrderColumn('calculatedTotal');
   sumOrderColumn('orderValue');
+  sumOrderColumn('totalValue');
+  sumOrderColumn('paymentReceived');
+  sumOrderColumn('paymentPending');
   sumOrderColumn('itemPrice');
 
   columns.forEach((column, index) => {
@@ -862,7 +874,7 @@ function ExportDialog<T>({ configuration, defaultSelectedColumns, selectedRows, 
                         <option value='filtered'>
                           Current filtered results ({configuration.filteredRows.length})
                         </option>
-                        <option value='all'>All inventory records</option>
+                        <option value='all'>All records</option>
                       </>
                     )}
                   </select>
@@ -1079,7 +1091,7 @@ function ExportDialog<T>({ configuration, defaultSelectedColumns, selectedRows, 
                     <span>
                       {includeTotals
                         ? 'Totals for the five preview records are shown above.'
-                        : 'Add weight and piece-count totals to the exported file.'}
+                        : 'Add totals for supported numeric and currency columns to the exported file.'}
                     </span>
                   </span>
                 </label>
@@ -1097,7 +1109,7 @@ function ExportDialog<T>({ configuration, defaultSelectedColumns, selectedRows, 
             {hasSelectedRows
               ? `Selected items (${selectedRows!.length})`
               : scope === 'all'
-                ? 'All inventory records'
+                ? 'All records'
                 : 'Current filtered results'}
             {' · '}
             {activeColumns.length} columns

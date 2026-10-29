@@ -17,6 +17,8 @@ import {
 } from './selection.queries';
 import CustomerPickerModal from './CustomerPickerModal';
 import CreateOrderModal from '../orders/CreateOrderModal';
+import ExportDialog from '../../components/export/ExportDialog';
+import { SELECTION_EXPORT_COLUMNS, SELECTION_ORDER_EXPORT_COLUMNS } from './selection.export';
 import './ExhibitionSelections.css';
 function weight(n: number | null) {
   return n == null ? '—' : `${(n / 1000).toFixed(3)}`;
@@ -88,6 +90,7 @@ export default function ExhibitionSelections({
   const [activeTab, setActiveTab] = useState<'items' | 'orders'>('items');
   const [selectedForOrder, setSelectedForOrder] = useState<number[]>([]);
   const [createOrderOpen, setCreateOrderOpen] = useState(false);
+  const [showExportDialog, setShowExportDialog] = useState(false);
   const [orders, setOrders] = useState<SelectionOrderSummary[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
@@ -783,6 +786,13 @@ export default function ExhibitionSelections({
                     Orders <span>{orders.length}</span>
                   </button>
                 </div>
+                <div className='selection-table-actions'>
+                  {((activeTab === 'items' && active.length > 0) || (activeTab === 'orders' && orders.length > 0)) && (
+                    <button type='button' className='selection-button' onClick={() => setShowExportDialog(true)}>
+                      <svg viewBox='0 0 20 20' aria-hidden='true'><path d='M10 2.5v9m0 0 3.5-3.5M10 11.5 6.5 8M3.5 12.5v4h13v-4' fill='none' stroke='currentColor' strokeWidth='1.5' strokeLinecap='round' strokeLinejoin='round' /></svg>
+                      Export
+                    </button>
+                  )}
                 {activeTab === 'items' && (
                   <div className='selection-order-actions'>
                     <span>{selectedForOrder.length} selected for order</span>
@@ -802,6 +812,7 @@ export default function ExhibitionSelections({
                     </button>
                   </div>
                 )}
+                </div>
               </div>
               {activeTab === 'orders' ? (
                 ordersLoading ? (
@@ -1180,6 +1191,31 @@ export default function ExhibitionSelections({
           </>
         )}
       </div>
+      {showExportDialog && activeTab === 'items' && customer && (
+        <ExportDialog<SelectionRow>
+          configuration={{
+            title: `${customer.businessName} — Selection Export`,
+            filename: `${customer.businessName.trim().replace(/[^a-zA-Z0-9_-]+/g, '-')}-selection.xlsx`,
+            columns: SELECTION_EXPORT_COLUMNS,
+            filteredRows: sortedActive,
+            getAllRows: async () => sortedActive,
+          }}
+          defaultSelectedColumns={['itemNumber', 'grossWeight', 'netWeight', 'diamondDetails', 'stoneDetails']}
+          onClose={() => setShowExportDialog(false)}
+        />
+      )}
+      {showExportDialog && activeTab === 'orders' && customer && (
+        <ExportDialog<SelectionOrderSummary>
+          configuration={{
+            title: `${customer.businessName} — Orders`,
+            filename: `${customer.businessName.trim().replace(/[^a-zA-Z0-9_-]+/g, '-')}-orders.xlsx`,
+            columns: SELECTION_ORDER_EXPORT_COLUMNS,
+            filteredRows: orders,
+            getAllRows: async () => orders,
+          }}
+          onClose={() => setShowExportDialog(false)}
+        />
+      )}
       {createOrderOpen && customer && (
         <CreateOrderModal
           initialCustomerId={customer.id}

@@ -66,6 +66,9 @@ function buildTotalsRow<T>(
     'netWeight',
     'diamondDetails',
     'stoneDetails',
+    'itemCount',
+    'calculatedTotal',
+    'orderValue',
   ]);
   const sumWeightColumn = (key: 'grossWeight' | 'netWeight') => {
     const index = columns.findIndex((column) => column.key === key);
@@ -84,6 +87,41 @@ function buildTotalsRow<T>(
   };
   sumWeightColumn('grossWeight');
   sumWeightColumn('netWeight');
+
+  // Order export rows keep their money values in integer paise. Sum those
+  // source values directly instead of parsing the formatted currency strings.
+  const sumOrderColumn = (key: 'itemCount' | 'calculatedTotal' | 'orderValue') => {
+    const index = columns.findIndex((column) => column.key === key);
+    if (index < 0) return;
+
+    const sum = rows.reduce((total, row) => {
+      const source = row as Record<string, unknown>;
+      const rawValue =
+        key === 'itemCount'
+          ? source.itemCount
+          : key === 'calculatedTotal'
+            ? source.calculatedTotalPaise
+            : source.totalPaise;
+      const value = Number(rawValue ?? 0);
+      return total + (Number.isFinite(value) ? value : 0);
+    }, 0);
+
+    if (key === 'itemCount') {
+      totals[index] = String(sum);
+      return;
+    }
+
+    totals[index] = new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(sum / 100);
+  };
+
+  sumOrderColumn('itemCount');
+  sumOrderColumn('calculatedTotal');
+  sumOrderColumn('orderValue');
 
   columns.forEach((column, index) => {
     if (column.key === 'diamondDetails') {

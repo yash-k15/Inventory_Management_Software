@@ -14,6 +14,7 @@ export interface SelectionDetail {
   label: string;
   pieces: number | null;
   weight_milli: number | null;
+  weight_unit?: 'ct' | 'g' | null;
 }
 
 export interface SelectionRow {
@@ -28,6 +29,21 @@ export interface SelectionRow {
   purityName: string | null;
   diamonds: SelectionDetail[];
   stones: SelectionDetail[];
+  diamondBreakdown: Array<{
+    shapeCode: string;
+    label: string;
+    sortOrder?: number;
+    weightMilli: number;
+    pieces: number;
+  }>;
+  stoneBreakdown: Array<{
+    tagLabel: string;
+    label: string;
+    sortOrder?: number;
+    weightUnit: 'ct' | 'g';
+    weightMilli: number;
+    pieces: number;
+  }>;
   status: 'active' | 'removed';
   addedAt: string;
   locked: number;
@@ -158,8 +174,37 @@ export async function addCustomerToSelectionExhibition(
 export async function getSelectionItems(selectionId: number) {
   const db = await getDatabase();
 
+  const [diamondShapeRows, stoneTypeRows] = await Promise.all([
+    db.select<Array<{ code: string; name: string; sortOrder: number }>>(
+      `SELECT code, name, sort_order AS sortOrder
+       FROM diamond_shape
+       WHERE is_archived = 0
+       ORDER BY sort_order ASC, name COLLATE NOCASE ASC`,
+    ),
+    db.select<Array<{ name: string; tagLabel: string; sortOrder: number }>>(
+      `SELECT name, tag_label AS tagLabel, sort_order AS sortOrder
+       FROM stone_type
+       WHERE is_archived = 0
+       ORDER BY sort_order ASC, name COLLATE NOCASE ASC`,
+    ),
+  ]);
+
+  const diamondLabels = new Map<string, { code: string; sortOrder: number }>();
+  diamondShapeRows.forEach(({ code, name, sortOrder }) => {
+    const entry = { code, sortOrder };
+    diamondLabels.set(code.trim().toLowerCase(), entry);
+    diamondLabels.set(name.trim().toLowerCase(), entry);
+  });
+
+  const stoneLabels = new Map<string, { tagLabel: string; sortOrder: number }>();
+  stoneTypeRows.forEach(({ name, tagLabel, sortOrder }) => {
+    const entry = { tagLabel, sortOrder };
+    stoneLabels.set(name.trim().toLowerCase(), entry);
+    stoneLabels.set(tagLabel.trim().toLowerCase(), entry);
+  });
+
   const rows = await db.select<
-    (Omit<SelectionRow, 'diamonds' | 'stones'> & {
+    (Omit<SelectionRow, 'diamonds' | 'stones' | 'diamondBreakdown' | 'stoneBreakdown'> & {
       diamondsJson: string | null;
       stonesJson: string | null;
       netWeightMilli: number | null;
@@ -181,7 +226,7 @@ export async function getSelectionItems(selectionId: number) {
        COALESCE(
          json_extract(si.snapshot_data, '$.diamonds'),
          (SELECT json_group_array(json_object(
-           'label', COALESCE(ds.code, ds.name),
+           'label', ds.code,
            'pieces', d.pieces,
            'weight_milli', d.weight_milli
          ))
@@ -192,9 +237,10 @@ export async function getSelectionItems(selectionId: number) {
        COALESCE(
          json_extract(si.snapshot_data, '$.stones'),
          (SELECT json_group_array(json_object(
-           'label', COALESCE(st.tag_label, st.name),
+           'label', st.tag_label,
            'pieces', s.pieces,
-           'weight_milli', s.weight_milli
+           'weight_milli', s.weight_milli,
+           'weight_unit', st.weight_unit
          ))
          FROM item_stone s
          JOIN stone_type st ON st.id = s.stone_type_id
@@ -236,6 +282,9 @@ export async function getSelectionItems(selectionId: number) {
           pieces: detail.pieces == null ? null : Number(detail.pieces),
           weight_milli:
             detail.weight_milli == null ? null : Number(detail.weight_milli),
+          weight_unit:
+            detail.weight_unit === 'g' ? 'g' :
+            detail.weight_unit === 'ct' ? 'ct' : null,
         }));
       } catch {
         return [];
@@ -243,10 +292,42 @@ export async function getSelectionItems(selectionId: number) {
     };
 
     const { diamondsJson, stonesJson, ...rest } = row;
+    const diamonds = parseDetails(diamondsJson).map((detail) => {
+      const reference = diamondLabels.get(detail.label.trim().toLowerCase());
+      return {
+        ...detail,
+        label: reference?.code ?? detail.label,
+        sortOrder: reference?.sortOrder ?? Number.MAX_SAFE_INTEGER,
+      };
+    });
+    const stones = parseDetails(stonesJson).map((detail) => {
+      const reference = stoneLabels.get(detail.label.trim().toLowerCase());
+      return {
+        ...detail,
+        label: reference?.tagLabel ?? detail.label,
+        sortOrder: reference?.sortOrder ?? Number.MAX_SAFE_INTEGER,
+      };
+    });
+
     return {
       ...rest,
-      diamonds: parseDetails(diamondsJson),
-      stones: parseDetails(stonesJson),
+      diamonds,
+      stones,
+      diamondBreakdown: diamonds.map((entry) => ({
+        shapeCode: entry.label,
+        label: entry.label,
+        sortOrder: (entry as SelectionDetail & { sortOrder?: number }).sortOrder,
+        weightMilli: entry.weight_milli ?? 0,
+        pieces: entry.pieces ?? 0,
+      })),
+      stoneBreakdown: stones.map((entry) => ({
+        tagLabel: entry.label,
+        label: entry.label,
+        sortOrder: (entry as SelectionDetail & { sortOrder?: number }).sortOrder,
+        weightUnit: entry.weight_unit ?? 'ct',
+        weightMilli: entry.weight_milli ?? 0,
+        pieces: entry.pieces ?? 0,
+      })),
     };
   });
 }
@@ -357,7 +438,7 @@ export async function addSelectionItem(
 
   const diamonds = await db.select<any[]>(
     `SELECT
-       COALESCE(ds.code, ds.name) AS label,
+       ds.code AS label,
        d.pieces,
        d.weight_milli AS weight_milli
      FROM item_diamond d
@@ -369,9 +450,10 @@ export async function addSelectionItem(
 
   const stones = await db.select<any[]>(
     `SELECT
-       COALESCE(st.tag_label, st.name) AS label,
+       st.tag_label AS label,
        s.pieces,
-       s.weight_milli AS weight_milli
+       s.weight_milli AS weight_milli,
+       st.weight_unit AS weight_unit
      FROM item_stone s
      JOIN stone_type st ON st.id = s.stone_type_id
      WHERE s.item_id = ?
@@ -536,10 +618,20 @@ export async function getSelectionOrders(
       'ORD-' || printf('%04d', co.id) AS orderNumber,
       co.status,
       co.created_at AS createdAt,
-      COUNT(coi.id) AS itemCount,
-      co.calculated_total_paise AS calculatedTotalPaise,
+      COUNT(DISTINCT coi.id) AS itemCount,
+      COALESCE(
+        NULLIF(co.calculated_total_paise, 0),
+        SUM(coi.agreed_price_paise),
+        0
+      ) AS calculatedTotalPaise,
       co.rounded_total_paise AS roundedTotalPaise,
-      co.final_total_paise AS totalPaise
+      COALESCE(
+        NULLIF(co.final_total_paise, 0),
+        NULLIF(co.rounded_total_paise, 0),
+        NULLIF(co.calculated_total_paise, 0),
+        SUM(coi.agreed_price_paise),
+        0
+      ) AS totalPaise
     FROM customer_order co
     LEFT JOIN customer_order_item coi ON coi.order_id = co.id
     WHERE co.customer_id = ?
@@ -592,10 +684,20 @@ export async function getSelectionOrderDetail(
     SELECT co.id,
       'ORD-' || printf('%04d', co.id) AS orderNumber,
       co.created_at AS createdAt,
-      COUNT(coi.id) AS itemCount,
-      co.calculated_total_paise AS calculatedTotalPaise,
+      COUNT(DISTINCT coi.id) AS itemCount,
+      COALESCE(
+        NULLIF(co.calculated_total_paise, 0),
+        SUM(coi.agreed_price_paise),
+        0
+      ) AS calculatedTotalPaise,
       co.rounded_total_paise AS roundedTotalPaise,
-      co.final_total_paise AS totalPaise,
+      COALESCE(
+        NULLIF(co.final_total_paise, 0),
+        NULLIF(co.rounded_total_paise, 0),
+        NULLIF(co.calculated_total_paise, 0),
+        SUM(coi.agreed_price_paise),
+        0
+      ) AS totalPaise,
       co.notes AS notes
     FROM customer_order co
     LEFT JOIN customer_order_item coi ON coi.order_id = co.id
@@ -649,6 +751,9 @@ export async function getSelectionOrderDetail(
               ? null
               : Number(d.weightMilli)
             : Number(d.weight_milli),
+        weight_unit:
+          d.weight_unit === 'g' ? 'g' :
+          d.weight_unit === 'ct' ? 'ct' : null,
       }));
     } catch {
       return [];

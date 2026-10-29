@@ -190,3 +190,5 @@
  .selection-thumbnail-preview:hover .selection-thumbnail-preview-popover { transform:translateY(-50%) scale(1); }
  .selection-thumbnail-preview-popover::before { left:auto; right:-6px; border:0; border-top:1px solid #e4d6c6; border-right:1px solid #e4d6c6; }
 }
+
+.selection-table-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px;min-width:0}.selection-table-actions>button{display:inline-flex;align-items:center;gap:7px}.selection-table-actions svg{width:16px;height:16px;flex:0 0 16px}.selection-order-actions{display:flex;align-items:center;gap:10px}.selection-order-actions>span{color:#81756a;font-size:12px}@media(max-width:900px){.selection-table-actions{flex-wrap:wrap}}@media(max-width:520px){.selection-table-actions{width:100%;justify-content:space-between}.selection-order-actions{flex-wrap:wrap}}

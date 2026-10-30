@@ -10,7 +10,8 @@ export type SidebarView =
   | 'add-item'
   | 'item-details'
   | 'edit-item'
-  | 'settings';
+  | 'settings'
+  | 'data-transfer';
 
 interface SidebarProps {
   view: SidebarView;
@@ -93,6 +94,11 @@ function Sidebar({
           <path d='m19.4 15 .1.1 1.4 1.1-1.4 2.4-1.7-.7a8 8 0 0 1-1.8 1l-.3 1.8h-2.8l-.3-1.8a8 8 0 0 1-1.8-1l-1.7.7-1.4-2.4 1.4-1.1a7 7 0 0 1 0-2l-1.4-1.1 1.4-2.4 1.7.7a8 8 0 0 1 1.8-1l.3-1.8h2.8l.3 1.8a8 8 0 0 1 1.8 1l1.7-.7 1.4 2.4-1.4 1.1a7 7 0 0 1 0 2Z' />
         </>
       ),
+    },
+    {
+      label: 'Data Transfer',
+      view: 'data-transfer' as const,
+      icon: <><path d='M12 3v12m0 0 4-4m-4 4-4-4M4 17v3h16v-3' /></>,
     },
   ];
 

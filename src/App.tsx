@@ -10,6 +10,7 @@ import SettingsScreen from './features/settings/SettingsScreen';
 import OrdersScreen from './features/orders/OrdersScreen';
 import OrderDetailsScreen from './features/orders/OrderDetailsScreen';
 import PaymentsScreen from './features/payments/PaymentsScreen';
+import DataTransferScreen from './features/data-transfer/DataTransferScreen';
 import Sidebar, { type SidebarView } from './components/Sidebar/Sidebar';
 import './App.css';
 
@@ -136,6 +137,7 @@ function App() {
             {view === 'settings' && (
               <SettingsScreen onDirtyChange={setSettingsDirty} />
             )}
+            {view === 'data-transfer' && <DataTransferScreen />}
             {view === 'exhibitions' && (
               <ExhibitionsScreen onOpenExhibition={openExhibitionWorkspace} />
             )}

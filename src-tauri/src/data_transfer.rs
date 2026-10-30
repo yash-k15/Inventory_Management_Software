@@ -238,3 +238,367 @@ pub fn validate_master_package(source: String) -> Result<TransferValidationResul
         message: "Package validation passed. No existing application data was changed.".to_string(),
     })
 }
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PreparedImportResult {
+    operation_id: String,
+    transfer_id: String,
+    image_count: usize,
+    backup_directory: String,
+    staging_directory: String,
+    message: String,
+}
+
+fn copy_tree_for_import(source: &Path, destination: &Path) -> Result<usize, String> {
+    if !source.exists() {
+        fs::create_dir_all(destination)
+            .map_err(|error| format!("Could not create empty item-images folder: {error}"))?;
+        return Ok(0);
+    }
+    copy_directory(source, destination)
+}
+
+fn create_database_snapshot(source: &Path, destination: &Path) -> Result<(), String> {
+    if destination.exists() {
+        fs::remove_file(destination)
+            .map_err(|error| format!("Could not prepare database backup destination: {error}"))?;
+    }
+    let connection = rusqlite::Connection::open(source)
+        .map_err(|error| format!("Could not open the current database for backup: {error}"))?;
+    let escaped = destination.to_string_lossy().replace('\'', "''");
+    connection.execute_batch(&format!("VACUUM INTO '{escaped}';"))
+        .map_err(|error| format!("Could not create a consistent database backup: {error}"))?;
+    let integrity: String = rusqlite::Connection::open(destination)
+        .and_then(|database| database.query_row("PRAGMA integrity_check", [], |row| row.get(0)))
+        .map_err(|error| format!("Could not verify the database backup: {error}"))?;
+    if integrity != "ok" {
+        return Err(format!("The database backup failed its integrity check: {integrity}"));
+    }
+    Ok(())
+}
+
+/// Validates a package, creates a recoverable backup of the current local data,
+/// and extracts the incoming package to a staging directory. It deliberately
+/// does not replace any live application files; replacement is a later step.
+#[tauri::command]
+pub fn prepare_master_import(app: AppHandle, source: String) -> Result<PreparedImportResult, String> {
+    // Revalidate at the point of use. The previous UI validation is not trusted
+    // as authorization to stage a package that may have changed on disk.
+    let validation = validate_master_package(source.clone())?;
+    let archive = PathBuf::from(&source);
+
+    let app_config_dir = app.path().app_config_dir()
+        .map_err(|error| format!("Could not resolve the database directory: {error}"))?;
+    let app_data_dir = app.path().app_data_dir()
+        .map_err(|error| format!("Could not resolve the application data directory: {error}"))?;
+    let database_name = if cfg!(debug_assertions) { "inventory-dev.db" } else { "inventory.db" };
+    let current_database = app_config_dir.join(database_name);
+    if !current_database.is_file() {
+        return Err(format!("The current local database was not found at {}. No data was changed.", current_database.display()));
+    }
+    let current_images = app_data_dir.join("item-images");
+
+    let unique_stamp = SystemTime::now().duration_since(UNIX_EPOCH)
+        .map_err(|error| format!("Could not create transfer folder name: {error}"))?.as_millis();
+    let operation_id = format!("{}-{unique_stamp}-{}", validation.transfer_id.replace(|c: char| !c.is_ascii_alphanumeric() && c != '-' && c != '_', "_"), std::process::id());
+    let backup_dir = app_data_dir.join("data-transfer-backups").join(&operation_id);
+    let staging_dir = app_data_dir.join("data-transfer-staging").join(&operation_id);
+
+    if backup_dir.exists() || staging_dir.exists() {
+        return Err("A transfer operation with this identifier already exists. No data was changed.".to_string());
+    }
+    fs::create_dir_all(&backup_dir)
+        .map_err(|error| format!("Could not create the backup directory: {error}"))?;
+
+    let backup_result = (|| {
+        create_database_snapshot(&current_database, &backup_dir.join("inventory.db"))?;
+        copy_tree_for_import(&current_images, &backup_dir.join("item-images"))?;
+        Ok::<(), String>(())
+    })();
+    if let Err(error) = backup_result {
+        let _ = fs::remove_dir_all(&backup_dir);
+        return Err(format!("Backup could not be completed. The live database and photos were not changed. {error}"));
+    }
+
+    if let Err(error) = fs::create_dir_all(&staging_dir) {
+        return Err(format!("The backup was created at {}, but staging could not be created: {error}", backup_dir.display()));
+    }
+    // Extract each validated regular-file entry through `unzip -p` instead of
+    // asking unzip to materialize the archive. This prevents archived symlinks
+    // from being created in the staging tree.
+    let listing = run_unzip(&["-Z1"], &archive)
+        .and_then(|bytes| String::from_utf8(bytes).map_err(|_| "The ZIP contains invalid entry names.".to_string()));
+    let extraction = listing.and_then(|listing| {
+        for entry in listing.lines().filter(|entry| !entry.ends_with('/')) {
+            let relative = Path::new(entry);
+            if relative.is_absolute() || relative.components().any(|part| !matches!(part, std::path::Component::Normal(_))) {
+                return Err("The ZIP contains an unsafe staging path.".to_string());
+            }
+            let destination = staging_dir.join(relative);
+            if let Some(parent) = destination.parent() {
+                fs::create_dir_all(parent).map_err(|error| format!("Could not create staging folder: {error}"))?;
+            }
+            let bytes = run_unzip(&["-p", entry], &archive)?;
+            fs::write(&destination, bytes).map_err(|error| format!("Could not write staged package file: {error}"))?;
+        }
+        Ok(())
+    });
+    if let Err(error) = extraction {
+        let _ = fs::remove_dir_all(&staging_dir);
+        return Err(format!("Backup was safely created at {}. Staging failed and live data was not changed. {error}", backup_dir.display()));
+    }
+
+    // Verify the staged files independently of the archive-level validation.
+    let staged_database = staging_dir.join("inventory.db");
+    let staged_integrity: Result<String, String> = rusqlite::Connection::open_with_flags(
+        &staged_database,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+    ).map_err(|error| format!("Could not open staged database: {error}"))
+      .and_then(|database| database.query_row("PRAGMA integrity_check", [], |row| row.get(0))
+          .map_err(|error| format!("Could not verify staged database: {error}")));
+    match staged_integrity {
+        Ok(value) if value == "ok" => {}
+        Ok(value) => {
+            let _ = fs::remove_dir_all(&staging_dir);
+            return Err(format!("Backup is at {}. Staged database integrity check failed: {value}. Live data was not changed.", backup_dir.display()));
+        }
+        Err(error) => {
+            let _ = fs::remove_dir_all(&staging_dir);
+            return Err(format!("Backup is at {}. {error}. Live data was not changed.", backup_dir.display()));
+        }
+    }
+    if !staging_dir.join("manifest.json").is_file() || !staging_dir.join("item-images").is_dir() {
+        let _ = fs::remove_dir_all(&staging_dir);
+        return Err(format!("Backup is at {}. Staged package is incomplete. Live data was not changed.", backup_dir.display()));
+    }
+
+    Ok(PreparedImportResult {
+        operation_id: operation_id.clone(),
+        transfer_id: validation.transfer_id,
+        image_count: validation.image_count,
+        backup_directory: backup_dir.to_string_lossy().into_owned(),
+        staging_directory: staging_dir.to_string_lossy().into_owned(),
+        message: "Package revalidated. A verified backup was created and the incoming package was staged. Your live database and photos have not been replaced.".to_string(),
+    })
+}
+
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PendingImportJournal {
+    operation_id: String,
+    state: String,
+    created_at_unix_millis: u128,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ImportCompletion {
+    success: bool,
+    message: String,
+    completed_at_unix_millis: u128,
+}
+
+fn safe_operation_id(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 180
+        && value.chars().all(|character| character.is_ascii_alphanumeric() || character == '-' || character == '_')
+}
+
+fn write_json_atomically<T: Serialize>(path: &Path, value: &T) -> Result<(), String> {
+    let parent = path.parent().ok_or_else(|| "Invalid transfer journal path.".to_string())?;
+    fs::create_dir_all(parent).map_err(|error| format!("Could not create transfer journal directory: {error}"))?;
+    let temporary = path.with_extension("json.tmp");
+    let bytes = serde_json::to_vec_pretty(value).map_err(|error| format!("Could not serialize transfer journal: {error}"))?;
+    fs::write(&temporary, bytes).map_err(|error| format!("Could not write transfer journal: {error}"))?;
+    fs::rename(&temporary, path).map_err(|error| format!("Could not commit transfer journal: {error}"))
+}
+
+fn verify_database_file(path: &Path) -> Result<(), String> {
+    let database = rusqlite::Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+        .map_err(|error| format!("Could not open database {}: {error}", path.display()))?;
+    let integrity: String = database.query_row("PRAGMA integrity_check", [], |row| row.get(0))
+        .map_err(|error| format!("Could not check database integrity: {error}"))?;
+    if integrity != "ok" {
+        return Err(format!("Database integrity check failed for {}: {integrity}", path.display()));
+    }
+    Ok(())
+}
+
+fn copy_tree_replace(source: &Path, destination: &Path) -> Result<(), String> {
+    let temporary = destination.with_extension("transfer-new");
+    if temporary.exists() {
+        fs::remove_dir_all(&temporary).map_err(|error| format!("Could not clear temporary photo folder: {error}"))?;
+    }
+    copy_tree_for_import(source, &temporary)?;
+    if destination.exists() {
+        fs::remove_dir_all(destination).map_err(|error| format!("Could not replace existing photo folder: {error}"))?;
+    }
+    fs::rename(&temporary, destination).map_err(|error| format!("Could not activate imported photo folder: {error}"))
+}
+
+fn copy_database_replace(source: &Path, destination: &Path) -> Result<(), String> {
+    verify_database_file(source)?;
+    let parent = destination.parent().ok_or_else(|| "Invalid database destination.".to_string())?;
+    fs::create_dir_all(parent).map_err(|error| format!("Could not access database directory: {error}"))?;
+    let temporary = parent.join(format!(".inventory-import-{}.db", std::process::id()));
+    if temporary.exists() {
+        fs::remove_file(&temporary).map_err(|error| format!("Could not clear temporary database: {error}"))?;
+    }
+    fs::copy(source, &temporary).map_err(|error| format!("Could not stage imported database beside the live database: {error}"))?;
+    verify_database_file(&temporary)?;
+
+    // The app is not running at startup, so no SQL connection should be open.
+    // Remove stale sidecars before activating the new database.
+    for suffix in ["-wal", "-shm"] {
+        let sidecar = PathBuf::from(format!("{}{}", destination.to_string_lossy(), suffix));
+        if sidecar.exists() {
+            fs::remove_file(&sidecar).map_err(|error| format!("Could not remove stale SQLite sidecar {}: {error}", sidecar.display()))?;
+        }
+    }
+    if destination.exists() {
+        fs::remove_file(destination).map_err(|error| format!("Could not replace existing database: {error}"))?;
+    }
+    fs::rename(&temporary, destination).map_err(|error| format!("Could not activate imported database: {error}"))
+}
+
+fn restore_from_backup(
+    database_backup: &Path,
+    images_backup: &Path,
+    database_destination: &Path,
+    images_destination: &Path,
+) -> Result<(), String> {
+    copy_database_replace(database_backup, database_destination)?;
+    copy_tree_replace(images_backup, images_destination)?;
+    Ok(())
+}
+
+fn write_import_completion(app_data_dir: &Path, success: bool, message: String) -> Result<(), String> {
+    let now = SystemTime::now().duration_since(UNIX_EPOCH)
+        .map_err(|error| format!("Could not timestamp import result: {error}"))?.as_millis();
+    write_json_atomically(&app_data_dir.join("data-transfer-last-result.json"), &ImportCompletion {
+        success,
+        message,
+        completed_at_unix_millis: now,
+    })
+}
+
+/// Schedules the already-prepared import and exits the app. The next launch
+/// applies it before the frontend can open the SQLite connection.
+#[tauri::command]
+pub fn schedule_master_import(app: AppHandle, operation_id: String) -> Result<String, String> {
+    if !safe_operation_id(&operation_id) {
+        return Err("Invalid import operation identifier.".to_string());
+    }
+    let app_data_dir = app.path().app_data_dir().map_err(|error| format!("Could not resolve application data directory: {error}"))?;
+    let journal_path = app_data_dir.join("data-transfer-pending.json");
+    if journal_path.exists() {
+        return Err("Another data import is already pending. Restart the application to finish recovery before scheduling another import.".to_string());
+    }
+    let backup_dir = app_data_dir.join("data-transfer-backups").join(&operation_id);
+    let staging_dir = app_data_dir.join("data-transfer-staging").join(&operation_id);
+    let database_backup = backup_dir.join("inventory.db");
+    let images_backup = backup_dir.join("item-images");
+    let staged_database = staging_dir.join("inventory.db");
+    let staged_images = staging_dir.join("item-images");
+    if !database_backup.is_file() || !images_backup.is_dir() || !staged_database.is_file() || !staged_images.is_dir() {
+        return Err("The prepared import is incomplete. No files were replaced; prepare the package again.".to_string());
+    }
+    verify_database_file(&database_backup)?;
+    verify_database_file(&staged_database)?;
+
+    let now = SystemTime::now().duration_since(UNIX_EPOCH)
+        .map_err(|error| format!("Could not timestamp import operation: {error}"))?.as_millis();
+    write_json_atomically(&journal_path, &PendingImportJournal {
+        operation_id,
+        state: "pending".to_string(),
+        created_at_unix_millis: now,
+    })?;
+
+    // Exit rather than replacing a database while the frontend SQL plugin may
+    // still hold a connection. The user reopens the app to apply the journal.
+    app.exit(0);
+    Ok("Import scheduled. The application is closing; reopen it to apply the Master package.".to_string())
+}
+
+/// Runs from Tauri setup before the React frontend loads. An interrupted
+/// `applying` operation is rolled back from the verified backup on next launch.
+#[tauri::command]
+pub fn get_data_transfer_import_result(app: AppHandle) -> Result<Option<serde_json::Value>, String> {
+    let app_data_dir = app.path().app_data_dir().map_err(|error| format!("Could not resolve application data directory: {error}"))?;
+    let result_path = app_data_dir.join("data-transfer-last-result.json");
+    if !result_path.is_file() {
+        return Ok(None);
+    }
+    let bytes = fs::read(&result_path).map_err(|error| format!("Could not read last import result: {error}"))?;
+    let value = serde_json::from_slice(&bytes).map_err(|error| format!("Last import result is invalid: {error}"))?;
+    Ok(Some(value))
+}
+
+pub fn apply_pending_import(app: &tauri::AppHandle) -> Result<(), String> {
+    let app_data_dir = app.path().app_data_dir().map_err(|error| format!("Could not resolve application data directory: {error}"))?;
+    let journal_path = app_data_dir.join("data-transfer-pending.json");
+    if !journal_path.is_file() {
+        return Ok(());
+    }
+    let journal_bytes = fs::read(&journal_path).map_err(|error| format!("Could not read pending import journal: {error}"))?;
+    let mut journal: PendingImportJournal = serde_json::from_slice(&journal_bytes)
+        .map_err(|error| format!("Pending import journal is corrupt. Do not use the app until it is recovered: {error}"))?;
+    if !safe_operation_id(&journal.operation_id) {
+        return Err("Pending import journal contains an invalid operation ID. Startup stopped to protect application data.".to_string());
+    }
+
+    let backup_dir = app_data_dir.join("data-transfer-backups").join(&journal.operation_id);
+    let staging_dir = app_data_dir.join("data-transfer-staging").join(&journal.operation_id);
+    let database_backup = backup_dir.join("inventory.db");
+    let images_backup = backup_dir.join("item-images");
+    let staged_database = staging_dir.join("inventory.db");
+    let staged_images = staging_dir.join("item-images");
+    let config_dir = app.path().app_config_dir().map_err(|error| format!("Could not resolve database directory: {error}"))?;
+    let database_name = if cfg!(debug_assertions) { "inventory-dev.db" } else { "inventory.db" };
+    let database_destination = config_dir.join(database_name);
+    let images_destination = app_data_dir.join("item-images");
+
+    if journal.state == "applying" {
+        // A prior launch was interrupted during replacement. Never retry the
+        // destructive operation; restore the known-good pre-import backup.
+        restore_from_backup(&database_backup, &images_backup, &database_destination, &images_destination)
+            .map_err(|error| format!("Automatic recovery failed. Keep the app closed and preserve backup at {}. {error}", backup_dir.display()))?;
+        fs::remove_file(&journal_path).map_err(|error| format!("Recovered the previous data, but could not clear the journal: {error}"))?;
+        write_import_completion(&app_data_dir, false, format!("The previous import was interrupted. Your previous database and photos were restored from {}.", backup_dir.display()))?;
+        return Ok(());
+    }
+    if journal.state != "pending" {
+        return Err("Pending import journal has an unknown state. Startup stopped to protect application data.".to_string());
+    }
+    if !database_backup.is_file() || !images_backup.is_dir() || !staged_database.is_file() || !staged_images.is_dir() {
+        return Err(format!("Pending import files are incomplete. Startup stopped; preserve the backup at {}.", backup_dir.display()));
+    }
+
+    journal.state = "applying".to_string();
+    write_json_atomically(&journal_path, &journal)?;
+
+    let apply_result = (|| {
+        copy_database_replace(&staged_database, &database_destination)?;
+        copy_tree_replace(&staged_images, &images_destination)?;
+        verify_database_file(&database_destination)?;
+        Ok::<(), String>(())
+    })();
+
+    match apply_result {
+        Ok(()) => {
+            fs::remove_file(&journal_path).map_err(|error| format!("Import completed, but the journal could not be cleared. On next launch recovery may restore the previous data: {error}"))?;
+            let _ = fs::remove_dir_all(&staging_dir);
+            write_import_completion(&app_data_dir, true, "Master database and item photos were imported successfully.".to_string())?;
+            Ok(())
+        }
+        Err(import_error) => {
+            restore_from_backup(&database_backup, &images_backup, &database_destination, &images_destination)
+                .map_err(|rollback_error| format!("Import failed: {import_error}. Automatic rollback also failed: {rollback_error}. Keep the app closed and preserve backup at {}.", backup_dir.display()))?;
+            fs::remove_file(&journal_path).map_err(|error| format!("Import failed and previous data was restored, but the journal could not be cleared: {error}"))?;
+            write_import_completion(&app_data_dir, false, format!("Import failed and your previous database and photos were restored. Reason: {import_error}"))?;
+            Ok(())
+        }
+    }
+}

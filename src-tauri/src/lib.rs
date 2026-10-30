@@ -186,7 +186,12 @@ pub fn run() {
                 .add_migrations("sqlite:inventory-dev.db", migrations())
                 .add_migrations("sqlite:inventory.db", migrations())
                 .build(),
-        );
+        )
+        .setup(|app| {
+            data_transfer::apply_pending_import(app.handle())
+                .map_err(std::io::Error::other)?;
+            Ok(())
+        });
 
     #[cfg(debug_assertions)]
     let builder = builder.invoke_handler(tauri::generate_handler![
@@ -211,6 +216,9 @@ pub fn run() {
         order::create_confirmed_order,
         data_transfer::export_master_package,
         data_transfer::validate_master_package,
+        data_transfer::prepare_master_import,
+        data_transfer::schedule_master_import,
+        data_transfer::get_data_transfer_import_result,
     ]);
 
     #[cfg(not(debug_assertions))]
@@ -234,6 +242,9 @@ pub fn run() {
         order::create_confirmed_order,
         data_transfer::export_master_package,
         data_transfer::validate_master_package,
+        data_transfer::prepare_master_import,
+        data_transfer::schedule_master_import,
+        data_transfer::get_data_transfer_import_result,
     ]);
 
     builder

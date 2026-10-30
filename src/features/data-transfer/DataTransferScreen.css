@@ -36,3 +36,30 @@
   margin: 5px 0;
   font-size: 13px;
 }
+
+.data-transfer-prepare-import {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 18px;
+  padding: 15px 16px;
+  border: 1px solid #e6ddd2;
+  border-radius: 10px;
+  background: #fbf8f3;
+}
+
+.data-transfer-prepare-import p {
+  margin: 0;
+  color: #655b52;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.data-transfer-danger-button {
+  background: #8f3b32;
+}
+
+.data-transfer-danger-button:hover:not(:disabled) {
+  background: #742d26;
+}

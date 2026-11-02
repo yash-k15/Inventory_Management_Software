@@ -69,3 +69,33 @@
 .app-muted {
   color: var(--color-text-muted);
 }
+
+/* Shared page back navigation */
+.app-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  width: fit-content;
+  min-height: 32px;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-secondary, #766f68);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.app-back-link:hover {
+  background: transparent;
+  color: var(--color-primary, #8b6a3e);
+}
+
+.app-back-link:focus-visible {
+  border-radius: 3px;
+  outline: 2px solid var(--color-accent, #b08d57);
+  outline-offset: 4px;
+}

@@ -27,25 +27,7 @@
 }
 
 .item-details-back {
-  display: inline-block;
-  padding: 0;
   margin: 0 0 6px;
-  border: 0;
-  background: transparent;
-  color: #766f68;
-  font: inherit;
-  font-size: 13px;
-  cursor: pointer;
-}
-
-.item-details-back:hover {
-  color: #8b6a3e;
-}
-
-.item-details-back:focus-visible {
-  outline: 2px solid #b08d57;
-  outline-offset: 4px;
-  border-radius: 3px;
 }
 
 .item-details-title-row {

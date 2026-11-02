@@ -329,7 +329,7 @@ function ItemDetailsScreen({ itemId, onBack, onEdit }: Props) {
   if (error || !data) {
     return (
       <section className='item-details-screen'>
-        <button className='item-details-back' type='button' onClick={onBack}>
+        <button className='app-back-link item-details-back' type='button' onClick={onBack}>
           ← Inventory
         </button>
         <p className='item-details-message item-details-error'>
@@ -362,7 +362,7 @@ function ItemDetailsScreen({ itemId, onBack, onEdit }: Props) {
     <section className='item-details-screen'>
       <header className='item-details-header'>
         <div className='item-details-heading'>
-          <button className='item-details-back' type='button' onClick={onBack}>
+          <button className='app-back-link item-details-back' type='button' onClick={onBack}>
             ← Inventory
           </button>
 

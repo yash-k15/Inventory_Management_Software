@@ -215,6 +215,8 @@ export default function CustomerDetailsScreen({
   const [payments, setPayments] = useState<CustomerPaymentHistoryRow[]>([]);
   const [activeTab, setActiveTab] = useState<HistoryTab>('orders');
   const [isExportOpen, setIsExportOpen] = useState(false);
+  const [selectedOrderIds, setSelectedOrderIds] = useState<Set<number>>(() => new Set());
+  const [selectedPaymentIds, setSelectedPaymentIds] = useState<Set<number>>(() => new Set());
   const [pageSize, setPageSize] = useState(25);
   const [ordersPage, setOrdersPage] = useState(1);
   const [paymentsPage, setPaymentsPage] = useState(1);
@@ -300,6 +302,30 @@ export default function CustomerDetailsScreen({
   const filteredOrdersTotalPages = Math.max(1, Math.ceil(filteredOrders.length / pageSize));
   const paginatedOrders = filteredOrders.slice((ordersPage - 1) * pageSize, ordersPage * pageSize);
   const paginatedPayments = payments.slice((paymentsPage - 1) * pageSize, paymentsPage * pageSize);
+  const selectedOrders = orders.filter((order) => selectedOrderIds.has(order.id));
+  const selectedPayments = payments.filter((payment) => selectedPaymentIds.has(payment.id));
+  const allVisibleOrdersSelected = paginatedOrders.length > 0 && paginatedOrders.every((order) => selectedOrderIds.has(order.id));
+  const allVisiblePaymentsSelected = paginatedPayments.length > 0 && paginatedPayments.every((payment) => selectedPaymentIds.has(payment.id));
+  const toggleOrderSelection = (orderId: number) => setSelectedOrderIds((current) => {
+    const next = new Set(current);
+    if (next.has(orderId)) next.delete(orderId); else next.add(orderId);
+    return next;
+  });
+  const togglePaymentSelection = (paymentId: number) => setSelectedPaymentIds((current) => {
+    const next = new Set(current);
+    if (next.has(paymentId)) next.delete(paymentId); else next.add(paymentId);
+    return next;
+  });
+  const toggleVisibleOrders = (checked: boolean) => setSelectedOrderIds((current) => {
+    const next = new Set(current);
+    paginatedOrders.forEach((order) => checked ? next.add(order.id) : next.delete(order.id));
+    return next;
+  });
+  const toggleVisiblePayments = (checked: boolean) => setSelectedPaymentIds((current) => {
+    const next = new Set(current);
+    paginatedPayments.forEach((payment) => checked ? next.add(payment.id) : next.delete(payment.id));
+    return next;
+  });
 
   useEffect(() => {
     setOrdersPage((page) => Math.min(page, filteredOrdersTotalPages));
@@ -318,7 +344,7 @@ export default function CustomerDetailsScreen({
   if (loading) {
     return (
       <section className='customer-details-screen'>
-        <button className='customer-details-back' type='button' onClick={onBack}>
+        <button className='app-button app-button--secondary app-back-link customer-details-back' type='button' onClick={onBack}>
           ← Back to customers
         </button>
         <div className='customer-details-state'>Loading customer details…</div>
@@ -329,7 +355,7 @@ export default function CustomerDetailsScreen({
   if (error || !customer) {
     return (
       <section className='customer-details-screen'>
-        <button className='customer-details-back' type='button' onClick={onBack}>
+        <button className='app-button app-button--secondary app-back-link customer-details-back' type='button' onClick={onBack}>
           ← Back to customers
         </button>
         <div className='customer-details-state customer-details-state--error'>
@@ -343,7 +369,7 @@ export default function CustomerDetailsScreen({
   return (
     <section className='customer-details-screen'>
       <div className='customer-details-topbar'>
-        <button className='customer-details-back' type='button' onClick={onBack}>
+        <button className='app-button app-button--secondary app-back-link customer-details-back' type='button' onClick={onBack}>
           <span aria-hidden='true'>←</span> Back to customers
         </button>
       </div>
@@ -416,11 +442,20 @@ export default function CustomerDetailsScreen({
                   Payments <span>{payments.length}</span>
                 </button>
               </div>
+              {(activeTab === 'orders' ? selectedOrderIds.size : selectedPaymentIds.size) > 0 && (
+                <button
+                  type='button'
+                  className='customer-details-clear-selection'
+                  onClick={() => activeTab === 'orders' ? setSelectedOrderIds(new Set()) : setSelectedPaymentIds(new Set())}
+                >
+                  Clear selection ({activeTab === 'orders' ? selectedOrderIds.size : selectedPaymentIds.size})
+                </button>
+              )}
               <button
                 type='button'
                 className='customer-details-export-button'
                 onClick={() => setIsExportOpen(true)}
-                disabled={activeTab === 'orders' ? filteredOrders.length === 0 : payments.length === 0}
+                disabled={activeTab === 'orders' ? filteredOrders.length === 0 && selectedOrderIds.size === 0 : payments.length === 0 && selectedPaymentIds.size === 0}
               >
                 <svg aria-hidden='true' width='15' height='15' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round'>
                   <path d='M12 3v12' />
@@ -428,6 +463,8 @@ export default function CustomerDetailsScreen({
                   <path d='M5 19h14' />
                 </svg>
                 Export
+                {(activeTab === 'orders' ? selectedOrderIds.size : selectedPaymentIds.size) > 0 &&
+                  ` (${activeTab === 'orders' ? selectedOrderIds.size : selectedPaymentIds.size})`}
               </button>
             </div>
           </div>
@@ -491,6 +528,15 @@ export default function CustomerDetailsScreen({
                     <table className='customer-details-table'>
                       <thead>
                         <tr>
+                          <th className='customer-details-select-cell'>
+                            <input
+                              type='checkbox'
+                              checked={allVisibleOrdersSelected}
+                              onChange={(event) => toggleVisibleOrders(event.target.checked)}
+                              aria-label='Select all orders on this page'
+                              title='Select all orders on this page'
+                            />
+                          </th>
                           <th className='customer-details-serial'>S.No.</th>
                           <th><button type='button' className={`customer-details-sort-heading ${orderSort === 'newest' || orderSort === 'oldest' ? 'is-active' : ''}`} onClick={() => setOrderSort((current) => current === 'newest' ? 'oldest' : 'newest')}>Order date <span>{orderSort === 'newest' ? '↓' : orderSort === 'oldest' ? '↑' : '↕'}</span></button></th>
                           <th>Order</th>
@@ -503,11 +549,20 @@ export default function CustomerDetailsScreen({
                       <tbody>
                         {paginatedOrders.map((order, index) => (
                           <tr key={order.id}>
+                            <td className='customer-details-select-cell'>
+                              <input
+                                type='checkbox'
+                                checked={selectedOrderIds.has(order.id)}
+                                onChange={() => toggleOrderSelection(order.id)}
+                                aria-label={`Select order ORD-${String(order.id).padStart(4, '0')} for export`}
+                              />
+                            </td>
                             <td className='customer-details-serial'>{(ordersPage - 1) * pageSize + index + 1}</td>
                             <td>{formatDate(order.orderDate)}</td>
                             <td className='customer-details-order-id'>
                               <button type='button' className='customer-details-order-link' onClick={() => onViewOrder(order.id)}>
                                 ORD-{String(order.id).padStart(4, '0')}
+                                <span aria-hidden='true'>↗</span>
                               </button>
                             </td>
                             <td>{formatText(order.exhibitionName)}</td>
@@ -539,6 +594,15 @@ export default function CustomerDetailsScreen({
               <table className='customer-details-table'>
                 <thead>
                   <tr>
+                    <th className='customer-details-select-cell'>
+                      <input
+                        type='checkbox'
+                        checked={allVisiblePaymentsSelected}
+                        onChange={(event) => toggleVisiblePayments(event.target.checked)}
+                        aria-label='Select all payments on this page'
+                        title='Select all payments on this page'
+                      />
+                    </th>
                     <th className='customer-details-serial'>S.No.</th>
                     <th>Payment date</th>
                     <th>Exhibition</th>
@@ -550,6 +614,14 @@ export default function CustomerDetailsScreen({
                 <tbody>
                   {paginatedPayments.map((payment, index) => (
                     <tr key={payment.id}>
+                      <td className='customer-details-select-cell'>
+                        <input
+                          type='checkbox'
+                          checked={selectedPaymentIds.has(payment.id)}
+                          onChange={() => togglePaymentSelection(payment.id)}
+                          aria-label={`Select payment dated ${formatDate(payment.paymentDate)} for export`}
+                        />
+                      </td>
                       <td className='customer-details-serial'>{(paymentsPage - 1) * pageSize + index + 1}</td>
                       <td>{formatDate(payment.paymentDate)}</td>
                       <td>{formatText(payment.exhibitionName)}</td>
@@ -619,12 +691,12 @@ export default function CustomerDetailsScreen({
             )}
           </section>
 
-          <section className='customer-details-panel'>
-            <h2>Notes</h2>
-            <p className='customer-details-notes'>
-              {customer.notes?.trim() || 'No notes added for this customer.'}
-            </p>
-          </section>
+          {customer.notes?.trim() && (
+            <section className='customer-details-panel'>
+              <h2>Notes</h2>
+              <p className='customer-details-notes'>{customer.notes}</p>
+            </section>
+          )}
         </aside>
       </div>
       {isExportOpen && activeTab === 'orders' && (
@@ -653,8 +725,9 @@ export default function CustomerDetailsScreen({
               },
             ],
             filteredRows: filteredOrders,
-            getAllRows: async () => filteredOrders,
+            getAllRows: async () => orders,
           } satisfies ExportConfiguration<CustomerOrderHistoryRow>}
+          selectedRows={selectedOrders}
           onClose={() => setIsExportOpen(false)}
         />
       )}
@@ -668,11 +741,19 @@ export default function CustomerDetailsScreen({
               { key: 'exhibition', label: 'Exhibition', value: (payment) => formatText(payment.exhibitionName) },
               { key: 'paymentMethod', label: 'Method', value: (payment) => formatText(payment.paymentMethod) },
               { key: 'notes', label: 'Notes', value: (payment) => formatText(payment.notes) },
-              { key: 'amount', label: 'Amount', value: (payment) => formatMoneyPaise(payment.amountPaise) },
+              {
+                key: 'amount',
+                label: 'Amount',
+                value: (payment) => formatMoneyPaise(payment.amountPaise),
+                total: (rows) => formatMoneyPaise(
+                  rows.reduce((sum, payment) => sum + payment.amountPaise, 0),
+                ),
+              },
             ],
             filteredRows: payments,
             getAllRows: async () => payments,
           } satisfies ExportConfiguration<CustomerPaymentHistoryRow>}
+          selectedRows={selectedPayments}
           onClose={() => setIsExportOpen(false)}
         />
       )}

@@ -4,6 +4,8 @@ import { save } from '@tauri-apps/plugin-dialog';
 import * as XLSX from 'xlsx-js-style';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import regularFontUrl from '../../assets/fonts/DejaVuSans.ttf?url';
+import boldFontUrl from '../../assets/fonts/DejaVuSans-Bold.ttf?url';
 import './ExportDialog.css';
 import { buildCsv, cellText, escapeCsv } from './export.utils';
 import type {
@@ -132,6 +134,19 @@ type RowWithBreakdown = {
 
 function getBreakdown(row: unknown): RowWithBreakdown {
   return row && typeof row === 'object' ? (row as RowWithBreakdown) : {};
+}
+
+async function loadPdfFont(pdf: jsPDF, url: string, filename: string, style: 'normal' | 'bold') {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Unable to load PDF font: ${filename}`);
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+  }
+  pdf.addFileToVFS(filename, btoa(binary));
+  pdf.addFont(filename, 'InventoryUnicode', style);
 }
 
 function normalizedTypeKey(value: string): string {
@@ -698,6 +713,11 @@ function ExportDialog<T>({ configuration, defaultSelectedColumns, selectedRows, 
         );
       } else if (format === 'pdf') {
         const pdf = new jsPDF({ orientation, unit: 'pt', format: 'a4' });
+        await Promise.all([
+          loadPdfFont(pdf, regularFontUrl, 'DejaVuSans.ttf', 'normal'),
+          loadPdfFont(pdf, boldFontUrl, 'DejaVuSans-Bold.ttf', 'bold'),
+        ]);
+        pdf.setFont('InventoryUnicode', 'normal');
         pdf.setFontSize(16);
         pdf.text(configuration.title, 40, 36);
         pdf.setFontSize(9);
@@ -746,6 +766,7 @@ function ExportDialog<T>({ configuration, defaultSelectedColumns, selectedRows, 
           // Keep every selected column on the same page. AutoTable will wrap
           // long values instead of creating a mostly-empty page for a final column.
           styles: {
+            font: 'InventoryUnicode',
             fontSize: selected.length > 10 ? 5.5 : selected.length > 7 ? 6 : 7,
             cellPadding: selected.length > 10 ? 2 : 3,
             overflow: 'linebreak',
@@ -754,6 +775,7 @@ function ExportDialog<T>({ configuration, defaultSelectedColumns, selectedRows, 
             textColor: [48, 43, 38],
           },
           headStyles: {
+            font: 'InventoryUnicode',
             fillColor: [244, 239, 232],
             textColor: [48, 43, 38],
             fontStyle: 'bold',

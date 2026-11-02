@@ -248,10 +248,6 @@ export default function CreateOrderModal({
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
   const [selectedExhibitionId, setSelectedExhibitionId] = useState('');
   const [selectedItems, setSelectedItems] = useState<SelectedItem[]>([]);
-  const [availablePage, setAvailablePage] = useState(1);
-  const [availablePageSize, setAvailablePageSize] = useState(25);
-  const [selectedPage, setSelectedPage] = useState(1);
-  const [selectedPageSize, setSelectedPageSize] = useState(25);
   const [pricePage, setPricePage] = useState(1);
   const [pricePageSize, setPricePageSize] = useState(25);
   const [reviewPage, setReviewPage] = useState(1);
@@ -263,6 +259,7 @@ export default function CreateOrderModal({
   const [inventorySearch, setInventorySearch] = useState('');
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<number[]>([]);
   const [showMoreItems, setShowMoreItems] = useState(false);
+  const [showSelectedDetails, setShowSelectedDetails] = useState(false);
   const [additionalSelectedIds, setAdditionalSelectedIds] = useState<number[]>(
     [],
   );
@@ -530,10 +527,7 @@ export default function CreateOrderModal({
     setCustomRatesByItem(nextOverrides);
     setSelectedItems((current) =>
       current.map((selected) => {
-        if (
-          !customizeSelected.includes(selected.item.id) ||
-          selected.directPrice
-        )
+        if (!customizeSelected.includes(selected.item.id))
           return selected;
         const source = pricingContext.items.find(
           (item) => item.inventoryItemId === selected.item.id,
@@ -566,6 +560,7 @@ export default function CreateOrderModal({
         return {
           ...selected,
           price: (totalPaise / 100).toFixed(2),
+          directPrice: false,
           pricingSource: 'custom',
         };
       }),
@@ -754,13 +749,10 @@ export default function CreateOrderModal({
 
   const filteredInventoryItems = useMemo(
     () => inventory.filter((item) =>
-      (selectedCategoryIds.length === 0 || selectedCategoryIds.includes(item.categoryId)) &&
-      (showMoreItems || !selectedItems.some((selected) => selected.item.id === item.id))
+      selectedCategoryIds.length === 0 || selectedCategoryIds.includes(item.categoryId)
     ),
-    [inventory, selectedCategoryIds, showMoreItems, selectedItems]
+    [inventory, selectedCategoryIds]
   );
-  const availablePageItems = filteredInventoryItems.slice((availablePage - 1) * availablePageSize, availablePage * availablePageSize);
-  const selectedPageItems = selectedItems.slice((selectedPage - 1) * selectedPageSize, selectedPage * selectedPageSize);
   const pricePageItems = selectedItems.slice((pricePage - 1) * pricePageSize, pricePage * pricePageSize);
   const reviewPageItems = selectedItems.slice((reviewPage - 1) * reviewPageSize, reviewPage * reviewPageSize);
 
@@ -836,7 +828,6 @@ export default function CreateOrderModal({
 
   async function searchInventory(value: string) {
     setInventorySearch(value);
-    setAvailablePage(1);
     try {
       let results: CreateOrderInventoryItem[];
       if (
@@ -1101,7 +1092,7 @@ export default function CreateOrderModal({
           </button>
         </header>
 
-        <div className='create-order-progress' aria-label='Order progress'>
+        <div className={`create-order-progress ${initialItems.length ? 'is-exhibition-flow' : 'is-standard-flow'}`} aria-label='Order progress'>
           {(initialItems.length
             ? [
                 { number: 2, label: 'Review order items' },
@@ -1400,7 +1391,10 @@ export default function CreateOrderModal({
                   <>
                     {!showMoreItems && (
                       <div className='create-order-inventory-search'>
-                        <span aria-hidden='true'>▥</span>
+                        <svg className='create-order-search-icon' viewBox='0 0 24 24' fill='none' aria-hidden='true'>
+                          <circle cx='10.8' cy='10.8' r='6.8' stroke='currentColor' strokeWidth='1.7' />
+                          <path d='m16 16 4.2 4.2' stroke='currentColor' strokeWidth='1.7' strokeLinecap='round' />
+                        </svg>
                         <input
                           value={inventorySearch}
                           onChange={(event) =>
@@ -1452,14 +1446,24 @@ export default function CreateOrderModal({
                       )}
 
                       {!loading &&
-                        availablePageItems.map((item, index) => {
+                        filteredInventoryItems.map((item, index) => {
                           const alreadySelected = selectedItems.some(
                             (selected) => selected.item.id === item.id,
                           );
                           return (
                             <div
                               key={item.id}
-                              className='create-order-inventory-row'
+                              className={`create-order-inventory-row ${alreadySelected || (initialItems.length > 0 && showMoreItems && additionalSelectedIds.includes(item.id)) ? 'is-selected' : ''}`}
+                              onClick={() => {
+                                if (initialItems.length > 0 && showMoreItems) {
+                                  if (alreadySelected) return;
+                                  setAdditionalSelectedIds((current) => current.includes(item.id) ? current.filter((id) => id !== item.id) : [...current, item.id]);
+                                } else if (alreadySelected) {
+                                  setSelectedItems((current) => current.filter((selected) => selected.item.id !== item.id));
+                                } else {
+                                  addItem(item);
+                                }
+                              }}
                             >
                               <input
                                 type='checkbox'
@@ -1467,6 +1471,7 @@ export default function CreateOrderModal({
                                 aria-label={`Select ${item.itemNumber}`}
                                 checked={initialItems.length > 0 && showMoreItems ? additionalSelectedIds.includes(item.id) : alreadySelected}
                                 disabled={Boolean(item.isArchived) || (initialItems.length > 0 && showMoreItems ? alreadySelected : false)}
+                                onClick={(event) => event.stopPropagation()}
                                 onChange={(event) => {
                                   if (initialItems.length > 0 && showMoreItems) {
                                     setAdditionalSelectedIds((current) => event.target.checked ? [...current, item.id] : current.filter((id) => id !== item.id));
@@ -1477,12 +1482,12 @@ export default function CreateOrderModal({
                                   }
                                 }}
                               />
-                              <span className='create-order-inventory-serial'>{(availablePage - 1) * availablePageSize + index + 1}</span>
+                              <span className='create-order-inventory-serial'>{index + 1}</span>
                               <div className='create-order-item-identity create-order-add-more-identity'>
                                 <ItemThumbnail path={item.imagePath} alt={item.itemNumber} />
                                 <div className='create-order-inventory-name'>
                                   <strong>{item.itemNumber}{item.name ? ` · ${item.name}` : ''}</strong>
-                                  <span>{item.categoryName}</span>
+                                  <span>{item.categoryName}{alreadySelected ? ' · Added' : ''}</span>
                                 </div>
                               </div>
                               <span className='create-order-inventory-details'>{formatWeight(item.grossWeightMilli)}</span>
@@ -1497,7 +1502,6 @@ export default function CreateOrderModal({
                         <p className='create-order-empty'>No eligible items match your search and category filters.</p>
                       )}
                     </div>
-                    <CreateOrderPagination page={availablePage} pageSize={availablePageSize} total={filteredInventoryItems.length} onPageChange={setAvailablePage} onPageSizeChange={setAvailablePageSize} />
 
                     {!(initialItems.length > 0 && showMoreItems) && (
                       <p className='create-order-helper'>
@@ -1553,89 +1557,64 @@ export default function CreateOrderModal({
                     </button>
                   </div>
                 ) : (
-                  <div className='create-order-selected-table'>
-                    <div className='create-order-selected-heading'>
-                      <span>Selected item</span>
-                      <span>Gross wt.</span>
-                      <span>Net wt.</span>
-                      <span>Diamond details</span>
-                      <span>Stone details</span>
-                      <span />
-                    </div>
-
-                    {selectedPageItems.map(({ item }) => (
-                      <div className='create-order-selected-row' key={item.id}>
-                        <div className='create-order-item-identity create-order-selected-name'>
-                          <ItemThumbnail
-                            path={item.imagePath}
-                            alt={item.itemNumber}
-                          />
-                          <span>
-                            <strong>{item.itemNumber}</strong>
-                            <small>{item.categoryName}</small>
-                          </span>
-                        </div>
-                        <span>{formatWeight(item.grossWeightMilli)}</span>
-                        <span>{formatWeight(item.netWeightMilli)}</span>
-                        <span className='create-order-selected-details'>
-                          {formatDetailLines(item.diamondDetails)}
-                        </span>
-                        <span className='create-order-selected-details'>
-                          {formatDetailLines(item.stoneDetails)}
-                        </span>
+                  <div className='create-order-selection-summary'>
+                    <div className='create-order-selection-summary-top'>
+                      <div>
+                        <strong>Selected items</strong>
+                        <span>{selectedItems.length} {selectedItems.length === 1 ? 'item' : 'items'} added</span>
+                      </div>
+                      {selectedItems.length > 0 && (
                         <button
                           type='button'
-                          className='create-order-remove-item'
-                          aria-label={`Remove ${item.itemNumber}`}
-                          onClick={() =>
-                            setSelectedItems((current) =>
-                              current.filter(
-                                (selected) => selected.item.id !== item.id,
-                              ),
-                            )
-                          }
+                          className='create-order-selection-details-toggle'
+                          aria-expanded={showSelectedDetails}
+                          onClick={() => setShowSelectedDetails((current) => !current)}
                         >
-                          ×
+                          {showSelectedDetails ? 'Hide details' : 'View details'}
+                          <span aria-hidden='true'>{showSelectedDetails ? '⌃' : '⌄'}</span>
                         </button>
-                      </div>
-                    ))}
-
-                    {!selectedItems.length && (
-                      <p className='create-order-empty'>
-                        No items selected yet.
-                      </p>
+                      )}
+                    </div>
+                    {selectedItems.length > 0 ? (
+                      <>
+                        <div className='create-order-selection-metrics'>
+                          <div><span>Gross weight</span><strong>{formatWeight(selectedItems.reduce((sum, selected) => sum + (selected.item.grossWeightMilli ?? 0), 0))}</strong></div>
+                          <div><span>Net weight</span><strong>{formatWeight(selectedItems.reduce((sum, selected) => sum + (selected.item.netWeightMilli ?? 0), 0))}</strong></div>
+                          <div><span>Diamonds</span><strong>{formatDetailTotal(selectedItems, 'diamondDetails')}</strong></div>
+                          <div><span>Stones</span><strong>{formatDetailTotal(selectedItems, 'stoneDetails')}</strong></div>
+                        </div>
+                        {showSelectedDetails && (
+                          <div className='create-order-selected-table'>
+                            <div className='create-order-selected-heading'>
+                              <span>Selected item</span><span>Gross wt.</span><span>Net wt.</span><span>Diamond details</span><span>Stone details</span><span />
+                            </div>
+                            {selectedItems.map(({ item }) => (
+                              <div className='create-order-selected-row' key={item.id}>
+                                <div className='create-order-item-identity create-order-selected-name'>
+                                  <ItemThumbnail path={item.imagePath} alt={item.itemNumber} />
+                                  <span><strong>{item.itemNumber}</strong><small>{item.categoryName}</small></span>
+                                </div>
+                                <span>{formatWeight(item.grossWeightMilli)}</span>
+                                <span>{formatWeight(item.netWeightMilli)}</span>
+                                <span className='create-order-selected-details'>{formatDetailLines(item.diamondDetails)}</span>
+                                <span className='create-order-selected-details'>{formatDetailLines(item.stoneDetails)}</span>
+                                <button type='button' className='create-order-remove-item' aria-label={`Remove ${item.itemNumber}`} onClick={() => setSelectedItems((current) => current.filter((selected) => selected.item.id !== item.id))}>×</button>
+                              </div>
+                            ))}
+                            <div className='create-order-selected-total'>
+                              <strong>Totals ({selectedItems.length} items)</strong>
+                              <strong>{formatWeight(selectedItems.reduce((sum, selected) => sum + (selected.item.grossWeightMilli ?? 0), 0))}</strong>
+                              <strong>{formatWeight(selectedItems.reduce((sum, selected) => sum + (selected.item.netWeightMilli ?? 0), 0))}</strong>
+                              <strong>{formatDetailTotal(selectedItems, 'diamondDetails')}</strong>
+                              <strong>{formatDetailTotal(selectedItems, 'stoneDetails')}</strong>
+                              <span />
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <p className='create-order-selection-empty'>Select jewelry from the inventory above to add it to this order.</p>
                     )}
-                    {selectedItems.length > 0 && (
-                      <div className='create-order-selected-total'>
-                        <strong>Totals ({selectedItems.length} items)</strong>
-                        <strong>
-                          {formatWeight(
-                            selectedItems.reduce(
-                              (sum, selected) =>
-                                sum + (selected.item.grossWeightMilli ?? 0),
-                              0,
-                            ),
-                          )}
-                        </strong>
-                        <strong>
-                          {formatWeight(
-                            selectedItems.reduce(
-                              (sum, selected) =>
-                                sum + (selected.item.netWeightMilli ?? 0),
-                              0,
-                            ),
-                          )}
-                        </strong>
-                        <strong>
-                          {formatDetailTotal(selectedItems, 'diamondDetails')}
-                        </strong>
-                        <strong>
-                          {formatDetailTotal(selectedItems, 'stoneDetails')}
-                        </strong>
-                        <span />
-                      </div>
-                    )}
-                    <CreateOrderPagination page={selectedPage} pageSize={selectedPageSize} total={selectedItems.length} onPageChange={setSelectedPage} onPageSizeChange={setSelectedPageSize} />
                   </div>
                 )}
               </section>

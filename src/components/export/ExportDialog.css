@@ -248,8 +248,20 @@
     white-space: nowrap
 }
 
+.export-step-content--columns {
+    display       : flex;
+    flex-direction: column
+}
+
+.export-step-content--columns .export-settings-grid,
+.export-step-content--columns .export-columns-heading {
+    flex-shrink: 0
+}
+
 .export-column-list {
-    max-height   : min(34vh, 520px);
+    flex         : 1 1 auto;
+    min-height   : 0;
+    max-height   : none;
     overflow     : auto;
     margin       : 0;
     border       : 1px solid #e8dfd5;
@@ -460,10 +472,6 @@
         grid-template-columns: 1fr;
         gap                  : 14px;
         padding              : 18px 0 20px
-    }
-
-    .export-column-list {
-        max-height: 45vh
     }
 
     .export-column-row {

@@ -276,10 +276,12 @@
     box-shadow   : 0 0 0 2px rgb(167 122 67 / 8%);
 }
 
-.create-order-inventory-search>span {
-    padding-left: 3px;
-    color       : #8c785f;
-    font-size   : 17px;
+.create-order-search-icon {
+    flex: 0 0 17px;
+    width: 17px;
+    height: 17px;
+    margin-left: 3px;
+    color: #8c785f;
 }
 
 .create-order-inventory-search input {
@@ -715,55 +717,53 @@
     font-weight: 400;
 }
 
-/* Three-step create-order wizard */
+/* Flow-aware create-order progress: four stages normally, three for exhibition selections. */
 .create-order-progress {
-    display              : grid;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 16px;
+    padding: 13px 22px;
+    border-bottom: 1px solid #eee5dc;
+    background: #fdfbf8;
+}
+
+.create-order-progress.is-exhibition-flow {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap                  : 10px;
-    padding              : 13px 22px;
-    border-bottom        : 1px solid #eee5dc;
-    background           : #fdfbf8;
 }
 
 .create-order-progress-step {
-    display    : flex;
+    display: flex;
+    min-width: 0;
+    flex-direction: row;
     align-items: center;
-    gap        : 9px;
-    min-width  : 0;
-    color      : #91857a;
-    font-size  : 11px;
+    gap: 9px;
+    color: #91857a;
+    font-size: 12px;
 }
 
-.create-order-progress-step>span {
-    display      : grid;
-    flex         : 0 0 27px;
-    width        : 27px;
-    height       : 27px;
-    place-items  : center;
-    border       : 1px solid #dfd2c4;
+.create-order-progress-step::before {
+    flex: 0 0 7px;
+    width: 7px;
+    height: 7px;
     border-radius: 50%;
-    background   : #fff;
-    color        : #83766a;
-    font-size    : 11px;
-    font-weight  : 700;
+    background: #d8cec3;
+    content: '';
 }
 
 .create-order-progress-step strong {
-    overflow     : hidden;
-    font-weight  : 600;
+    overflow: hidden;
+    font-weight: 600;
     text-overflow: ellipsis;
-    white-space  : nowrap;
+    white-space: nowrap;
 }
 
 .create-order-progress-step.is-current {
     color: #382c23;
 }
 
-.create-order-progress-step.is-current>span,
-.create-order-progress-step.is-complete>span {
-    border-color: #352923;
-    background  : #352923;
-    color       : #fffaf4;
+.create-order-progress-step.is-current::before,
+.create-order-progress-step.is-complete::before {
+    background: #352923;
 }
 
 .create-order-progress-step.is-current strong {
@@ -964,15 +964,13 @@
 
 @media (max-width: 600px) {
     .create-order-progress {
-        gap    : 5px;
+        gap: 8px;
         padding: 10px 12px;
     }
 
     .create-order-progress-step {
-        flex-direction: column;
-        align-items   : flex-start;
-        gap           : 5px;
-        font-size     : 9px;
+        gap: 6px;
+        font-size: 10px;
     }
 
     .create-order-review-heading,
@@ -1048,9 +1046,6 @@
     cursor : not-allowed;
 }
 
-.create-order-progress-step>span {
-    display: none !important;
-}
 
 /* Updated jewelry details tables for exhibition-selection order creation */
 .create-order-selected-heading,
@@ -2636,3 +2631,151 @@
 }
 
 .create-order-inventory-serial { color: #786e65; font-size: 10px; font-variant-numeric: tabular-nums; }
+
+
+/* Step 2: scroll inventory independently and keep selected-item summary compact. */
+.create-order-jewelry-section {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.create-order-step2-table {
+    max-height: min(54vh, 560px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+}
+
+.create-order-step2-table .create-order-step2-heading {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+
+.create-order-step2-table .create-order-inventory-row {
+    cursor: pointer;
+    transition: background-color 120ms ease;
+}
+
+.create-order-step2-table .create-order-inventory-row:hover {
+    background: #fcf8f2;
+}
+
+.create-order-step2-table .create-order-inventory-row.is-selected {
+    background: #f7efe3;
+}
+
+.create-order-step2-table .create-order-inventory-row.is-selected:hover {
+    background: #f2e6d6;
+}
+
+.create-order-step2-table .create-order-item-checkbox {
+    cursor: pointer;
+}
+
+.create-order-selection-summary {
+    margin-top: 14px;
+    overflow: hidden;
+    border: 1px solid #e3d5c6;
+    border-radius: 10px;
+    background: #fdfbf8;
+}
+
+.create-order-selection-summary-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 14px;
+}
+
+.create-order-selection-summary-top > div {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 9px;
+}
+
+.create-order-selection-summary-top strong {
+    color: #392f29;
+    font-size: 13px;
+    font-weight: 750;
+}
+
+.create-order-selection-summary-top span {
+    color: #786e65;
+    font-size: 11px;
+}
+
+.create-order-selection-details-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 2px 5px 8px;
+    border: 0;
+    background: transparent;
+    color: #8a602e;
+    font: inherit;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.create-order-selection-details-toggle:hover {
+    color: #5f3d1e;
+}
+
+.create-order-selection-metrics {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1px;
+    border-top: 1px solid #eee5dc;
+    background: #eee5dc;
+}
+
+.create-order-selection-metrics > div {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 13px;
+    background: #fffdf9;
+}
+
+.create-order-selection-metrics span {
+    color: #786e65;
+    font-size: 10px;
+}
+
+.create-order-selection-metrics strong {
+    overflow-wrap: anywhere;
+    color: #392f29;
+    font-size: 12px;
+    font-weight: 750;
+}
+
+.create-order-selection-empty {
+    margin: 0;
+    padding: 12px 14px;
+    border-top: 1px solid #eee5dc;
+    color: #786e65;
+    font-size: 11px;
+}
+
+.create-order-selection-summary .create-order-selected-table {
+    margin: 0;
+    border: 0;
+    border-top: 1px solid #e7ddd2;
+    border-radius: 0;
+}
+
+@media (max-width: 760px) {
+    .create-order-step2-table {
+        max-height: 48vh;
+    }
+
+    .create-order-selection-metrics {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}

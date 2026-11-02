@@ -725,7 +725,7 @@ function OrdersScreen() {
             type='button'
             className='orders-create-button'
             onClick={() => setCreateOrderOpen(true)}
-            title='Create order — coming in the next implementation step'
+            title='Create a new order'
           >
             <span aria-hidden='true'>+</span> Create order
           </button>
@@ -1050,9 +1050,9 @@ function OrdersScreen() {
       {createOrderOpen && (
         <CreateOrderModal
           onClose={() => setCreateOrderOpen(false)}
-          onCreated={() => {
+          onCreated={(orderId) => {
             setCreateOrderOpen(false);
-            void loadOrders();
+            setSelectedOrderId(orderId);
           }}
         />
       )}

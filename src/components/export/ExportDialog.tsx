@@ -840,7 +840,7 @@ function ExportDialog<T>({ configuration, defaultSelectedColumns, selectedRows, 
             ×
           </button>
         </header>
-        <div className='export-step-content' key={step}>
+        <div className={`export-step-content${step === 1 ? ' export-step-content--columns' : ''}`} key={step}>
           {step === 1 ? (
             <>
               <div className='export-settings-grid'>

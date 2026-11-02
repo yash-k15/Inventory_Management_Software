@@ -10,6 +10,10 @@ import {
   type ItemStoneDetail,
 } from './itemDetails.queries';
 import { getDatabase } from '../../db';
+import { getInventoryItems } from '../inventory/inventory.queries';
+import { INITIAL_INVENTORY_FILTERS } from '../inventory/InventoryFilters';
+import type { InventoryItem } from '../inventory/inventory.types';
+import JewelryTagPreview from '../tags/JewelryTagPreview';
 import './ItemDetailsScreen.css';
 
 type Props = {
@@ -86,6 +90,9 @@ function ItemDetailsScreen({ itemId, onBack, onEdit }: Props) {
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [tagPreviewItem, setTagPreviewItem] = useState<InventoryItem | null>(null);
+  const [tagLoading, setTagLoading] = useState(false);
+  const [tagError, setTagError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -148,6 +155,38 @@ function ItemDetailsScreen({ itemId, onBack, onEdit }: Props) {
         <p className='item-details-message'>Loading jewelry item…</p>
       </section>
     );
+  }
+
+  async function handlePrintTag() {
+    if (!data || tagLoading) return;
+
+    setTagLoading(true);
+    setTagError(null);
+
+    try {
+      // Reuse the inventory query so the tag preview receives the exact
+      // InventoryItem shape and formatted detail strings used by batch printing.
+      const matches = await getInventoryItems({
+        ...INITIAL_INVENTORY_FILTERS,
+        search: data.item.itemNumber,
+      });
+      const inventoryItem = matches.find((candidate) => candidate.id === itemId);
+
+      if (!inventoryItem) {
+        throw new Error('Unable to load this item for tag printing.');
+      }
+
+      setTagPreviewItem(inventoryItem);
+    } catch (printError) {
+      console.error('Unable to prepare jewelry tag:', printError);
+      setTagError(
+        printError instanceof Error
+          ? printError.message
+          : 'Unable to prepare this jewelry tag. Please try again.',
+      );
+    } finally {
+      setTagLoading(false);
+    }
   }
 
   async function handleArchiveToggle() {
@@ -333,6 +372,14 @@ function ItemDetailsScreen({ itemId, onBack, onEdit }: Props) {
         <div className='item-details-actions'>
           <button
             type='button'
+            className='app-button app-button--secondary'
+            onClick={() => void handlePrintTag()}
+            disabled={tagLoading}
+          >
+            {tagLoading ? 'Preparing…' : 'Print Tag'}
+          </button>
+          <button
+            type='button'
             className='app-button app-button--primary'
             onClick={onEdit}
           >
@@ -362,6 +409,11 @@ function ItemDetailsScreen({ itemId, onBack, onEdit }: Props) {
             >
               Delete Item
             </button>
+          )}
+          {tagError && (
+            <p role='alert' className='item-details-error item-details-tag-error'>
+              {tagError}
+            </p>
           )}
         </div>
       </header>
@@ -566,16 +618,18 @@ function ItemDetailsScreen({ itemId, onBack, onEdit }: Props) {
 
           <section className='item-details-card'>
             <SectionHeading title='Record' />
-            <KeyValue label='Item number' value={item.itemNumber} />
             <KeyValue label='Created' value={formatDate(item.createdAt)} />
             <KeyValue label='Last updated' value={formatDate(item.updatedAt)} />
-            <KeyValue
-              label='Status'
-              value={item.isArchived ? 'Archived' : 'Active'}
-            />
           </section>
         </aside>
       </div>
+      {tagPreviewItem && (
+        <JewelryTagPreview
+          item={tagPreviewItem}
+          onClose={() => setTagPreviewItem(null)}
+        />
+      )}
+
       {showArchiveDialog && (
         <div className='item-details-modal-backdrop'>
           <section

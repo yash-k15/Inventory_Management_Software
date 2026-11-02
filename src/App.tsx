@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import InventoryScreen from './features/inventory/InventoryScreen';
 import AddItemScreen from './features/inventory/AddItemScreen';
 import ItemDetailsScreen from './features/inventory/ItemDetailsScreen';
@@ -17,6 +17,16 @@ import './App.css';
 function App() {
   const [view, setView] = useState<SidebarView>('inventory');
   const [notice, setNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!notice) return;
+
+    const timeoutId = window.setTimeout(() => {
+      setNotice(null);
+    }, 4000);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [notice]);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [settingsDirty, setSettingsDirty] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
@@ -98,10 +108,19 @@ function App() {
       <div className='app-main'>
         <main className='app-content' id='inventory'>
           <div className='app-content-inner'>
-            {notice && view === 'inventory' && (
-              <p role='status' className='app-success-message'>
-                {notice}
-              </p>
+            {notice && (
+              <div className='app-toast' role='status' aria-live='polite'>
+                <span>{notice}</span>
+                <button
+                  type='button'
+                  className='app-toast-close'
+                  onClick={() => setNotice(null)}
+                  aria-label='Dismiss notification'
+                  title='Dismiss'
+                >
+                  ×
+                </button>
+              </div>
             )}
             {view === 'inventory' && (
               <InventoryScreen

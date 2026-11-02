@@ -419,3 +419,28 @@
     min-width: 440px;
   }
 }
+
+
+.item-details-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.item-details-tag-error {
+  flex-basis: 100%;
+  margin: 0;
+  text-align: right;
+}
+
+@media (max-width: 600px) {
+  .item-details-actions {
+    justify-content: flex-start;
+  }
+
+  .item-details-tag-error {
+    text-align: left;
+  }
+}

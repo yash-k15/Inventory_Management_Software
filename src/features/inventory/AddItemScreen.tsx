@@ -905,14 +905,6 @@ function AddItemScreen({ onCancel, onCreated, itemId, onUpdated }: Props) {
               : 'Register a new design. The item number is generated from the category.'}
           </p>
         </div>
-        <button
-          type='button'
-          className='app-button app-button--secondary'
-          onClick={onCancel}
-          disabled={saving}
-        >
-          Cancel
-        </button>
       </div>
 
       {error && (
@@ -1508,27 +1500,29 @@ function AddItemScreen({ onCancel, onCreated, itemId, onUpdated }: Props) {
                   </strong>
                 </div>
               </div>
-              <button
-                type='submit'
-                className='app-button app-button--primary add-item-save-button'
-                disabled={saving || !preview}
-              >
-                {saving
-                  ? isEditMode
-                    ? 'Updating jewelry item...'
-                    : 'Saving jewelry item...'
-                  : isEditMode
-                    ? 'Save changes'
-                    : 'Save jewelry item'}
-              </button>
-              <button
-                type='button'
-                className='add-item-cancel-link'
-                onClick={onCancel}
-                disabled={saving}
-              >
-                Cancel
-              </button>
+              <div className='add-item-form-actions'>
+                <button
+                  type='button'
+                  className='app-button app-button--secondary add-item-cancel-button'
+                  onClick={onCancel}
+                  disabled={saving}
+                >
+                  Cancel
+                </button>
+                <button
+                  type='submit'
+                  className='app-button app-button--primary add-item-save-button'
+                  disabled={saving || !preview}
+                >
+                  {saving
+                    ? isEditMode
+                      ? 'Updating jewelry item...'
+                      : 'Saving jewelry item...'
+                    : isEditMode
+                      ? 'Save changes'
+                      : 'Save jewelry item'}
+                </button>
+              </div>
             </aside>
           </div>
         </form>

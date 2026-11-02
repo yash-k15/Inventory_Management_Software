@@ -14,7 +14,7 @@
 
 .add-item-heading .app-page-title {
   margin: 4px 0 6px;
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: 'Cormorant Garamond', Georgia, 'Times New Roman', serif;
   font-size: clamp(30px, 3vw, 42px);
   font-weight: 500;
   letter-spacing: -0.8px;
@@ -297,8 +297,16 @@
 .summary-ok { color: #27804b; }
 .summary-missing { color: #bd3029; }
 
-.add-item-save-button {
+.add-item-form-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   width: 100%;
+}
+
+.add-item-save-button {
+  flex: 1 1 auto;
+  min-width: 0;
   min-height: 42px;
   border: 0;
   border-radius: 7px;
@@ -309,8 +317,18 @@
 }
 
 .add-item-save-button:hover { background: #765731; }
-.add-item-cancel-link { align-self: center; border: 0; padding: 4px 10px; background: transparent; color: #766f68; font-size: 11px; font-weight: 600; cursor: pointer; }
-.add-item-cancel-link:disabled, .add-item-back-link:disabled { cursor: not-allowed; opacity: .6; }
+
+.add-item-cancel-button {
+  flex: 0 0 auto;
+  min-height: 42px;
+  min-width: 88px;
+}
+
+.add-item-form-actions button:disabled,
+.add-item-back-link:disabled {
+  cursor: not-allowed;
+  opacity: .6;
+}
 
 .add-item-notes textarea { resize: vertical; }
 .add-item-error { padding: 12px 16px; border: 1px solid #e6b9b9; border-radius: 8px; background: #fff3f3; color: #8c2929; overflow-wrap: anywhere; }
@@ -321,12 +339,11 @@
   .add-item-sidebar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
   .add-item-number, .add-item-image-card, .add-item-summary { min-width: 0; }
   .add-item-summary { grid-column: 2; grid-row: 1 / span 2; }
-  .add-item-save-button, .add-item-cancel-link { grid-column: 1 / -1; }
+  .add-item-form-actions { grid-column: 1 / -1; }
 }
 
 @media (max-width: 600px) {
   .add-item-heading { align-items: flex-start; }
-  .add-item-heading > .app-button { flex-shrink: 0; }
   .add-item-card { padding: 17px; }
   .add-item-grid { grid-template-columns: minmax(0, 1fr); }
   .add-item-field--full { grid-column: auto; }
@@ -365,7 +382,7 @@
   background: #fff;
   color: var(--app-text, #302824);
   font: inherit;
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.35;
   text-align: left;
   cursor: pointer;
@@ -442,7 +459,7 @@
   background: transparent;
   color: #302824;
   font: inherit;
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.35;
   text-align: left;
   cursor: pointer;

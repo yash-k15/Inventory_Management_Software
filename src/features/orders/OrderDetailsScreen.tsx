@@ -1,4 +1,4 @@
-import { useEffect, useState, type MouseEvent } from 'react';
+import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import { appDataDir, join, isAbsolute } from '@tauri-apps/api/path';
@@ -28,6 +28,14 @@ function OrderItemImage({ paths, alt }: { paths: (string | null | undefined)[]; 
   const [src, setSrc] = useState<string | null>(null);
   const [previewPosition, setPreviewPosition] = useState<{ left: number; top: number } | null>(null);
   const [failed, setFailed] = useState(false);
+  const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearPreviewTimer = () => {
+    if (previewTimerRef.current !== null) {
+      clearTimeout(previewTimerRef.current);
+      previewTimerRef.current = null;
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -69,20 +77,31 @@ function OrderItemImage({ paths, alt }: { paths: (string | null | undefined)[]; 
     return () => { cancelled = true; };
   }, [paths.join('\u0000')]);
 
+  useEffect(() => () => clearPreviewTimer(), []);
+
   const showPreview = (event: MouseEvent<HTMLImageElement>) => {
     if (!src || failed) return;
+    clearPreviewTimer();
     const rect = event.currentTarget.getBoundingClientRect();
-    const previewWidth = 280;
-    const previewHeight = 360;
-    const gap = 12;
-    const left = rect.right + gap + previewWidth <= window.innerWidth
-      ? rect.right + gap
-      : Math.max(8, rect.left - previewWidth - gap);
-    const top = Math.max(8, Math.min(
-      rect.top + rect.height / 2 - previewHeight / 2,
-      window.innerHeight - previewHeight - 8,
-    ));
-    setPreviewPosition({ left, top });
+    const previewWidth = Math.min(420, window.innerWidth - 32);
+    const previewHeight = Math.min(560, window.innerHeight - 32);
+    const left = rect.right + previewWidth + 16 <= window.innerWidth
+      ? rect.right + 16
+      : Math.max(16, rect.left - previewWidth - 16);
+    const top = Math.min(
+      Math.max(16, rect.top),
+      Math.max(16, window.innerHeight - previewHeight - 16),
+    );
+
+    previewTimerRef.current = setTimeout(() => {
+      setPreviewPosition({ left, top });
+      previewTimerRef.current = null;
+    }, 1500);
+  };
+
+  const hidePreview = () => {
+    clearPreviewTimer();
+    setPreviewPosition(null);
   };
 
   if (!src || failed) {
@@ -95,8 +114,8 @@ function OrderItemImage({ paths, alt }: { paths: (string | null | undefined)[]; 
       src={src}
       alt={alt}
       onMouseEnter={showPreview}
-      onMouseLeave={() => setPreviewPosition(null)}
-      onError={() => { setFailed(true); setPreviewPosition(null); }}
+      onMouseLeave={hidePreview}
+      onError={() => { setFailed(true); hidePreview(); }}
       tabIndex={0}
     />
     {previewPosition && createPortal(
@@ -154,7 +173,7 @@ function ItemPricingBreakdown({ item }: { item: OrderDetailItem }) {
     </div>
     <BreakdownTable title="Diamonds" headers={['Shape / quality', 'Pieces', 'Weight', 'Rate / ct', 'Cost']} rows={[...diamonds.map((line) => [`${line.shape ?? 'Diamond'}${line.quality ? ` · ${line.quality}` : ''}`, snapshotPieces(item, 'diamond', line) ?? '—', `${formatNumber(line.weight_ct ?? (line.weightMilliCarats != null ? Number(line.weightMilliCarats) / 1000 : line.weightMilli != null ? Number(line.weightMilli) / 1000 : null))} ct`, formatMoney(line.rate_paise_per_ct == null ? null : getNumber(line.rate_paise_per_ct)), formatMoney(line.value_paise)] as (string | number)[]), ...(diamonds.length ? [['Total diamonds', diamonds.reduce((sum, line) => sum + getNumber(snapshotPieces(item, 'diamond', line)), 0) || '—', `${formatNumber(diamonds.reduce((sum, line) => sum + getNumber(line.weight_ct ?? (line.weightMilliCarats != null ? Number(line.weightMilliCarats) / 1000 : line.weightMilli != null ? Number(line.weightMilli) / 1000 : 0)), 0))} ct`, '—', formatMoney(diamonds.reduce((sum, line) => sum + getNumber(line.value_paise), 0))] as (string | number)[]] : [])]} />
     <BreakdownTable title="Stones" headers={['Stone type', 'Pieces', 'Weight', 'Rate / unit', 'Cost']} rows={[...stones.map((line) => [`${line.stone ?? 'Stone'}`, snapshotPieces(item, 'stone', line) ?? '—', `${formatNumber(line.weight ?? (line.weightMilli != null ? Number(line.weightMilli) / 1000 : null))} ${line.unit ?? line.weightUnit ?? 'ct'}`, formatMoney(line.rate_paise_per_unit == null ? null : getNumber(line.rate_paise_per_unit)), formatMoney(line.value_paise)] as (string | number)[]), ...(stones.length ? [['Total stones', stones.reduce((sum, line) => sum + getNumber(snapshotPieces(item, 'stone', line)), 0) || '—', `${formatNumber(stones.reduce((sum, line) => sum + getNumber(line.weight ?? (line.weightMilli != null ? Number(line.weightMilli) / 1000 : 0)), 0))} ${String(stones[0]?.unit ?? stones[0]?.weightUnit ?? 'ct')}`, '—', formatMoney(stones.reduce((sum, line) => sum + getNumber(line.value_paise), 0))] as (string | number)[]] : [])]} />
-    <div className="od-breakdown-total-row"><span>Calculated item price</span><strong>{formatMoney(breakdown?.calculated_total_paise)}</strong><span>Agreed price</span><strong>{formatMoney(item.agreedPricePaise)}</strong></div>
+    <div className="od-breakdown-total-row od-breakdown-total-row--single"><span>Calculated item price</span><strong>{formatMoney(breakdown?.calculated_total_paise)}</strong></div>
   </div>;
 }
 
@@ -162,6 +181,11 @@ function OrderPriceBreakdown({ items, totalValuePaise }: { items: OrderDetailIte
   const calculatedItems = items.filter(pricingAvailable);
   const anyDirect = items.some((item) => !pricingAvailable(item));
   const sumField = (field: string) => calculatedItems.reduce((sum, item) => sum + getNumber(item.pricingBreakdown?.[field]), 0);
+  const calculatedItemsTotalPaise = calculatedItems.reduce(
+    (sum, item) => sum + getNumber(item.pricingBreakdown?.calculated_total_paise),
+    0,
+  );
+  const roundingAdjustmentPaise = totalValuePaise - calculatedItemsTotalPaise;
   const diamondTotals = new Map<string, { pieces: number; weight: number; value: number }>();
   const stoneTotals = new Map<string, { pieces: number; weight: number; value: number; unit: string }>();
   for (const item of calculatedItems) {
@@ -180,7 +204,7 @@ function OrderPriceBreakdown({ items, totalValuePaise }: { items: OrderDetailIte
     {anyDirect && <p className="od-breakdown-caveat">One or more items use a direct final amount. Their individual component breakdowns are unavailable and are excluded from the component totals below.</p>}
     <div className="od-breakdown-grid od-order-summary-grid">
       <div className="od-breakdown-group"><h4>Gold &amp; making</h4><DetailLine label="Gold" value={calculatedItems.length ? formatMoney(sumField('gold_value_paise')) : '—'} /><DetailLine label="Wastage" value={calculatedItems.length ? formatMoney(sumField('wastage_value_paise')) : '—'} /><DetailLine label="Gold & making total" value={calculatedItems.length ? formatMoney(sumField('gold_value_paise') + sumField('wastage_value_paise')) : '—'} /></div>
-      <div className="od-breakdown-group"><h4>Other charges</h4><DetailLine label="Extra cost" value={calculatedItems.length ? formatMoney(sumField('extra_cost_paise')) : '—'} /><DetailLine label="Certification" value={calculatedItems.length ? formatMoney(sumField('certification_value_paise')) : '—'} /><DetailLine label="GST" value={calculatedItems.length ? formatMoney(sumField('gst_value_paise')) : '—'} /><DetailLine label="Other charges total" value={calculatedItems.length ? formatMoney(sumField('extra_cost_paise') + sumField('certification_value_paise') + sumField('gst_value_paise')) : '—'} /><DetailLine label="Calculated total (priced items)" value={calculatedItems.length ? formatMoney(sumField('calculated_total_paise')) : '—'} /></div>
+      <div className="od-breakdown-group"><h4>Other charges</h4><DetailLine label="Extra cost" value={calculatedItems.length ? formatMoney(sumField('extra_cost_paise')) : '—'} /><DetailLine label="Certification" value={calculatedItems.length ? formatMoney(sumField('certification_value_paise')) : '—'} /><DetailLine label="GST" value={calculatedItems.length ? formatMoney(sumField('gst_value_paise')) : '—'} /><DetailLine label="Other charges total" value={calculatedItems.length ? formatMoney(sumField('extra_cost_paise') + sumField('certification_value_paise') + sumField('gst_value_paise')) : '—'} /><DetailLine label="Calculated total (priced items)" value={calculatedItems.length ? formatMoney(calculatedItemsTotalPaise) : '—'} />{!anyDirect && roundingAdjustmentPaise !== 0 && <DetailLine label="Rounding adjustment" value={formatMoney(roundingAdjustmentPaise)} />}</div>
     </div>
     <BreakdownTable title="Diamond totals by type / quality" headers={['Shape / quality', 'Pieces', 'Total weight', 'Total cost']} rows={[...[...diamondTotals.entries()].map(([name, line]) => [name, line.pieces ?? '—', `${formatNumber(line.weight)} ct`, formatMoney(line.value)] as (string | number)[]), ...(diamondTotals.size ? [['Total diamonds', [...diamondTotals.values()].reduce((sum, line) => sum + line.pieces, 0), `${formatNumber([...diamondTotals.values()].reduce((sum, line) => sum + line.weight, 0))} ct`, formatMoney([...diamondTotals.values()].reduce((sum, line) => sum + line.value, 0))] as (string | number)[]] : [])]} />
     <BreakdownTable title="Stone totals by type" headers={['Stone type', 'Pieces', 'Total weight', 'Total cost']} rows={[...[...stoneTotals.entries()].map(([name, line]) => [name, line.pieces ?? '—', `${formatNumber(line.weight)} ${line.unit}`, formatMoney(line.value)] as (string | number)[]), ...(stoneTotals.size ? [['Total stones', [...stoneTotals.values()].reduce((sum, line) => sum + line.pieces, 0), `${formatNumber([...stoneTotals.values()].reduce((sum, line) => sum + line.weight, 0))} ${[...stoneTotals.values()][0].unit}`, formatMoney([...stoneTotals.values()].reduce((sum, line) => sum + line.value, 0))] as (string | number)[]] : [])]} />
@@ -280,18 +304,17 @@ export default function OrderDetailsScreen({ orderId, onBack, backLabel = 'Order
   if (!order) return <section className="order-details-screen"><button className="order-details-back" onClick={onBack}>← {backLabel}</button><p className="order-details-message" role="alert">{error || 'Order not found.'}</p></section>;
   const isDirect = order.exhibitionId === null;
   return <section className="order-details-screen">
-    <div className="od-top-actions"><button type="button" className="order-details-back" onClick={onBack}>← {backLabel}</button><button type="button" className="od-export-button" onClick={() => { setExportError(null); setExportOpen(true); }}>Export order</button></div>
+    <div className="od-top-actions"><button type="button" className="order-details-back" onClick={onBack}>← {backLabel}</button><button type="button" className="od-export-button" onClick={() => { setExportError(null); setExportOpen(true); }}><svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M5 19h14" /></svg>Export order</button></div>
     <header className="order-details-heading">
       <div className="order-details-title-row"><h1>{orderNumber(order.id)}</h1><span className={`order-detail-badge order-detail-status order-detail-status--${order.status.toLowerCase().replace(/ /g, '-')}`}>{order.status}</span><span className={`order-detail-badge ${isDirect ? 'order-detail-source--direct' : 'order-detail-source--exhibition'}`}>{isDirect ? 'Direct' : 'Exhibition'}</span></div>
-      <p>{order.customerName} · {order.items.length} {order.items.length === 1 ? 'item' : 'items'} · {isDirect ? 'created directly' : 'from exhibition selections'} · Created {formatDate(order.createdAt)}</p>
+      <p>{order.items.length} {order.items.length === 1 ? 'item' : 'items'} · Created {formatDate(order.createdAt)}</p>
     </header>
     <div className="od-context-grid">
       <section className="order-detail-card od-context-card"><span className="od-context-label">CUSTOMER</span><strong>{order.customerName}</strong><p>{[order.contactName, order.phone].filter(Boolean).join(' · ') || 'Contact details unavailable'}</p>{order.city && <p>{order.city}</p>}</section>
       <section className="order-detail-card od-context-card"><span className="od-context-label">{isDirect ? 'ORDER TYPE' : 'EXHIBITION'}</span><strong>{isDirect ? 'Direct order' : order.exhibitionName || 'Exhibition'}</strong>{!isDirect && <p>{[order.exhibitionStartDate && formatDate(order.exhibitionStartDate), order.exhibitionEndDate && formatDate(order.exhibitionEndDate)].filter(Boolean).join(' – ')}</p>}<p>Confirmed: {formatDate(order.confirmedAt)}</p></section>
       <section className="order-detail-card od-context-card"><span className="od-context-label">PAYMENTS</span><strong>{formatMoney(order.paymentReceivedPaise)} received</strong><p>{formatMoney(order.paymentPendingPaise)} outstanding</p>{order.status !== 'Cancelled' && order.paymentPendingPaise > 0 && <button type="button" className="od-record-payment" onClick={openPaymentDialog}>Record payment</button>}</section>
-      <section className="order-detail-card od-context-card"><span className="od-context-label">RECORD</span><strong>{orderNumber(order.id)}</strong><p>Created {formatDate(order.createdAt)}</p><p>{isDirect ? 'Direct order' : 'Exhibition selections'}</p></section>
     </div>
-    <section className="order-detail-card od-items-section"><div className="od-section-heading"><div><h2>Jewelry items</h2><p>Select an item to view its saved pricing calculation.</p></div><strong className="od-item-count">{order.items.length} {order.items.length === 1 ? 'item' : 'items'}</strong></div>
+    <section className="order-detail-card od-items-section"><div className="od-section-heading"><div><h2>Jewelry items</h2></div></div>
       <div className="od-item-list">{order.items.map((item) => {
         const expanded = expandedItems.includes(item.id);
         const snapshot = item.itemSnapshot ?? {};

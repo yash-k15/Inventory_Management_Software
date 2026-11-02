@@ -359,7 +359,7 @@ export default function CustomersScreenRedesigned({
         );
         showNotice(
           'error',
-          `${customer.businessName} was saved, but the list could not refresh. Use Refresh to try again.`,
+          `${customer.businessName} was saved, but the list could not refresh. Please try again.`,
         );
         setError('Unable to refresh customers. Please try again.');
       } finally {
@@ -527,7 +527,7 @@ export default function CustomersScreenRedesigned({
     if (!keep || !duplicate) {
       showNotice(
         'error',
-        'One of the selected customers is no longer in the list. Refresh and try again.',
+        'One of the selected customers is no longer in the list. Reload the customer list and try again.',
       );
       closeMergeCustomers();
       return;
@@ -755,12 +755,11 @@ export default function CustomersScreenRedesigned({
 
       <header className='customers-header'>
         <div>
-          <h1>Customers</h1>
-          <p>Search, review and manage your business customers.</p>
+          <h1 className='app-page-title'>Customers</h1>
         </div>
         <button
           type='button'
-          className='customers-primary-button'
+          className='app-button app-button--primary'
           onClick={() => {
             setNotice(null);
             setIsAddModalOpen(true);
@@ -816,22 +815,11 @@ export default function CustomersScreenRedesigned({
             </button>
           ))}
         </div>
-      </div>
-
-      <div className='customers-list-heading'>
-        <span>
+        <span className='customers-result-count' aria-live='polite'>
           {loading
-            ? 'Loading customers…'
+            ? 'Loading…'
             : `${customers.length} ${customers.length === 1 ? 'customer' : 'customers'}`}
         </span>
-        <button
-          type='button'
-          className='customers-quiet-button'
-          onClick={() => void loadCustomers()}
-          disabled={loading}
-        >
-          ↻ Refresh
-        </button>
       </div>
 
       {error && (
@@ -839,7 +827,7 @@ export default function CustomersScreenRedesigned({
           <p>{error}</p>
           <button
             type='button'
-            className='customers-secondary-button'
+            className='app-button app-button--secondary'
             onClick={() => void loadCustomers()}
           >
             Try again
@@ -871,7 +859,7 @@ export default function CustomersScreenRedesigned({
           {!search && archiveStatus !== 'archived' && (
             <button
               type='button'
-              className='customers-primary-button'
+              className='app-button app-button--primary'
               onClick={() => setIsAddModalOpen(true)}
             >
               + Add customer
@@ -886,15 +874,15 @@ export default function CustomersScreenRedesigned({
             <thead>
               <tr>
                 <th className='customers-serial-col'>S.No.</th>
-                <th className='customers-expand-col'>
-                  <span className='sr-only'>Expand</span>
-                </th>
                 <th>Business Name</th>
                 <th>Contact Name</th>
                 <th>City</th>
                 <th>Orders</th>
                 <th>Lifetime Value</th>
                 <th>Last Purchase</th>
+                <th className='customers-expand-col'>
+                  <span className='sr-only'>Expand</span>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -922,6 +910,35 @@ export default function CustomersScreenRedesigned({
                         {pageStartIndex + index + 1}
                       </td>
                       <td>
+                        <div className='customers-business'>
+                          <span className='customers-avatar'>
+                            {initials(customer.businessName) || '?'}
+                          </span>
+                          <span className='customers-business-copy'>
+                            <strong>{customer.businessName}</strong>
+                          </span>
+                        </div>
+                      </td>
+
+                      <td>
+                        <span className='customers-business-copy'>
+                          <strong>{customer.primaryContactName}</strong>
+                          <small>
+                            {formatValue(customer.primaryContactPhone1)}
+                          </small>
+                        </span>
+                      </td>
+                      <td>{formatValue(customer.city)}</td>
+                      <td className='customers-metric'>
+                        {customer.orderCount}
+                      </td>
+                      <td className='customers-metric'>
+                        {formatCurrency(customer.lifetimeValuePaise)}
+                      </td>
+                      <td className='customers-metric'>
+                        {formatDate(customer.lastPurchaseDate)}
+                      </td>
+                      <td className='customers-expand-cell'>
                         <button
                           type='button'
                           className='customers-expand'
@@ -947,40 +964,6 @@ export default function CustomersScreenRedesigned({
                             <path d='m9 18 6-6-6-6' />
                           </svg>
                         </button>
-                      </td>
-
-                      <td>
-                        <button
-                          type='button'
-                          className='customers-business'
-                          onClick={(event) => event.stopPropagation()}
-                        >
-                          <span className='customers-avatar'>
-                            {initials(customer.businessName) || '?'}
-                          </span>
-                          <span className='customers-business-copy'>
-                            <strong>{customer.businessName}</strong>
-                          </span>
-                        </button>
-                      </td>
-
-                      <td>
-                        <span className='customers-business-copy'>
-                          <strong>{customer.primaryContactName}</strong>
-                          <small>
-                            {formatValue(customer.primaryContactPhone1)}
-                          </small>
-                        </span>
-                      </td>
-                      <td>{formatValue(customer.city)}</td>
-                      <td className='customers-metric'>
-                        {customer.orderCount}
-                      </td>
-                      <td className='customers-metric'>
-                        {formatCurrency(customer.lifetimeValuePaise)}
-                      </td>
-                      <td className='customers-metric'>
-                        {formatDate(customer.lastPurchaseDate)}
                       </td>
                     </tr>
                     {expanded && (
@@ -1102,15 +1085,18 @@ export default function CustomersScreenRedesigned({
                                 ))}
                               </section>
 
-                              <section className='customers-expanded-section'>
-                                <h3>Notes</h3>
-                                <p className='customers-note-text'>
-                                  {formatValue(customer.notes)}
-                                </p>
-                              </section>
+                              {customer.notes?.trim() && (
+                                <section className='customers-expanded-section'>
+                                  <h3>Notes</h3>
+                                  <p className='customers-note-text'>
+                                    {customer.notes}
+                                  </p>
+                                </section>
+                              )}
                             </div>
 
                             <div className='customers-detail-actions'>
+                              <div className='customers-detail-actions-left'>
                               <button
                                 type='button'
                                 className='customers-action-primary'
@@ -1133,6 +1119,8 @@ export default function CustomersScreenRedesigned({
                               >
                                 Edit
                               </button>
+                              </div>
+                              <div className='customers-detail-actions-right'>
                               <button
                                 type='button'
                                 className='customers-action-secondary'
@@ -1180,6 +1168,7 @@ export default function CustomersScreenRedesigned({
                                   ? 'Unarchive'
                                   : 'Archive'}
                               </button>
+                              </div>
                             </div>
                           </div>
                         </td>

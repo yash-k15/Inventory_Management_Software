@@ -440,7 +440,22 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
           disabled={isLoading || Boolean(error)}
           title={selectedTagItems.length ? `Export inventory records or print ${selectedTagItems.length} selected tags` : 'Export inventory records'}
         >
-          Export<span aria-hidden='true'>⤓</span>
+          <svg
+            aria-hidden='true'
+            width='15'
+            height='15'
+            viewBox='0 0 24 24'
+            fill='none'
+            stroke='currentColor'
+            strokeWidth='2'
+            strokeLinecap='round'
+            strokeLinejoin='round'
+          >
+            <path d='M12 3v12' />
+            <path d='m7 10 5 5 5-5' />
+            <path d='M5 19h14' />
+          </svg>
+          Export
         </button>
 
         <button

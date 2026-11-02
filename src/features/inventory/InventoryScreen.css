@@ -856,5 +856,25 @@
   background: #f6efe5;
 }
 
-.inventory-export-button{border-color:#957044;color:#79582f;font-weight:600}
-.inventory-export-button:hover:not(:disabled){border-color:#79582f;background:#f6efe5}
+.inventory-export-button {
+  min-height: 38px;
+  padding: 8px 13px;
+  border: 1px solid #a87540;
+  border-radius: 9px;
+  background: var(--color-surface, #fff);
+  color: #8a5a2b;
+  font: inherit;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
+  gap: 8px;
+}
+
+.inventory-export-button:hover:not(:disabled) {
+  border-color: #a87540;
+  background: #fbf7f1;
+}
+
+.inventory-export-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}

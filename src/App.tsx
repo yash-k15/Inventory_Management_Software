@@ -27,6 +27,7 @@ function App() {
     null,
   );
   const [selectedPaymentOrderId, setSelectedPaymentOrderId] = useState<number | null>(null);
+  const [selectedCustomerOrderId, setSelectedCustomerOrderId] = useState<number | null>(null);
 
   function canLeaveSettings() {
     if (view !== 'settings' || !settingsDirty) return true;
@@ -87,6 +88,7 @@ function App() {
           setNotice(null);
           setSelectedCustomerId(null);
           setSelectedPaymentOrderId(null);
+          setSelectedCustomerOrderId(null);
           setView(nextView);
         }}
         onAddItem={openAddItem}
@@ -107,7 +109,16 @@ function App() {
                 onViewItem={openItemDetails}
               />
             )}
-            {view === 'orders' && selectedPaymentOrderId !== null ? (
+            {view === 'orders' && selectedCustomerOrderId !== null ? (
+              <OrderDetailsScreen
+                orderId={selectedCustomerOrderId}
+                backLabel='Customer history'
+                onBack={() => {
+                  setSelectedCustomerOrderId(null);
+                  setView('customers');
+                }}
+              />
+            ) : view === 'orders' && selectedPaymentOrderId !== null ? (
               <OrderDetailsScreen
                 orderId={selectedPaymentOrderId}
                 backLabel='Payments'
@@ -132,6 +143,10 @@ function App() {
               <CustomerDetailsScreen
                 customerId={selectedCustomerId}
                 onBack={() => setSelectedCustomerId(null)}
+                onViewOrder={(orderId) => {
+                  setSelectedCustomerOrderId(orderId);
+                  setView('orders');
+                }}
               />
             )}
             {view === 'settings' && (

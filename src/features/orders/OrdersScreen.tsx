@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   getOrderFilterOptions,
   getOrders,
@@ -21,7 +22,7 @@ const initialFilters: OrdersFilters = {
   customerId: 'all',
   exhibitionId: 'all',
   dateRange: 'all',
-  status: 'Confirmed',
+  status: 'All',
   sort: 'newest',
 };
 
@@ -81,6 +82,7 @@ function CustomDropdown({
   const [open, setOpen] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const selectedIndex = Math.max(
     0,
@@ -92,7 +94,11 @@ function CustomDropdown({
     if (!open) return;
 
     function handlePointerDown(event: MouseEvent) {
-      if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
+      if (
+        rootRef.current &&
+        !rootRef.current.contains(event.target as Node) &&
+        !menuRef.current?.contains(event.target as Node)
+      ) {
         setOpen(false);
       }
     }
@@ -190,12 +196,25 @@ function CustomDropdown({
         </svg>
       </button>
 
-      {open && (
-        <div
-          className='orders-dropdown-menu'
-          role='listbox'
-          aria-label={ariaLabel}
-        >
+      {open && (() => {
+        const isRowStatus = className.includes('orders-row-status-dropdown');
+        const triggerRect = rootRef.current?.getBoundingClientRect();
+        const menu = (
+          <div
+            ref={menuRef}
+            className={`orders-dropdown-menu ${isRowStatus ? 'orders-dropdown-menu--row-status' : ''}`}
+            role='listbox'
+            aria-label={ariaLabel}
+            style={isRowStatus && triggerRect ? {
+              position: 'fixed',
+              top: `${triggerRect.bottom + 7}px`,
+              left: `${triggerRect.left}px`,
+              width: '190px',
+              minWidth: '190px',
+              maxWidth: '190px',
+              transform: 'none',
+            } : undefined}
+          >
           {options.map((option, index) => (
             <button
               key={option.value}
@@ -225,8 +244,10 @@ function CustomDropdown({
               )}
             </button>
           ))}
-        </div>
-      )}
+          </div>
+        );
+        return isRowStatus ? createPortal(menu, document.body) : menu;
+      })()}
     </div>
   );
 }
@@ -493,55 +514,6 @@ function OrdersScreen() {
     })),
   ];
 
-  const columnSortLabels: Record<
-    OrderSortColumn,
-    { asc: string; desc: string }
-  > = {
-    order: { asc: 'Order (low to high)', desc: 'Order (high to low)' },
-    customer: { asc: 'Customer (A–Z)', desc: 'Customer (Z–A)' },
-    source: {
-      asc: 'Exhibition / source (A–Z)',
-      desc: 'Exhibition / source (Z–A)',
-    },
-    items: { asc: 'Items (low to high)', desc: 'Items (high to low)' },
-    date: {
-      asc: 'Order date (oldest first)',
-      desc: 'Order date (newest first)',
-    },
-    value: {
-      asc: 'Order value (low to high)',
-      desc: 'Order value (high to low)',
-    },
-    received: {
-      asc: 'Payment received (low to high)',
-      desc: 'Payment received (high to low)',
-    },
-    pending: {
-      asc: 'Payment pending (low to high)',
-      desc: 'Payment pending (high to low)',
-    },
-  };
-
-  const sortDropdownOptions: DropdownOption[] = [
-    { value: 'default', label: 'Default (Newest first)' },
-    { value: 'oldest', label: 'Oldest first' },
-    { value: 'value-high', label: 'Highest value' },
-    { value: 'value-low', label: 'Lowest value' },
-    ...(tableSort
-      ? [
-          {
-            value: 'column-sort',
-            label: columnSortLabels[tableSort.column][tableSort.direction],
-          },
-        ]
-      : []),
-  ];
-
-  const sortDropdownValue = tableSort
-    ? 'column-sort'
-    : filters.sort === 'newest'
-      ? 'default'
-      : filters.sort;
 
   async function handleStatusChange(order: OrderRow, value: string) {
     try {
@@ -630,6 +602,11 @@ function OrdersScreen() {
             disabled={loading || Boolean(error)}
             title={selectedOrdersForExport.length > 0 ? `Export ${selectedOrdersForExport.length} selected orders` : 'Export filtered orders'}
           >
+            <svg viewBox='0 0 20 20' fill='none' aria-hidden='true'>
+              <path d='M10 2.5v9' stroke='currentColor' strokeWidth='1.6' strokeLinecap='round' />
+              <path d='m6.5 8.5 3.5 3.5 3.5-3.5' stroke='currentColor' strokeWidth='1.6' strokeLinecap='round' strokeLinejoin='round' />
+              <path d='M3.5 13.5v3h13v-3' stroke='currentColor' strokeWidth='1.6' strokeLinecap='round' strokeLinejoin='round' />
+            </svg>
             Export{selectedOrdersForExport.length > 0 ? ` (${selectedOrdersForExport.length})` : ''}
           </button>
           <button
@@ -649,7 +626,6 @@ function OrdersScreen() {
           <strong className='orders-summary-value'>
             {summary.confirmedCount}
           </strong>
-          <span className='orders-summary-note'>All confirmed orders</span>
         </div>
 
         <div className='orders-summary-card'>
@@ -657,9 +633,6 @@ function OrdersScreen() {
           <strong className='orders-summary-value'>
             {formatMoney(summary.confirmedValuePaise)}
           </strong>
-          <span className='orders-summary-note'>
-            Sum of item values, not payments
-          </span>
         </div>
 
         <div className='orders-summary-card'>
@@ -671,7 +644,6 @@ function OrdersScreen() {
             {summary.directOrderCount}
             <span>direct</span>
           </strong>
-          <span className='orders-summary-note'>Non-cancelled orders</span>
         </div>
 
         <div className='orders-summary-card orders-provisional-card'>
@@ -683,9 +655,6 @@ function OrdersScreen() {
             {summary.provisionalCustomerCount}
             <span className='orders-summary-inline-note'> customers</span>
           </strong>
-          <span className='orders-summary-note'>
-            Not orders until confirmed
-          </span>
         </div>
       </section>
 
@@ -706,6 +675,7 @@ function OrdersScreen() {
         <CustomDropdown
           label='Customer'
           ariaLabel='Filter by customer'
+          className='orders-customer-filter'
           value={filters.customerId}
           options={customerDropdownOptions}
           onChange={(value) => updateFilter('customerId', value)}
@@ -738,23 +708,6 @@ function OrdersScreen() {
           onChange={(value) =>
             updateFilter('status', value as OrdersFilters['status'])
           }
-        />
-
-        <CustomDropdown
-          label='Sort'
-          ariaLabel='Sort orders'
-          value={sortDropdownValue}
-          options={sortDropdownOptions}
-          className='orders-sort-filter'
-          onChange={(value) => {
-            setTableSort(null);
-            updateFilter(
-              'sort',
-              (value === 'default' || value === 'column-sort'
-                ? 'newest'
-                : value) as OrdersFilters['sort'],
-            );
-          }}
         />
 
         <button
@@ -806,10 +759,10 @@ function OrdersScreen() {
                   {sortableHeader('Order value', 'value', true)}
                 </th>
                 <th className='orders-number-cell'>
-                  {sortableHeader('Payment received', 'received', true)}
+                  {sortableHeader('Received', 'received', true)}
                 </th>
                 <th className='orders-number-cell'>
-                  {sortableHeader('Payment pending', 'pending', true)}
+                  {sortableHeader('Pending', 'pending', true)}
                 </th>
                 <th>Status</th>
                 <th>Actions</th>
@@ -834,16 +787,18 @@ function OrdersScreen() {
                       {(currentPage - 1) * pageSize + index + 1}
                     </td>
                     <td className='orders-number'>
-                      {formatOrderNumber(order.id)}
+                      <button
+                        type='button'
+                        className='orders-number-link'
+                        onClick={() => setSelectedOrderId(order.id)}
+                        aria-label={`Open order ${formatOrderNumber(order.id)}`}
+                      >
+                        {formatOrderNumber(order.id)}
+                      </button>
                     </td>
                     <td>
                       <div className='orders-customer-name'>
                         {order.customerName}
-                      </div>
-                      <div className='orders-secondary'>
-                        {[order.contactName, order.city]
-                          .filter(Boolean)
-                          .join(' · ') || '—'}
                       </div>
                     </td>
                     <td>
@@ -851,9 +806,6 @@ function OrdersScreen() {
                         <>
                           <div className='orders-exhibition-name'>
                             {order.exhibitionName}
-                          </div>
-                          <div className='orders-secondary'>
-                            {formatDate(order.exhibitionStartDate)}
                           </div>
                         </>
                       ) : (
@@ -889,25 +841,27 @@ function OrdersScreen() {
                       />
                     </td>
                     <td className='orders-actions-cell'>
-                      {order.status !== 'Cancelled' &&
-                        order.paymentPendingPaise > 0 && (
-                          <button
-                            type='button'
-                            className='orders-record-payment'
-                            onClick={() => openPayment(order)}
-                          >
-                            Record payment
-                          </button>
-                        )}
-                      <button
-                        type='button'
-                        className='orders-row-open'
-                        aria-label={`Open order ${formatOrderNumber(order.id)}`}
-                        title={`Open ${formatOrderNumber(order.id)}`}
-                        onClick={() => setSelectedOrderId(order.id)}
-                      >
-                        ›
-                      </button>
+                      <div className='orders-actions-wrap'>
+                        {order.status !== 'Cancelled' &&
+                          order.paymentPendingPaise > 0 && (
+                            <button
+                              type='button'
+                              className='orders-record-payment'
+                              onClick={() => openPayment(order)}
+                            >
+                              Record payment
+                            </button>
+                          )}
+                        <button
+                          type='button'
+                          className='orders-row-open'
+                          aria-label={`Open order ${formatOrderNumber(order.id)}`}
+                          title={`Open ${formatOrderNumber(order.id)}`}
+                          onClick={() => setSelectedOrderId(order.id)}
+                        >
+                          ›
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -955,7 +909,6 @@ function OrdersScreen() {
             <button type='button' aria-label='Next page' title='Next page' disabled={currentPage === totalPages} onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}>›</button>
             <button type='button' aria-label='Last page' title='Last page' disabled={currentPage === totalPages} onClick={() => setCurrentPage(totalPages)}>»</button>
           </div>
-          <span className='orders-table-footer-note'>Order value is the final order total. Payments and pending balances are tracked per order.</span>
         </footer>
       </section>
       {showExportDialog && (

@@ -136,9 +136,7 @@ export default function AddCustomerModalRedesigned({
       >
         <header className='customer-modal-header'>
           <div>
-            <span className='customer-eyebrow'>CUSTOMER DIRECTORY</span>
             <h2 id='customer-modal-title'>Add customer</h2>
-            <p>Save a business and the people you work with.</p>
           </div>
           <button
             type='button'
@@ -171,7 +169,6 @@ export default function AddCustomerModalRedesigned({
                 <span className='customer-section-number'>01</span>
                 <div>
                   <h3>Business details</h3>
-                  <p>General information for this customer.</p>
                 </div>
               </div>
               <div className='customer-form-grid'>
@@ -233,11 +230,10 @@ export default function AddCustomerModalRedesigned({
                 <span className='customer-section-number'>02</span>
                 <div>
                   <h3>Contact people</h3>
-                  <p>Add at least one contact and choose a primary contact.</p>
                 </div>
                 <button
                   type='button'
-                  className='customer-secondary-button'
+                  className='app-button app-button--secondary customer-secondary-button'
                   onClick={() =>
                     setContacts((current) => [...current, emptyContact()])
                   }
@@ -334,13 +330,10 @@ export default function AddCustomerModalRedesigned({
           </div>
 
           <footer className='customer-modal-footer'>
-            <span className='customer-footer-hint'>
-              <span className='required-mark'>*</span> Required field
-            </span>
             <div>
               <button
                 type='button'
-                className='customer-secondary-button'
+                className='app-button app-button--secondary customer-secondary-button'
                 disabled={saving}
                 onClick={onClose}
               >
@@ -348,7 +341,7 @@ export default function AddCustomerModalRedesigned({
               </button>
               <button
                 type='submit'
-                className='customer-primary-button'
+                className='app-button app-button--primary customer-primary-button'
                 disabled={saving}
               >
                 {saving ? 'Saving…' : 'Save customer'}

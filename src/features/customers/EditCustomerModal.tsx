@@ -187,7 +187,6 @@ export default function EditCustomerModal({
         <header className='customer-modal-header'>
           <div>
             <h2 id='edit-customer-title'>Edit customer</h2>
-            <p>Update the business and contact details.</p>
           </div>
 
           <button
@@ -214,7 +213,6 @@ export default function EditCustomerModal({
                 <span className='customer-section-number'>01</span>
                 <div>
                   <h3>Business details</h3>
-                  <p>General information for this customer.</p>
                 </div>
               </div>
 
@@ -279,12 +277,11 @@ export default function EditCustomerModal({
                 <span className='customer-section-number'>02</span>
                 <div>
                   <h3>Contact people</h3>
-                  <p>Add at least one contact and choose a primary contact.</p>
                 </div>
 
                 <button
                   type='button'
-                  className='customer-secondary-button'
+                  className='app-button app-button--secondary customer-secondary-button'
                   onClick={addContact}
                 >
                   + Add contact
@@ -385,13 +382,10 @@ export default function EditCustomerModal({
           </div>
 
           <footer className='customer-modal-footer'>
-            <span className='customer-footer-hint'>
-              <span className='required-mark'>*</span> Required field
-            </span>
             <div>
             <button
               type='button'
-              className='customer-secondary-button'
+              className='app-button app-button--secondary customer-secondary-button'
               disabled={saving}
               onClick={onClose}
             >
@@ -400,7 +394,7 @@ export default function EditCustomerModal({
 
             <button
               type='submit'
-              className='customer-primary-button'
+              className='app-button app-button--primary customer-primary-button'
               disabled={saving}
             >
               {saving ? 'Saving…' : 'Save changes'}

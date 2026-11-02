@@ -68,6 +68,58 @@ p {
   margin-top: 0;
 }
 
+.app-page-title {
+  margin: 0;
+  color: var(--color-text);
+  font-family: var(--font-family-heading);
+  font-size: var(--font-size-page-title);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: -0.055em;
+  line-height: var(--line-height-heading);
+}
+
+.app-page-description {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-subtitle);
+  line-height: var(--line-height-body);
+}
+
+.app-section-title {
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--font-size-section-title);
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.3;
+}
+
+.app-body-text {
+  color: var(--color-text);
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+}
+
+.app-hint,
+.app-meta-text {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-hint);
+  line-height: var(--line-height-body);
+}
+
+.app-field-label {
+  color: var(--color-text);
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-semibold);
+}
+
+.app-table-header {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-table-header);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
 h1,
 h2,
 h3,
@@ -89,4 +141,10 @@ h6 {
 ::selection {
   background: var(--color-accent);
   color: var(--color-text-on-primary);
+}
+
+@media (max-width: 600px) {
+  .app-page-title {
+    font-size: 2.125rem;
+  }
 }

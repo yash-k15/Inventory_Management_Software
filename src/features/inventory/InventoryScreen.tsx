@@ -73,10 +73,6 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [isSeeding, setIsSeeding] = useState(false);
-  const [seedMessage, setSeedMessage] = useState<string | null>(null);
-  const [showCleanConfirmation, setShowCleanConfirmation] = useState(false);
-  const [showDevMenu, setShowDevMenu] = useState(false);
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [sort, setSort] = useState<InventorySort>({
     field: 'itemNumber',
@@ -91,15 +87,15 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
   const selectedTagItems = items.filter((item) =>
     selectedTagItemIds.has(item.id),
   );
-  const allFilteredItemsSelected =
-    items.length > 0 && items.every((item) => selectedTagItemIds.has(item.id));
-  const someFilteredItemsSelected = items.some((item) =>
+  const allVisiblePageItemsSelected =
+    paginatedItems.length > 0 &&
+    paginatedItems.every((item) => selectedTagItemIds.has(item.id));
+  const someVisiblePageItemsSelected = paginatedItems.some((item) =>
     selectedTagItemIds.has(item.id),
   );
   const firstVisibleItem = items.length === 0 ? 0 : pageStartIndex + 1;
   const lastVisibleItem = Math.min(pageStartIndex + pageSize, items.length);
 
-  const devMenuRef = useRef<HTMLDivElement>(null);
   const sortMenuRef = useRef<HTMLDivElement>(null);
   const imagePreviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
@@ -217,31 +213,6 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
   }, [currentPage, totalPages]);
 
   useEffect(() => {
-    if (!showDevMenu) return;
-
-    function handleOutsideClick(event: MouseEvent) {
-      if (
-        event.target instanceof Node &&
-        !devMenuRef.current?.contains(event.target)
-      ) {
-        setShowDevMenu(false);
-      }
-    }
-
-    function handleEscape(event: KeyboardEvent) {
-      if (event.key === 'Escape') setShowDevMenu(false);
-    }
-
-    document.addEventListener('mousedown', handleOutsideClick);
-    document.addEventListener('keydown', handleEscape);
-
-    return () => {
-      document.removeEventListener('mousedown', handleOutsideClick);
-      document.removeEventListener('keydown', handleEscape);
-    };
-  }, [showDevMenu]);
-
-  useEffect(() => {
     if (!showSortMenu) return;
 
     function handleOutsideSortClick(event: MouseEvent) {
@@ -348,45 +319,6 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
     ? getActiveInventoryFilterChips(filters, filterOptions)
     : [];
 
-  const seedSampleInventory = async () => {
-    setIsSeeding(true);
-    setSeedMessage(null);
-    setShowDevMenu(false);
-
-    try {
-      const count = await invoke<number>('seed_dev_inventory');
-      setSeedMessage(`Sample inventory ready: ${count} test items.`);
-      await loadInventory();
-    } catch (err) {
-      console.error('Failed to seed sample inventory:', err);
-      setSeedMessage(
-        'Unable to seed sample inventory. Check the console for details.',
-      );
-    } finally {
-      setIsSeeding(false);
-    }
-  };
-
-  const cleanSampleInventory = async () => {
-    setIsSeeding(true);
-    setSeedMessage(null);
-    setShowDevMenu(false);
-
-    try {
-      const count = await invoke<number>('clean_dev_inventory');
-      setSeedMessage(`Sample cleanup complete: ${count} test items removed.`);
-      setShowCleanConfirmation(false);
-      await loadInventory();
-    } catch (err) {
-      console.error('Failed to clean sample inventory:', err);
-      setSeedMessage(
-        'Unable to clean sample inventory. Check the console for details.',
-      );
-    } finally {
-      setIsSeeding(false);
-    }
-  };
-
   const toggleTagItem = (itemId: number) => {
     setSelectedTagItemIds((current) => {
       const next = new Set(current);
@@ -396,12 +328,14 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
     });
   };
 
-  const toggleAllFilteredTagItems = () => {
+  const toggleAllVisiblePageTagItems = () => {
     setSelectedTagItemIds((current) => {
       const next = new Set(current);
-      if (allFilteredItemsSelected)
-        items.forEach((item) => next.delete(item.id));
-      else items.forEach((item) => next.add(item.id));
+      if (allVisiblePageItemsSelected) {
+        paginatedItems.forEach((item) => next.delete(item.id));
+      } else {
+        paginatedItems.forEach((item) => next.add(item.id));
+      }
       return next;
     });
   };
@@ -413,9 +347,6 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
       <header className='inventory-page-header'>
         <div>
           <h2 className='app-page-title'>Inventory</h2>
-          <p className='app-page-description'>
-            Browse and search your jewelry catalog.
-          </p>
         </div>
       </header>
 
@@ -493,58 +424,14 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
           )}
         </div>
 
+        <span className='inventory-toolbar-item-count' aria-live='polite'>
+          {isLoading
+            ? 'Loading...'
+            : `${items.length} ${items.length === 1 ? 'item' : 'items'}`}
+        </span>
+
         <div className='inventory-toolbar-spacer' />
 
-        {import.meta.env.DEV && (
-          <div className='inventory-dev-menu' ref={devMenuRef}>
-            <button
-              type='button'
-              className='inventory-toolbar-button inventory-more-button'
-              aria-label='Development tools'
-              aria-haspopup='menu'
-              aria-expanded={showDevMenu}
-              onClick={() => setShowDevMenu((current) => !current)}
-              disabled={isSeeding}
-            >
-              <span aria-hidden='true'>•••</span>
-            </button>
-
-            {showDevMenu && (
-              <div className='inventory-dev-menu-panel' role='menu'>
-                <button
-                  type='button'
-                  role='menuitem'
-                  onClick={() => void seedSampleInventory()}
-                  disabled={isLoading || isSeeding}
-                >
-                  {isSeeding ? 'Working...' : 'Seed sample data'}
-                </button>
-                <button
-                  type='button'
-                  role='menuitem'
-                  onClick={() => {
-                    setShowDevMenu(false);
-                    setShowCleanConfirmation(true);
-                  }}
-                  disabled={isLoading || isSeeding}
-                >
-                  Clean sample data
-                </button>
-                <button
-                  type='button'
-                  role='menuitem'
-                  onClick={() => {
-                    setShowDevMenu(false);
-                    void loadInventory();
-                  }}
-                  disabled={isLoading || isSeeding}
-                >
-                  Refresh inventory
-                </button>
-              </div>
-            )}
-          </div>
-        )}
 
         <button
           type='button'
@@ -580,14 +467,9 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
         </button>
       </section>
 
-      <div className='inventory-list-meta'>
-        <span>
-          {isLoading
-            ? 'Loading...'
-            : `${items.length} ${items.length === 1 ? 'item' : 'items'}`}
-        </span>
-
-        {activeFilterChips.map((chip) => (
+      {activeFilterChips.length > 0 && (
+        <div className='inventory-list-meta'>
+          {activeFilterChips.map((chip) => (
           <button
             key={chip.id}
             type='button'
@@ -599,61 +481,6 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
             <span aria-hidden='true'>×</span>
           </button>
         ))}
-      </div>
-
-      {import.meta.env.DEV && seedMessage && (
-        <div className='inventory-dev-message' role='status'>
-          <span>{seedMessage}</span>
-          <button
-            type='button'
-            aria-label='Dismiss message'
-            onClick={() => setSeedMessage(null)}
-          >
-            ×
-          </button>
-        </div>
-      )}
-
-      {import.meta.env.DEV && showCleanConfirmation && (
-        <div
-          className='inventory-confirm-overlay'
-          role='presentation'
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget && !isSeeding) {
-              setShowCleanConfirmation(false);
-            }
-          }}
-        >
-          <section
-            className='inventory-confirm-dialog'
-            role='alertdialog'
-            aria-modal='true'
-            aria-labelledby='clean-sample-title'
-          >
-            <h3 id='clean-sample-title'>Delete sample jewelry data?</h3>
-            <p>
-              This permanently deletes sample items whose item numbers start
-              with TEST-, along with unused test categories and purities.
-            </p>
-            <div className='inventory-confirm-actions'>
-              <button
-                type='button'
-                className='inventory-toolbar-button'
-                onClick={() => setShowCleanConfirmation(false)}
-                disabled={isSeeding}
-              >
-                Cancel
-              </button>
-              <button
-                type='button'
-                className='inventory-add-button'
-                onClick={() => void cleanSampleInventory()}
-                disabled={isSeeding}
-              >
-                {isSeeding ? 'Cleaning...' : 'Confirm cleanup'}
-              </button>
-            </div>
-          </section>
         </div>
       )}
 
@@ -696,28 +523,29 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
                 <tr>
                   <th
                     scope='col'
-                    className='inventory-serial-heading inventory-select-heading'
+                    className='inventory-select-heading'
                   >
-                    <label
+                    <input
+                      className='inventory-select-checkbox'
+                      type='checkbox'
+                      aria-label='Select all inventory items on this page for tag printing'
                       title={
-                        allFilteredItemsSelected
-                          ? 'Deselect all filtered items'
-                          : 'Select all filtered items'
+                        allVisiblePageItemsSelected
+                          ? 'Deselect all items on this page'
+                          : 'Select all items on this page'
                       }
-                    >
-                      <input
-                        type='checkbox'
-                        aria-label='Select all filtered inventory items for tag printing'
-                        checked={allFilteredItemsSelected}
-                        ref={(element) => {
-                          if (element)
-                            element.indeterminate =
-                              someFilteredItemsSelected &&
-                              !allFilteredItemsSelected;
-                        }}
-                        onChange={toggleAllFilteredTagItems}
-                      />
-                    </label>
+                      checked={allVisiblePageItemsSelected}
+                      ref={(element) => {
+                        if (element)
+                          element.indeterminate =
+                            someVisiblePageItemsSelected &&
+                            !allVisiblePageItemsSelected;
+                      }}
+                      onChange={toggleAllVisiblePageTagItems}
+                    />
+                  </th>
+                  <th scope='col' className='inventory-serial-heading'>
+                    S.NO.
                   </th>
                   <th scope='col'>
                     <button
@@ -786,7 +614,6 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
                   <th scope='col'>IGI</th>
                   <th scope='col'>HUID</th>
                   <th scope='col'>Status</th>
-                  <th scope='col'>Tag selected</th>
                 </tr>
               </thead>
 
@@ -803,15 +630,18 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
                       className='inventory-table-row'
                       onClick={() => onViewItem(item.id)}
                     >
-                      <td className='inventory-serial-cell inventory-select-cell'>
+                      <td className='inventory-select-cell'>
                         <input
+                          className='inventory-select-checkbox'
                           type='checkbox'
                           aria-label={`Select ${item.itemNumber} for tag printing`}
                           checked={selectedTagItemIds.has(item.id)}
                           onClick={(event) => event.stopPropagation()}
                           onChange={() => toggleTagItem(item.id)}
-                        />{' '}
-                        <span>{pageStartIndex + index + 1}</span>
+                        />
+                      </td>
+                      <td className='inventory-serial-cell'>
+                        {pageStartIndex + index + 1}
                       </td>
                       <td className='inventory-item-column'>
                         <div className='inventory-item-cell'>
@@ -937,9 +767,6 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
                         >
                           {item.isArchived === 1 ? 'Archived' : 'Active'}
                         </span>
-                      </td>
-                      <td className='inventory-tag-selection-cell'>
-                        {selectedTagItemIds.has(item.id) ? 'Selected' : '—'}
                       </td>
                     </tr>
                   );

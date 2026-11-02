@@ -76,6 +76,7 @@ function formatCustomValues(value: string): string | null {
 function ItemDetailsScreen({ itemId, onBack, onEdit }: Props) {
   const [data, setData] = useState<LoadedItem | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [showImagePreview, setShowImagePreview] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -90,7 +91,9 @@ function ItemDetailsScreen({ itemId, onBack, onEdit }: Props) {
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
-  const [tagPreviewItem, setTagPreviewItem] = useState<InventoryItem | null>(null);
+  const [tagPreviewItem, setTagPreviewItem] = useState<InventoryItem | null>(
+    null,
+  );
   const [tagLoading, setTagLoading] = useState(false);
   const [tagError, setTagError] = useState<string | null>(null);
 
@@ -149,6 +152,17 @@ function ItemDetailsScreen({ itemId, onBack, onEdit }: Props) {
     };
   }, [itemId]);
 
+  useEffect(() => {
+    if (!showImagePreview) return;
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setShowImagePreview(false);
+    }
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [showImagePreview]);
+
   if (loading) {
     return (
       <section className='item-details-screen'>
@@ -170,7 +184,9 @@ function ItemDetailsScreen({ itemId, onBack, onEdit }: Props) {
         ...INITIAL_INVENTORY_FILTERS,
         search: data.item.itemNumber,
       });
-      const inventoryItem = matches.find((candidate) => candidate.id === itemId);
+      const inventoryItem = matches.find(
+        (candidate) => candidate.id === itemId,
+      );
 
       if (!inventoryItem) {
         throw new Error('Unable to load this item for tag printing.');
@@ -411,7 +427,10 @@ function ItemDetailsScreen({ itemId, onBack, onEdit }: Props) {
             </button>
           )}
           {tagError && (
-            <p role='alert' className='item-details-error item-details-tag-error'>
+            <p
+              role='alert'
+              className='item-details-error item-details-tag-error'
+            >
               {tagError}
             </p>
           )}
@@ -565,12 +584,19 @@ function ItemDetailsScreen({ itemId, onBack, onEdit }: Props) {
           <section className='item-details-card item-details-image-card'>
             <div className='item-details-image-wrap'>
               {imageUrl ? (
-                <img
-                  src={imageUrl}
-                  alt={`Jewelry item ${item.itemNumber}`}
-                  className='item-details-image'
-                  onError={() => setImageUrl(null)}
-                />
+                <button
+                  type='button'
+                  className='item-details-image-trigger'
+                  onClick={() => setShowImagePreview(true)}
+                  aria-label={`View larger image of jewelry item ${item.itemNumber}`}
+                >
+                  <img
+                    src={imageUrl}
+                    alt={`Jewelry item ${item.itemNumber}`}
+                    className='item-details-image'
+                    onError={() => setImageUrl(null)}
+                  />
+                </button>
               ) : (
                 <div className='item-details-image-placeholder'>
                   <span>◇</span>
@@ -578,9 +604,6 @@ function ItemDetailsScreen({ itemId, onBack, onEdit }: Props) {
                 </div>
               )}
             </div>
-            <p className='item-details-image-caption'>
-              {imageUrl ? 'Item image' : 'No image saved'}
-            </p>
           </section>
 
           <section className='item-details-card'>
@@ -623,6 +646,44 @@ function ItemDetailsScreen({ itemId, onBack, onEdit }: Props) {
           </section>
         </aside>
       </div>
+
+      {showImagePreview && imageUrl && (
+        <div
+          className='item-details-image-modal-backdrop'
+          role='presentation'
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setShowImagePreview(false);
+            }
+          }}
+        >
+          <section
+            className='item-details-image-modal'
+            role='dialog'
+            aria-modal='true'
+            aria-label={`Jewelry item ${item.itemNumber} image`}
+          >
+            <button
+              type='button'
+              className='item-details-image-modal-close'
+              onClick={() => setShowImagePreview(false)}
+              aria-label='Close image preview'
+              autoFocus
+            >
+              ×
+            </button>
+            <img
+              src={imageUrl}
+              alt={`Jewelry item ${item.itemNumber}`}
+              className='item-details-image-modal-img'
+            />
+            <p className='item-details-image-modal-caption'>
+              {item.itemNumber}
+            </p>
+          </section>
+        </div>
+      )}
+
       {tagPreviewItem && (
         <JewelryTagPreview
           item={tagPreviewItem}

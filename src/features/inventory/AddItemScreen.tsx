@@ -894,7 +894,7 @@ function AddItemScreen({ onCancel, onCreated, itemId, onUpdated }: Props) {
             onClick={onCancel}
             disabled={saving}
           >
-            ← Inventory
+            {isEditMode ? '← Item details' : '← Inventory'}
           </button>
           <h2 className='app-page-title'>
             {isEditMode ? 'Edit jewelry item' : 'Add jewelry item'}

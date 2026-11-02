@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { save } from '@tauri-apps/plugin-dialog';
 import * as XLSX from 'xlsx-js-style';
@@ -21,6 +21,95 @@ type Props<T> = {
   selectedRows?: T[];
   onClose: () => void;
 };
+
+type SelectOption = { value: string; label: string };
+
+function StyledSelect({
+  label,
+  value,
+  options,
+  onChange,
+  disabled = false,
+}: {
+  label: string;
+  value: string;
+  options: SelectOption[];
+  onChange: (value: string) => void;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const selectRef = useRef<HTMLSpanElement>(null);
+  const selectedOption = options.find((option) => option.value === value);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!selectRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (disabled) setOpen(false);
+  }, [disabled]);
+
+  return (
+    <div className='export-select-field'>
+      <span className='export-select-label'>{label}</span>
+      <span className='export-select' ref={selectRef}>
+        <button
+          type='button'
+          className='export-select-trigger'
+          aria-haspopup='listbox'
+          aria-expanded={open}
+          disabled={disabled}
+          onClick={() => setOpen((current) => !current)}
+        >
+          <span>{selectedOption?.label ?? ''}</span>
+          <svg className={`export-select-chevron${open ? ' is-open' : ''}`} aria-hidden='true' width='16' height='16' viewBox='0 0 24 24' fill='none'>
+            <path d='m7 10 5 5 5-5' stroke='currentColor' strokeWidth='1.8' strokeLinecap='round' strokeLinejoin='round' />
+          </svg>
+        </button>
+        {open && !disabled && (
+          <>
+            <div className='export-select-menu' role='listbox' aria-label={label}>
+              {options.map((option) => (
+                <button
+                  type='button'
+                  role='option'
+                  aria-selected={option.value === value}
+                  className={`export-select-option${option.value === value ? ' is-selected' : ''}`}
+                  key={option.value}
+                  onClick={() => {
+                    // Apply the choice and close the menu in the same event.
+                    // Keep this controlled by the option click, not the parent label.
+                    onChange(option.value);
+                    setOpen(false);
+                  }}
+                >
+                  <span>{option.label}</span>
+                  {option.value === value && <span aria-hidden='true'>✓</span>}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </span>
+    </div>
+  );
+}
 
 type ConfiguredColumn<T> = ExportColumn<T> & {
   outputLabel: string;
@@ -314,7 +403,7 @@ function replaceDetailedColumns<T>(
 function ExportDialog<T>({ configuration, defaultSelectedColumns, selectedRows, onClose }: Props<T>) {
   const [step, setStep] = useState<1 | 2>(1);
   const [format, setFormat] = useState<ExportFormat>('xlsx');
-  const [scope, setScope] = useState<ExportScope>('filtered');
+  const [scope, setScope] = useState<ExportScope>(selectedRows?.length ? 'selected' : 'filtered');
   const [separateDiamonds, setSeparateDiamonds] = useState(false);
   const [separateStones, setSeparateStones] = useState(false);
   const [includeTotals, setIncludeTotals] = useState(false);
@@ -367,6 +456,9 @@ function ExportDialog<T>({ configuration, defaultSelectedColumns, selectedRows, 
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [previewSourceRows, setPreviewSourceRows] = useState<T[]>(
+    selectedRows?.length ? selectedRows : configuration.filteredRows,
+  );
 
   const activeColumns = useMemo(
     () =>
@@ -399,13 +491,12 @@ function ExportDialog<T>({ configuration, defaultSelectedColumns, selectedRows, 
   const getRowsForScope = async (
     requestedScope: ExportScope = scope,
   ): Promise<T[]> => {
-    if (hasSelectedRows) return selectedRows!;
+    if (requestedScope === 'selected' && hasSelectedRows) return selectedRows!;
     if (requestedScope === 'all') return configuration.getAllRows();
     return configuration.filteredRows;
   };
 
-  const rowsForPreview = hasSelectedRows ? selectedRows! : configuration.filteredRows;
-  const previewRows = rowsForPreview.slice(0, 5);
+  const previewRows = previewSourceRows.slice(0, 5);
   const previewTotalsRow = includeTotals
     ? buildTotalsRow(
         previewRows,
@@ -488,7 +579,12 @@ function ExportDialog<T>({ configuration, defaultSelectedColumns, selectedRows, 
         }),
       );
       const totalsRow = includeTotals ? buildTotalsRow(rows, selected) : null;
-      const baseName = configuration.filename.replace(/\.(xlsx|csv|pdf)$/i, '');
+      const configuredBaseName = configuration.filename.replace(/\.(xlsx|csv|pdf)$/i, '');
+      const fileBaseName = configuredBaseName.toLowerCase() === 'inventory'
+        ? 'inventory_items'
+        : configuredBaseName;
+      const dateStamp = new Date().toLocaleDateString('en-GB').replace(/\//g, '-');
+      const baseName = `${fileBaseName}_${dateStamp}`;
       if (format === 'csv') {
         const csv = buildCsv(rows, selected);
         const csvWithTotals = totalsRow
@@ -676,15 +772,8 @@ function ExportDialog<T>({ configuration, defaultSelectedColumns, selectedRows, 
           'pdf',
           new Uint8Array(pdf.output('arraybuffer')),
         );
-      } else {
-        printReport({
-          title: configuration.title,
-          rows,
-          columns: selected,
-          orientation,
-        });
       }
-      if (format !== 'print') onClose();
+      onClose();
     } catch (err) {
       console.error('Export failed:', err);
       setError(
@@ -714,7 +803,7 @@ function ExportDialog<T>({ configuration, defaultSelectedColumns, selectedRows, 
         <header className='export-header'>
           <div>
             <p className='export-eyebrow'>DATA OUTPUT</p>
-            <h2 id='export-title'>Export & Print</h2>
+            <h2 id='export-title'>Export</h2>
             <p>
               Choose your records, arrange columns, and select an output format.
             </p>
@@ -733,90 +822,68 @@ function ExportDialog<T>({ configuration, defaultSelectedColumns, selectedRows, 
           {step === 1 ? (
             <>
               <div className='export-settings-grid'>
-                <label>
-                  Format
-                  <select
-                    value={format}
-                    onChange={(event) => {
-                      const nextFormat = event.target.value as ExportFormat;
-                      setFormat(nextFormat);
-                      setColumns((current) =>
-                        current.map((column) =>
-                          column.key === '__serial'
-                            ? {
-                                ...column,
-                                included:
-                                  nextFormat === 'pdf' ||
-                                  nextFormat === 'print',
-                              }
-                            : column,
-                        ),
-                      );
-                    }}
-                  >
-                    <option value='xlsx'>Excel workbook (.xlsx)</option>
-                    <option value='csv'>CSV (.csv)</option>
-                    <option value='pdf'>PDF document (.pdf)</option>
-                    <option value='print'>Print…</option>
-                  </select>
-                </label>
-                <label>
-                  Records
-                  <select
-                    value={hasSelectedRows ? 'selected' : scope}
-                    disabled={hasSelectedRows}
-                    onChange={async (event) => {
-                      const nextScope = event.target.value as ExportScope;
-                      setScope(nextScope);
+                <StyledSelect
+                  label='Format'
+                  value={format}
+                  options={[
+                    { value: 'xlsx', label: 'Excel workbook (.xlsx)' },
+                    { value: 'pdf', label: 'PDF document (.pdf)' },
+                    { value: 'csv', label: 'CSV (.csv)' },
+                  ]}
+                  onChange={(value) => {
+                    const nextFormat = value as ExportFormat;
+                    setFormat(nextFormat);
+                    setColumns((current) =>
+                      current.map((column) =>
+                        column.key === '__serial'
+                          ? { ...column, included: nextFormat === 'pdf' }
+                          : column,
+                      ),
+                    );
+                  }}
+                />
+                <StyledSelect
+                  label='Records'
+                  value={scope}
+                  options={[
+                    ...(hasSelectedRows
+                      ? [{ value: 'selected', label: `Selected items (${selectedRows!.length})` }]
+                      : []),
+                    { value: 'filtered', label: `Current filtered results (${configuration.filteredRows.length})` },
+                    { value: 'all', label: 'All inventory records' },
+                  ]}
+                  onChange={async (value) => {
+                    const nextScope = value as ExportScope;
+                    setScope(nextScope);
+                    setBusy(true);
+                    setError(null);
+                    try {
+                      const rowsForExport = await getRowsForScope(nextScope);
+                      setPreviewSourceRows(rowsForExport);
                       if (!separateDiamonds && !separateStones) return;
-                      setBusy(true);
-                      setError(null);
-                      try {
-                        const rowsForExport = await getRowsForScope(nextScope);
-                        setColumns((current) => {
-                          let next = current;
-                          if (separateDiamonds) {
-                            next = replaceDetailedColumns(next, 'diamonds', rowsForExport);
-                          }
-                          if (separateStones) {
-                            next = replaceDetailedColumns(next, 'stones', rowsForExport);
-                          }
-                          return next;
-                        });
-                      } catch (err) {
-                        setError(err instanceof Error ? err.message : 'Unable to refresh detailed columns.');
-                      } finally {
-                        setBusy(false);
-                      }
-                    }} 
-                  >
-                    {hasSelectedRows ? (
-                      <option value='selected'>Selected items ({selectedRows!.length})</option>
-                    ) : (
-                      <>
-                        <option value='filtered'>
-                          Current filtered results ({configuration.filteredRows.length})
-                        </option>
-                        <option value='all'>All inventory records</option>
-                      </>
-                    )}
-                  </select>
-                </label>
-                {(format === 'pdf' || format === 'print') && (
-                  <label>
-                    Page orientation
-                    <select
-                      value={orientation}
-                      onChange={(event) =>
-                        setOrientation(
-                          event.target.value as 'portrait' | 'landscape',
-                        )
-                      }
-                    >
-                      <option value='landscape'>Landscape</option>
-                      <option value='portrait'>Portrait</option>
-                    </select>
-                  </label>
+                      setColumns((current) => {
+                        let next = current;
+                        if (separateDiamonds) next = replaceDetailedColumns(next, 'diamonds', rowsForExport);
+                        if (separateStones) next = replaceDetailedColumns(next, 'stones', rowsForExport);
+                        return next;
+                      });
+                    } catch (err) {
+                      setError(err instanceof Error ? err.message : 'Unable to refresh detailed columns.');
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                />
+                {format === 'pdf' && (
+                  <StyledSelect
+                    label='Page orientation'
+                    value={orientation}
+                    options={[
+                      { value: 'landscape', label: 'Landscape' },
+                      { value: 'portrait', label: 'Portrait' },
+                    ]}
+                    onChange={(value) => setOrientation(value as 'portrait' | 'landscape')}
+                  />
                 )}
               </div>
               <div className='export-columns-heading'>
@@ -932,7 +999,9 @@ function ExportDialog<T>({ configuration, defaultSelectedColumns, selectedRows, 
                           disabled={index === 0}
                           aria-label={`Move ${column.label} up`}
                         >
-                          ↑
+                          <svg aria-hidden='true' width='16' height='16' viewBox='0 0 24 24' fill='none'>
+                            <path d='M12 19V5M6.5 11.5 12 5l5.5 6.5' stroke='currentColor' strokeWidth='1.8' strokeLinecap='round' strokeLinejoin='round' />
+                          </svg>
                         </button>
                         <button
                           type='button'
@@ -940,7 +1009,9 @@ function ExportDialog<T>({ configuration, defaultSelectedColumns, selectedRows, 
                           disabled={index === columns.length - 1}
                           aria-label={`Move ${column.label} down`}
                         >
-                          ↓
+                          <svg aria-hidden='true' width='16' height='16' viewBox='0 0 24 24' fill='none'>
+                            <path d='M12 5v14m5.5-6.5L12 19l-5.5-6.5' stroke='currentColor' strokeWidth='1.8' strokeLinecap='round' strokeLinejoin='round' />
+                          </svg>
                         </button>
                       </div>
                     </div>
@@ -1001,8 +1072,7 @@ function ExportDialog<T>({ configuration, defaultSelectedColumns, selectedRows, 
                   </tbody>
                 </table>
               </div>
-              {format !== 'print' && (
-                <label className='export-totals-toggle'>
+              <label className='export-totals-toggle'>
                   <input
                     type='checkbox'
                     checked={includeTotals}
@@ -1017,8 +1087,7 @@ function ExportDialog<T>({ configuration, defaultSelectedColumns, selectedRows, 
                         : 'Add weight and piece-count totals to the exported file.'}
                     </span>
                   </span>
-                </label>
-              )}
+              </label>
             </>
           )}
         </div>
@@ -1029,7 +1098,7 @@ function ExportDialog<T>({ configuration, defaultSelectedColumns, selectedRows, 
         )}
         <footer className='export-footer'>
           <span>
-            {hasSelectedRows
+             {scope === 'selected' && hasSelectedRows
               ? `Selected items (${selectedRows!.length})`
               : scope === 'all'
                 ? 'All inventory records'
@@ -1063,13 +1132,22 @@ function ExportDialog<T>({ configuration, defaultSelectedColumns, selectedRows, 
               <button
                 type='button'
                 className='export-primary-button'
-                onClick={() => {
+                onClick={async () => {
                   if (!activeColumns.length) {
                     setError('Choose at least one column to include.');
                     return;
                   }
+                  setBusy(true);
                   setError(null);
-                  setStep(2);
+                  try {
+                    const rows = await getRowsForScope();
+                    setPreviewSourceRows(rows);
+                    setStep(2);
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : 'Unable to load preview records.');
+                  } finally {
+                    setBusy(false);
+                  }
                 }}
                 disabled={busy}
               >
@@ -1102,7 +1180,7 @@ function ExportDialog<T>({ configuration, defaultSelectedColumns, selectedRows, 
                       <path d='m7 10 5 5 5-5' />
                       <path d='M5 19h14' />
                     </svg>
-                    {format === 'print' ? 'Print' : 'Export'}
+                    Export
                   </>
                 )}
               </button>
@@ -1112,144 +1190,6 @@ function ExportDialog<T>({ configuration, defaultSelectedColumns, selectedRows, 
       </section>
     </div>
   );
-}
-
-type PrintColumn<T> = {
-  key: string;
-  label: string;
-  value: (row: T) => unknown;
-  outputLabel: string;
-};
-
-function printReport<T>({
-  title,
-  rows,
-  columns,
-  orientation,
-}: {
-  title: string;
-  rows: T[];
-  columns: PrintColumn<T>[];
-  orientation: 'portrait' | 'landscape';
-}): void {
-  const root = document.createElement('div');
-  root.className = 'export-print-root';
-
-  const heading = document.createElement('h1');
-  heading.textContent = title;
-  root.appendChild(heading);
-
-  const metadata = document.createElement('p');
-  metadata.textContent = `${rows.length} records · ${new Date().toLocaleDateString()}`;
-  root.appendChild(metadata);
-
-  const table = document.createElement('table');
-  const thead = document.createElement('thead');
-  const headerRow = document.createElement('tr');
-
-  columns.forEach((column) => {
-    const th = document.createElement('th');
-    th.textContent = column.outputLabel || column.label;
-    headerRow.appendChild(th);
-  });
-
-  thead.appendChild(headerRow);
-  table.appendChild(thead);
-
-  const tbody = document.createElement('tbody');
-  rows.forEach((row, rowIndex) => {
-    const tr = document.createElement('tr');
-    columns.forEach((column) => {
-      const td = document.createElement('td');
-      td.textContent =
-        column.key === '__serial'
-          ? String(rowIndex + 1)
-          : cellText(column.value(row)) || '—';
-      tr.appendChild(td);
-    });
-    tbody.appendChild(tr);
-  });
-  table.appendChild(tbody);
-  root.appendChild(table);
-
-  const style = document.createElement('style');
-  style.className = 'export-print-style';
-  style.textContent = `
-    .export-print-root { display: none; }
-    @page { size: A4 ${orientation}; margin: 12mm; }
-    @media print {
-      html, body {
-        width: auto !important;
-        height: auto !important;
-        min-height: 0 !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        overflow: visible !important;
-        background: #fff !important;
-      }
-      body > *:not(.export-print-root):not(.export-print-style) {
-        display: none !important;
-      }
-      body > .export-print-root {
-        display: block !important;
-        position: static !important;
-        width: 100% !important;
-        height: auto !important;
-        min-height: 0 !important;
-        max-height: none !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        overflow: visible !important;
-        color: #111 !important;
-        background: #fff !important;
-        font-family: Arial, sans-serif !important;
-        font-size: 9pt !important;
-      }
-      .export-print-root h1 { margin: 0 0 6pt; font-size: 16pt; }
-      .export-print-root p { margin: 0 0 12pt; font-size: 9pt; }
-      .export-print-root table {
-        width: 100%;
-        border-collapse: collapse;
-        table-layout: auto;
-      }
-      .export-print-root th,
-      .export-print-root td {
-        border: 1px solid #bbb;
-        padding: 4pt;
-        text-align: left;
-        vertical-align: top;
-        overflow-wrap: anywhere;
-      }
-      .export-print-root th {
-        color: #fff;
-        background: #3f342a !important;
-        print-color-adjust: exact;
-        -webkit-print-color-adjust: exact;
-      }
-      .export-print-root thead { display: table-header-group; }
-      .export-print-root tfoot { display: table-footer-group; }
-      .export-print-root tr { break-inside: avoid; page-break-inside: avoid; }
-      .export-print-root table { break-after: auto; page-break-after: auto; }
-      .export-print-root { break-after: auto; page-break-after: auto; }
-    }
-  `;
-
-  document.body.appendChild(style);
-  document.body.appendChild(root);
-
-  const cleanup = () => {
-    root.remove();
-    style.remove();
-    window.removeEventListener('afterprint', cleanup);
-  };
-  window.addEventListener('afterprint', cleanup, { once: true });
-
-  try {
-    window.print();
-  } catch (error) {
-    cleanup();
-    throw error;
-  }
 }
 
 async function saveExportFile(

@@ -438,7 +438,7 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
           className='inventory-toolbar-button inventory-export-button'
           onClick={() => setShowExportDialog(true)}
           disabled={isLoading || Boolean(error)}
-          title='Export or print inventory records'
+          title={selectedTagItems.length ? `Export inventory records or print ${selectedTagItems.length} selected tags` : 'Export inventory records'}
         >
           Export<span aria-hidden='true'>⤓</span>
         </button>
@@ -528,7 +528,7 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
                     <input
                       className='inventory-select-checkbox'
                       type='checkbox'
-                      aria-label='Select all inventory items on this page for tag printing'
+                      aria-label='Select all inventory items on this page for export and tag printing'
                       title={
                         allVisiblePageItemsSelected
                           ? 'Deselect all items on this page'
@@ -634,7 +634,7 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
                         <input
                           className='inventory-select-checkbox'
                           type='checkbox'
-                          aria-label={`Select ${item.itemNumber} for tag printing`}
+                          aria-label={`Select ${item.itemNumber} for export and tag printing`}
                           checked={selectedTagItemIds.has(item.id)}
                           onClick={(event) => event.stopPropagation()}
                           onChange={() => toggleTagItem(item.id)}
@@ -868,6 +868,7 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
             'stoneDetails',
             'igiCertificateNumber',
           ]}
+          selectedRows={selectedTagItems}
           onClose={() => setShowExportDialog(false)}
         />
       )}

@@ -1,5 +1,5 @@
-export type ExportFormat = 'xlsx' | 'csv' | 'pdf' | 'print';
-export type ExportScope = 'filtered' | 'all';
+export type ExportFormat = 'xlsx' | 'pdf' | 'csv';
+export type ExportScope = 'selected' | 'filtered' | 'all';
 
 export type ExportColumn<T> = {
   key: string;

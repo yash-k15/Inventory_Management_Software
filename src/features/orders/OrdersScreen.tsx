@@ -20,9 +20,9 @@ import { ORDER_EXPORT_COLUMNS } from './orders-list.export';
 const initialFilters: OrdersFilters = {
   search: '',
   customerId: 'all',
-  exhibitionId: 'all',
+  exhibitionId: [],
   dateRange: 'all',
-  status: 'All',
+  status: [],
   sort: 'newest',
 };
 
@@ -248,6 +248,122 @@ function CustomDropdown({
         );
         return isRowStatus ? createPortal(menu, document.body) : menu;
       })()}
+    </div>
+  );
+}
+
+
+interface MultiSelectDropdownProps {
+  label: string;
+  ariaLabel: string;
+  options: DropdownOption[];
+  selectedValues: string[];
+  onChange: (values: string[]) => void;
+  allLabel: string;
+  className?: string;
+}
+
+function MultiSelectDropdown({
+  label,
+  ariaLabel,
+  options,
+  selectedValues,
+  onChange,
+  allLabel,
+  className = '',
+}: MultiSelectDropdownProps) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const allSelected = selectedValues.length === 0 || selectedValues.length === options.length;
+  const selectedLabels = options
+    .filter((option) => selectedValues.includes(option.value))
+    .map((option) => option.label);
+  const valueLabel = allSelected
+    ? allLabel
+    : selectedLabels.length === 1
+      ? selectedLabels[0]
+      : `${selectedLabels.length} selected`;
+
+  useEffect(() => {
+    if (!open) return;
+    function handlePointerDown(event: MouseEvent) {
+      if (
+        rootRef.current &&
+        !rootRef.current.contains(event.target as Node) &&
+        !menuRef.current?.contains(event.target as Node)
+      ) setOpen(false);
+    }
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') setOpen(false);
+    }
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [open]);
+
+  function toggleValue(value: string) {
+    const currentValues = selectedValues.includes('__none__') ? [] : selectedValues;
+    if (currentValues.includes(value)) {
+      onChange(currentValues.filter((entry) => entry !== value));
+    } else {
+      onChange([...currentValues, value]);
+    }
+  }
+
+  return (
+    <div
+      ref={rootRef}
+      className={`orders-filter-control orders-multiselect-control ${className} ${
+        open ? 'orders-dropdown--open' : ''
+      }`}
+    >
+      <span className='orders-filter-label'>{label}</span>
+      <button
+        type='button'
+        className='orders-dropdown-trigger'
+        aria-label={ariaLabel}
+        aria-haspopup='listbox'
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <span className='orders-dropdown-value'>{valueLabel}</span>
+        <svg className='orders-dropdown-chevron' viewBox='0 0 20 20' fill='none' aria-hidden='true'>
+          <path d='m5 7.5 5 5 5-5' />
+        </svg>
+      </button>
+      {open && (
+        <div ref={menuRef} className='orders-dropdown-menu orders-multiselect-menu' role='group' aria-label={ariaLabel}>
+          <div className='orders-multiselect-actions'>
+            <button type='button' onClick={() => onChange([])}>All</button>
+            <button type='button' onClick={() => onChange(options.map((option) => option.value))}>Select all</button>
+            <button type='button' onClick={() => onChange(['__none__'])}>Clear</button>
+          </div>
+          {options.map((option) => {
+            const checked = selectedValues.includes(option.value);
+            return (
+              <button
+                key={option.value}
+                type='button'
+                role='checkbox'
+                aria-checked={checked}
+                className={`orders-dropdown-option orders-multiselect-option ${
+                  checked ? 'orders-dropdown-option--selected' : ''
+                }`}
+                onClick={() => toggleValue(option.value)}
+              >
+                <span>{option.label}</span>
+                <span className={`orders-multiselect-check ${checked ? 'is-checked' : ''}`} aria-hidden='true'>
+                  {checked ? '✓' : ''}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -490,8 +606,7 @@ function OrdersScreen() {
     })),
   ];
 
-  const exhibitionDropdownOptions: DropdownOption[] = [
-    { value: 'all', label: 'All, incl. direct' },
+  const sourceDropdownOptions: DropdownOption[] = [
     { value: 'direct', label: 'Direct order' },
     ...options.exhibitions.map((exhibition) => ({
       value: String(exhibition.id),
@@ -506,13 +621,10 @@ function OrdersScreen() {
     { value: '365', label: 'Last 12 months' },
   ];
 
-  const statusDropdownOptions: DropdownOption[] = [
-    { value: 'All', label: 'All statuses' },
-    ...statusOptions.map((status) => ({
-      value: status,
-      label: status,
-    })),
-  ];
+  const statusDropdownOptions: DropdownOption[] = statusOptions.map((status) => ({
+    value: status,
+    label: status,
+  }));
 
 
   async function handleStatusChange(order: OrderRow, value: string) {
@@ -681,12 +793,14 @@ function OrdersScreen() {
           onChange={(value) => updateFilter('customerId', value)}
         />
 
-        <CustomDropdown
-          label='Exhibition'
-          ariaLabel='Filter by exhibition'
-          value={filters.exhibitionId}
-          options={exhibitionDropdownOptions}
-          onChange={(value) => updateFilter('exhibitionId', value)}
+        <MultiSelectDropdown
+          label='Source'
+          ariaLabel='Filter by order source'
+          className='orders-source-filter'
+          selectedValues={Array.isArray(filters.exhibitionId) ? filters.exhibitionId : filters.exhibitionId === 'all' ? [] : [filters.exhibitionId]}
+          options={sourceDropdownOptions}
+          allLabel='All sources'
+          onChange={(values) => updateFilter('exhibitionId', values)}
         />
 
         <CustomDropdown
@@ -699,15 +813,14 @@ function OrdersScreen() {
           }
         />
 
-        <CustomDropdown
+        <MultiSelectDropdown
           label='Status'
-          ariaLabel='Filter by status'
-          value={filters.status}
-          options={statusDropdownOptions}
+          ariaLabel='Filter by order status'
           className='orders-status-filter'
-          onChange={(value) =>
-            updateFilter('status', value as OrdersFilters['status'])
-          }
+          selectedValues={Array.isArray(filters.status) ? filters.status : filters.status === 'All' ? [] : [filters.status]}
+          options={statusDropdownOptions}
+          allLabel='All statuses'
+          onChange={(values) => updateFilter('status', values as OrderStatus[])}
         />
 
         <button
@@ -921,10 +1034,10 @@ function OrdersScreen() {
             getAllRows: () =>
               getOrders({
                 ...initialFilters,
-                status: 'All',
+                status: [],
                 search: '',
                 customerId: 'all',
-                exhibitionId: 'all',
+                exhibitionId: [],
                 dateRange: 'all',
                 sort: 'newest',
               }),

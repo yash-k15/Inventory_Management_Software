@@ -9,9 +9,9 @@ import type {
 export interface OrdersFilters {
   search: string;
   customerId: string;
-  exhibitionId: string;
+  exhibitionId: string | string[];
   dateRange: 'all' | '30' | '90' | '365';
-  status: OrderStatusFilter;
+  status: OrderStatusFilter | OrderStatus[];
   sort: 'newest' | 'oldest' | 'value-high' | 'value-low';
 }
 
@@ -29,17 +29,39 @@ export async function getOrders(filters: OrdersFilters): Promise<OrderRow[]> {
       ? ''
       : `AND co.created_at >= datetime('now', '-${Number(filters.dateRange)} days', 'localtime')`;
 
-  const statusCondition = filters.status === 'All' ? '' : 'AND co.status = ?';
+  const selectedStatuses: string[] = Array.isArray(filters.status)
+    ? filters.status
+    : filters.status === 'All'
+      ? []
+      : [filters.status];
+  const statusCondition = selectedStatuses.includes('__none__')
+    ? 'AND 1 = 0'
+    : selectedStatuses.length
+      ? `AND co.status IN (${selectedStatuses.map(() => '?').join(', ')})`
+      : '';
 
   const customerCondition =
     filters.customerId === 'all' ? '' : 'AND co.customer_id = ?';
 
-  const exhibitionCondition =
-    filters.exhibitionId === 'all'
-      ? ''
-      : filters.exhibitionId === 'direct'
-        ? 'AND co.exhibition_id IS NULL'
-        : 'AND co.exhibition_id = ?';
+  const selectedSources: string[] = Array.isArray(filters.exhibitionId)
+    ? filters.exhibitionId
+    : filters.exhibitionId === 'all'
+      ? []
+      : [filters.exhibitionId];
+  const sourceConditions: string[] = [];
+  const exhibitionIds = selectedSources.filter((value) => value !== 'direct' && value !== '__none__');
+  const includesDirect = selectedSources.includes('direct');
+  if (includesDirect) sourceConditions.push('co.exhibition_id IS NULL');
+  if (exhibitionIds.length) {
+    sourceConditions.push(`co.exhibition_id IN (${exhibitionIds.map(() => '?').join(', ')})`);
+  }
+  const exhibitionCondition = selectedSources.includes('__none__')
+    ? 'AND 1 = 0'
+    : selectedSources.length
+      ? sourceConditions.length
+        ? `AND (${sourceConditions.join(' OR ')})`
+        : 'AND 1 = 0'
+      : '';
 
   const orderBy = {
     newest: 'co.created_at DESC, co.id DESC',
@@ -50,13 +72,11 @@ export async function getOrders(filters: OrdersFilters): Promise<OrderRow[]> {
 
   const parameters: (string | number)[] = [search, search, search, search];
 
-  if (filters.status !== 'All') parameters.push(filters.status);
+  parameters.push(...selectedStatuses.filter((status) => status !== '__none__'));
   if (filters.customerId !== 'all') {
     parameters.push(Number(filters.customerId));
   }
-  if (filters.exhibitionId !== 'all' && filters.exhibitionId !== 'direct') {
-    parameters.push(Number(filters.exhibitionId));
-  }
+  parameters.push(...exhibitionIds.map(Number));
 
   return db.select<OrderRow[]>(
     `SELECT

@@ -11,6 +11,9 @@ const money = (paise: number | null | undefined) =>
         maximumFractionDigits: 2,
       }).format(paise / 100);
 
+const totalMoney = (orders: OrderRow[], getPaise: (order: OrderRow) => number | null | undefined) =>
+  money(orders.reduce((total, order) => total + (getPaise(order) ?? 0), 0));
+
 const date = (value: string | null | undefined) => {
   if (!value) return '';
   const parsed = new Date(value.replace(' ', 'T'));
@@ -27,14 +30,34 @@ const orderNumber = (id: number) => `ORD-${String(id).padStart(4, '0')}`;
 
 export const ORDER_EXPORT_COLUMNS: ExportColumn<OrderRow>[] = [
   { key: 'orderNumber', label: 'Order number', value: (order) => orderNumber(order.id) },
+  { key: 'orderDate', label: 'Order date', value: (order) => date(order.orderDate) },
   { key: 'customerName', label: 'Customer', value: (order) => order.customerName },
-  { key: 'contactName', label: 'Contact name', value: (order) => order.contactName },
-  { key: 'city', label: 'City', value: (order) => order.city },
   { key: 'source', label: 'Exhibition / source', value: (order) => order.exhibitionName ?? 'Direct order' },
   { key: 'itemCount', label: 'Items', value: (order) => order.itemCount },
-  { key: 'orderDate', label: 'Order date', value: (order) => date(order.orderDate) },
-  { key: 'totalValue', label: 'Order value', value: (order) => money(order.totalValuePaise) },
-  { key: 'paymentReceived', label: 'Payment received', value: (order) => money(order.paymentReceivedPaise) },
-  { key: 'paymentPending', label: 'Payment pending', value: (order) => money(order.paymentPendingPaise) },
+  {
+    key: 'totalValue',
+    label: 'Order value',
+    value: (order) => money(order.totalValuePaise),
+    total: (orders) => totalMoney(orders, (order) => order.totalValuePaise),
+  },
+  {
+    key: 'paymentReceived',
+    label: 'Payment received',
+    value: (order) => money(order.paymentReceivedPaise),
+    total: (orders) => totalMoney(orders, (order) => order.paymentReceivedPaise),
+  },
+  {
+    key: 'paymentPending',
+    label: 'Payment pending',
+    value: (order) => money(order.paymentPendingPaise),
+    total: (orders) => totalMoney(orders, (order) => order.paymentPendingPaise),
+  },
   { key: 'status', label: 'Status', value: (order) => order.status },
+  {
+    key: 'contactName',
+    label: 'Contact name',
+    value: (order) => order.contactName,
+    defaultVisible: false,
+  },
+  { key: 'city', label: 'City', value: (order) => order.city, defaultVisible: false },
 ];

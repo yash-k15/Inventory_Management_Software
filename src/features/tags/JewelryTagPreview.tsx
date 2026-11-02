@@ -84,7 +84,7 @@ function Barcode({ value }: { value: string }) {
   return (
     <image
       href={barcodeData}
-      x='355'
+      x='360'
       y='5'
       width='160'
       height='31'
@@ -504,18 +504,18 @@ function JewelryTagCard({
           <rect width='800' height='104' fill='#fff' />
           <Barcode value={item.itemNumber} />
           <text
-            x='410'
+            x='415'
             y='51'
             className='tag-preview-item-code'
             style={{ fontSize: 18 }}
           >
             {item.itemNumber}
           </text>
-          <text x='355' y='72' className='tag-preview-gold-weight'>
+          <text x='360' y='72' className='tag-preview-gold-weight'>
             G WT: {goldWeight}
           </text>
           {frontDetail && (
-            <text x='355' y='92' className='tag-preview-front-detail'>
+            <text x='360' y='92' className='tag-preview-front-detail'>
               {formatDetail(frontDetail)}
             </text>
           )}

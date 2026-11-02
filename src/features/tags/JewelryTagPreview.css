@@ -35,6 +35,28 @@
   letter-spacing: -0.4px;
 }
 
+.tag-preview-title-group {
+  display    : flex;
+  align-items: center;
+  flex-wrap  : wrap;
+  gap        : 12px;
+  min-width  : 0;
+}
+
+.tag-preview-total-count {
+  display      : inline-flex;
+  align-items  : center;
+  min-height   : 26px;
+  padding      : 3px 10px;
+  border       : 1px solid #e6ddd3;
+  border-radius: 999px;
+  background   : #f7f3ee;
+  color        : #72533d;
+  font-size    : 12px;
+  font-weight  : 650;
+  white-space  : nowrap;
+}
+
 .tag-preview-header p,
 .tag-preview-footer p {
   margin   : 6px 0 0;
@@ -422,5 +444,55 @@
 
   .tag-preview-item-card .tag-preview-count-picker {
     flex-wrap: wrap;
+  }
+}
+
+/* Keep the dialog controls fixed while the tag cards scroll independently. */
+.tag-preview-dialog {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.tag-preview-header {
+  flex: 0 0 auto;
+  padding-bottom: 18px;
+}
+
+.tag-preview-items {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  margin-top: 0;
+  padding: 0 4px 4px 0;
+}
+
+.tag-preview-pagination {
+  flex: 0 0 auto;
+  padding-top: 14px;
+  margin-top: 12px;
+  background: #fffdfb;
+}
+
+.tag-preview-item-heading p,
+.tag-preview-scale-note {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .tag-preview-dialog {
+    max-height: calc(100dvh - 20px);
+  }
+
+  .tag-preview-header {
+    padding-bottom: 12px;
+  }
+
+  .tag-preview-pagination {
+    padding-top: 10px;
+    margin-top: 8px;
   }
 }

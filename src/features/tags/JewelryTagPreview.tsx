@@ -111,7 +111,7 @@ export default function JewelryTagPreview({
   const visibleItems = items.filter(
     (item) => !removedItemIds.includes(item.id),
   );
-  const pageSize = 5;
+  const pageSize = 4;
   const pageCount = Math.max(1, Math.ceil(visibleItems.length / pageSize));
   const safePage = Math.min(currentPage, pageCount - 1);
   const registerPrinter = useCallback(
@@ -165,14 +165,11 @@ export default function JewelryTagPreview({
         aria-labelledby='tag-preview-title'
       >
         <header className='tag-preview-header'>
-          <div>
+          <div className='tag-preview-title-group'>
             <h2 id='tag-preview-title'>Print tag previews</h2>
-            <p>Review each tag before printing · 100 × 13 mm</p>
-            <p className='tag-preview-navigation-count'>
-              Showing {safePage * pageSize + 1}–
-              {Math.min((safePage + 1) * pageSize, visibleItems.length)} of{' '}
+            <span className='tag-preview-total-count'>
               {visibleItems.length} tags
-            </p>
+            </span>
           </div>
           <button
             type='button'
@@ -189,8 +186,6 @@ export default function JewelryTagPreview({
             <JewelryTagCard
               key={item.id}
               item={item}
-              position={index + 1}
-              total={visibleItems.length}
               isHidden={
                 index < safePage * pageSize ||
                 index >= (safePage + 1) * pageSize
@@ -214,7 +209,7 @@ export default function JewelryTagPreview({
             onClick={() => setCurrentPage((page) => Math.max(0, page - 1))}
             disabled={safePage === 0}
           >
-            Previous 5
+            Previous 4
           </button>
           <span>
             Page {safePage + 1} of {pageCount}
@@ -227,7 +222,7 @@ export default function JewelryTagPreview({
             }
             disabled={safePage >= pageCount - 1}
           >
-            Next 5
+            Next 4
           </button>
           <button
             type='button'
@@ -235,9 +230,7 @@ export default function JewelryTagPreview({
             onClick={() => void handlePrintAll()}
             disabled={isPrintingAll}
           >
-            {isPrintingAll
-              ? 'Printing all tags…'
-              : `Print all tags (${visibleItems.length})`}
+            {isPrintingAll ? 'Printing all tags…' : 'Print all tags'}
           </button>
         </footer>
       </section>
@@ -247,8 +240,6 @@ export default function JewelryTagPreview({
 
 function JewelryTagCard({
   item,
-  position,
-  total,
   detailCount: savedDetailCount,
   onDetailCountChange,
   isHidden,
@@ -256,8 +247,6 @@ function JewelryTagCard({
   onRemove,
 }: {
   item: InventoryItem;
-  position: number;
-  total: number;
   detailCount: number | undefined;
   isHidden: boolean;
   onDetailCountChange: (count: number) => void;
@@ -468,16 +457,13 @@ function JewelryTagCard({
       <header className='tag-preview-item-header'>
         <div className='tag-preview-item-heading'>
           <h3>{item.itemNumber}</h3>
-          <p>
-            Tag {position} of {total}
-          </p>
         </div>
         <div className='tag-preview-card-controls'>
           <div
             className='tag-preview-count-picker'
             aria-label='Choose number of details'
           >
-            <span>Details on item</span>
+            <span>Details</span>
             {Array.from(
               {
                 length:
@@ -508,9 +494,6 @@ function JewelryTagCard({
         </div>
       </header>
       <div className='tag-preview-canvas-wrap'>
-        <div className='tag-preview-scale-note'>
-          Preview only · not print-ready
-        </div>
         <svg
           ref={tagSvgRef}
           className='jewelry-tag-preview'
@@ -548,20 +531,20 @@ function JewelryTagCard({
           ))}
         </svg>
       </div>
-      <div className='tag-preview-footer'>
-        {printMessage && (
+      {printMessage && (
+        <div className='tag-preview-footer'>
           <p
             role={printError ? 'alert' : 'status'}
             style={{
               color: printError ? '#b42318' : '#067647',
               width: '100%',
-              margin: '0 0 8px',
+              margin: 0,
             }}
           >
             {printMessage}
           </p>
-        )}
-      </div>
+        </div>
+      )}
     </article>
   );
 }

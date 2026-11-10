@@ -5,7 +5,7 @@ import './ExhibitionCustomers.css';
 
 type Notice = { error: boolean; text: string } | null;
 
-export default function ExhibitionCustomers({ exhibitionId, onOpenSelection }: { exhibitionId: number; onOpenSelection: (customerId: number) => void }) {
+export default function ExhibitionCustomers({ exhibitionId, onOpenSelection, onOpenOrder }: { exhibitionId: number; onOpenSelection: (customerId: number) => void; onOpenOrder: (orderId: number) => void }) {
   const [customers, setCustomers] = useState<ExhibitionCustomerRow[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -45,7 +45,7 @@ export default function ExhibitionCustomers({ exhibitionId, onOpenSelection }: {
         <tbody>
           {loading ? <tr><td colSpan={8} className='exhibition-customers-empty'>Loading customers…</td></tr> :
           visible.length === 0 ? <tr><td colSpan={8} className='exhibition-customers-empty'>{search.trim()?'No attendees match your search.':'No customers in this exhibition yet.'}</td></tr> :
-          visible.map((customer, index) => <CustomerRow key={customer.id} serialNumber={(currentPage - 1) * pageSize + index + 1} customer={customer} onOpen={() => onOpenSelection(customer.id)} />)}
+          visible.map((customer, index) => <CustomerRow key={customer.id} serialNumber={(currentPage - 1) * pageSize + index + 1} customer={customer} onOpen={() => onOpenSelection(customer.id)} onOpenOrder={onOpenOrder} />)}
         </tbody>
       </table></div>
       <footer className='exhibition-customers-footer exhibition-customers-pagination'>
@@ -68,7 +68,7 @@ export default function ExhibitionCustomers({ exhibitionId, onOpenSelection }: {
   </section>;
 }
 
-function CustomerRow({ customer, serialNumber, onOpen }: { customer: ExhibitionCustomerRow; serialNumber: number; onOpen: () => void }) {
+function CustomerRow({ customer, serialNumber, onOpen, onOpenOrder }: { customer: ExhibitionCustomerRow; serialNumber: number; onOpen: () => void; onOpenOrder: (orderId: number) => void }) {
   const initials = (customer.contactName || customer.businessName).trim().split(/\s+/).slice(0,2).map(part=>part[0]||'').join('').toUpperCase();
   return <tr>
     <td className='exhibition-customers-serial'>{serialNumber}</td>
@@ -77,7 +77,7 @@ function CustomerRow({ customer, serialNumber, onOpen }: { customer: ExhibitionC
     <td><span className={`exhibition-customers-count ${customer.activeItemCount===0?'is-zero':''}`}>{customer.activeItemCount} selected</span></td>
     <td><span className={`exhibition-customers-count ${customer.orderCreatedItemCount===0?'is-zero':''}`}>{customer.orderCreatedItemCount} items</span></td>
     <td>{customer.itemNumbers.length ? <div className='exhibition-customers-item-chips'>{customer.itemNumbers.map(item=><span key={item}>{item}</span>)}{customer.activeItemCount>customer.itemNumbers.length&&<span>+{customer.activeItemCount-customer.itemNumbers.length}</span>}</div> : <span className='exhibition-customers-no-selection'>No selections yet</span>}</td>
-    <td>{customer.orderNumbers.length ? <div className='exhibition-customers-item-chips'>{customer.orderNumbers.slice(0, 3).map(order => <span key={order}>{order}</span>)}{customer.orderNumbers.length > 3 && <span>+{customer.orderNumbers.length - 3}</span>}</div> : <span className='exhibition-customers-no-selection'>—</span>}</td>
+    <td>{customer.orderNumbers.length ? <div className='exhibition-customers-item-chips exhibition-customers-order-chips'>{customer.orderNumbers.slice(0, 3).map(order => <button key={order.id} type='button' className='exhibition-customers-order-chip' onClick={() => onOpenOrder(order.id)} title={`Open ${order.orderNumber}`}>{order.orderNumber}</button>)}{customer.orderNumbers.length > 3 && <span>+{customer.orderNumbers.length - 3}</span>}</div> : <span className='exhibition-customers-no-selection'>—</span>}</td>
     <td className='exhibition-customers-action'><button type='button' className='exhibition-customers-open' onClick={onOpen}>{customer.activeItemCount ? 'Open selection' : 'Start selection'}</button></td>
   </tr>;
 }

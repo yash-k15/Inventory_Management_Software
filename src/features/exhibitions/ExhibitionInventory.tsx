@@ -35,36 +35,50 @@ function formatWeight(value: number | null) {
   return value == null ? '—' : `${(value / 1000).toFixed(3)} g`;
 }
 
-function parseDetailWeights(details: string | null): Map<string, number> {
-  const totals = new Map<string, number>();
-  if (!details) return totals;
+type DetailTotal = { label: string; unit: string; weight: number; pieces: number; hasPieces: boolean };
+
+function parseDetailTotals(details: string | null): DetailTotal[] {
+  const totals = new Map<string, DetailTotal>();
+  if (!details) return [];
   for (const line of details.split(/\r?\n/)) {
-    const match = line.match(/·\s*([\d,.]+)\s*(ct|g|mg)\b/i);
+    const match = line.match(/^\s*(.+?)\s*[·:]\s*([\d,.]+)\s*(ct|g|mg)\b(?:\s*\((\d+)\s*pcs?\))?/i);
     if (!match) continue;
-    const amount = Number(match[1].replace(/,/g, ''));
-    const unit = match[2].toLowerCase();
-    if (Number.isFinite(amount))
-      totals.set(unit, (totals.get(unit) ?? 0) + amount);
+    const label = match[1].trim();
+    const weight = Number(match[2].replace(/,/g, ''));
+    const unit = match[3].toLowerCase();
+    const pieces = match[4] == null ? 0 : Number(match[4]);
+    if (!label || !Number.isFinite(weight) || !Number.isFinite(pieces)) continue;
+    const key = `${label.toLocaleLowerCase()}|${unit}`;
+    const current = totals.get(key) ?? { label, unit, weight: 0, pieces: 0, hasPieces: false };
+    current.weight += weight;
+    current.pieces += pieces;
+    current.hasPieces ||= match[4] != null;
+    totals.set(key, current);
   }
-  return totals;
+  return [...totals.values()];
 }
 
 function formatDetailTotals(
   rows: ExhibitionInventoryRow[],
   field: 'diamondDetails' | 'stoneDetails',
-  defaultUnit: string,
 ) {
-  const totals = new Map<string, number>();
+  const totals = new Map<string, DetailTotal>();
   for (const row of rows) {
-    for (const [unit, amount] of parseDetailWeights(row[field])) {
-      totals.set(unit, (totals.get(unit) ?? 0) + amount);
+    for (const detail of parseDetailTotals(row[field])) {
+      const key = `${detail.label.toLocaleLowerCase()}|${detail.unit}`;
+      const current = totals.get(key) ?? { ...detail, weight: 0, pieces: 0, hasPieces: false };
+      current.weight += detail.weight;
+      current.pieces += detail.pieces;
+      current.hasPieces ||= detail.hasPieces;
+      totals.set(key, current);
     }
   }
   if (!totals.size) return '—';
-  return [...totals.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([unit, amount]) => `${amount.toFixed(unit === 'ct' ? 2 : 3)} ${unit || defaultUnit}`)
-    .join(' · ');
+  return [...totals.values()]
+    .map(({ label, unit, weight, pieces, hasPieces }) =>
+      `${label}: ${weight.toFixed(unit === 'ct' ? 2 : 3)} ${unit}${hasPieces ? ` (${pieces} pcs)` : ''}`,
+    )
+    .join('\n');
 }
 
 export default function ExhibitionInventory({
@@ -326,13 +340,13 @@ export default function ExhibitionInventory({
       key: SortKey,
     ): string | number => {
       if (key === 'diamondDetails' || key === 'stoneDetails') {
-        const unitTotals = parseDetailWeights(item[key]);
-        if (!unitTotals.size) return '';
+        const detailTotals = parseDetailTotals(item[key]);
+        if (!detailTotals.length) return '';
         // Normalize all supported units to grams for a meaningful numeric sort.
-        return [...unitTotals.entries()].reduce((sum, [unit, amount]) => {
-          if (unit === 'ct') return sum + amount * 0.2;
-          if (unit === 'mg') return sum + amount / 1000;
-          return sum + amount;
+        return detailTotals.reduce((sum, detail) => {
+          if (detail.unit === 'ct') return sum + detail.weight * 0.2;
+          if (detail.unit === 'mg') return sum + detail.weight / 1000;
+          return sum + detail.weight;
         }, 0);
       }
       const value = item[key];
@@ -401,7 +415,11 @@ export default function ExhibitionInventory({
       .filter((item) => selected.includes(item.id))
       .map((item) => item.id);
     const removableSelectedIds = rows
-      .filter((item) => selected.includes(item.id) && (!registered || item.selectionCount === 0))
+      .filter(
+        (item) =>
+          selected.includes(item.id) &&
+          (!registered || item.selectionCount === 0),
+      )
       .map((item) => item.id);
     const selectedVisibleCount = removableSelectedIds.length;
     const allSelected =
@@ -502,8 +520,15 @@ export default function ExhibitionInventory({
                       onChange={(event) =>
                         setSelectedIds((ids) =>
                           event.target.checked
-                            ? [...new Set([...ids, ...rows.map((item) => item.id)])]
-                            : ids.filter((id) => !rows.some((item) => item.id === id)),
+                            ? [
+                                ...new Set([
+                                  ...ids,
+                                  ...rows.map((item) => item.id),
+                                ]),
+                              ]
+                            : ids.filter(
+                                (id) => !rows.some((item) => item.id === id),
+                              ),
                         )
                       }
                     />
@@ -539,7 +564,9 @@ export default function ExhibitionInventory({
                         }
                       />
                     </td>
-                    <td className='exhibition-inventory-serial-column'>{firstRow + index}</td>
+                    <td className='exhibition-inventory-serial-column'>
+                      {firstRow + index}
+                    </td>
                     <td>
                       <div className='exhibition-inventory-item-cell'>
                         {item.imagePath ? (
@@ -598,18 +625,15 @@ export default function ExhibitionInventory({
                   <td colSpan={2}>Totals ({rows.length} items)</td>
                   <td>{hasGrossWeight ? formatWeight(grossTotal) : '—'}</td>
                   <td>{hasNetWeight ? formatWeight(netTotal) : '—'}</td>
-                  <td>{formatDetailTotals(rows, 'diamondDetails', 'ct')}</td>
-                  <td>{formatDetailTotals(rows, 'stoneDetails', 'ct')}</td>
+                  <td><span className='exhibition-inventory-details exhibition-inventory-totals-details'>{formatDetailTotals(rows, 'diamondDetails')}</span></td>
+                  <td><span className='exhibition-inventory-details exhibition-inventory-totals-details'>{formatDetailTotals(rows, 'stoneDetails')}</span></td>
                   {registered && <td>—</td>}
                 </tr>
               </tfoot>
             </table>
           </div>
         )}
-        <footer className='exhibition-inventory-table-footer'>
-          {rows.length} {registered ? 'registered items' : 'available items'}
-          {selected.length ? ` · ${selected.length} selected` : ''}
-        </footer>
+
         {rows.length > 0 && (
           <div className='exhibition-inventory-pagination'>
             <div className='exhibition-inventory-pagination-summary'>
@@ -624,15 +648,49 @@ export default function ExhibitionInventory({
                   aria-label='Rows per page'
                 >
                   {[10, 25, 50, 100].map((size) => (
-                    <option key={size} value={size}>{size}</option>
+                    <option key={size} value={size}>
+                      {size}
+                    </option>
                   ))}
                 </select>
               </label>
-              <button type='button' onClick={() => setCurrentPage(1)} disabled={safeCurrentPage === 1} aria-label='First page'>«</button>
-              <button type='button' onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} disabled={safeCurrentPage === 1} aria-label='Previous page'>‹</button>
-              <span>Page {safeCurrentPage} of {pageCount}</span>
-              <button type='button' onClick={() => setCurrentPage((page) => Math.min(pageCount, page + 1))} disabled={safeCurrentPage === pageCount} aria-label='Next page'>›</button>
-              <button type='button' onClick={() => setCurrentPage(pageCount)} disabled={safeCurrentPage === pageCount} aria-label='Last page'>»</button>
+              <button
+                type='button'
+                onClick={() => setCurrentPage(1)}
+                disabled={safeCurrentPage === 1}
+                aria-label='First page'
+              >
+                «
+              </button>
+              <button
+                type='button'
+                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                disabled={safeCurrentPage === 1}
+                aria-label='Previous page'
+              >
+                ‹
+              </button>
+              <span>
+                Page {safeCurrentPage} of {pageCount}
+              </span>
+              <button
+                type='button'
+                onClick={() =>
+                  setCurrentPage((page) => Math.min(pageCount, page + 1))
+                }
+                disabled={safeCurrentPage === pageCount}
+                aria-label='Next page'
+              >
+                ›
+              </button>
+              <button
+                type='button'
+                onClick={() => setCurrentPage(pageCount)}
+                disabled={safeCurrentPage === pageCount}
+                aria-label='Last page'
+              >
+                »
+              </button>
             </div>
           </div>
         )}
@@ -679,7 +737,9 @@ export default function ExhibitionInventory({
                         ? 'Items with active customer selections cannot be removed.'
                         : 'Items cannot be removed while the exhibition is active.'
                   }
-                  onClick={() => void handleUnregisterMany(removableSelectedIds)}
+                  onClick={() =>
+                    void handleUnregisterMany(removableSelectedIds)
+                  }
                 >
                   Remove selected ({selectedVisibleCount})
                 </button>
@@ -736,110 +796,140 @@ export default function ExhibitionInventory({
 
   return (
     <>
-    <section className='exhibition-inventory'>
-      {exhibitionEnded && (
-        <p className='exhibition-inventory-frozen'>
-          This exhibition has ended. Its registered inventory is frozen.
-        </p>
-      )}
-      {notice && (
+      <section className='exhibition-inventory'>
+        {exhibitionEnded && (
+          <p className='exhibition-inventory-frozen'>
+            This exhibition has ended. Its registered inventory is frozen.
+          </p>
+        )}
+        {notice && (
+          <div
+            className={`exhibition-inventory-notice exhibition-inventory-notice--${notice.kind}`}
+            role='status'
+          >
+            <span>{notice.text}</span>
+            <button
+              type='button'
+              aria-label='Dismiss message'
+              onClick={() => setNotice(null)}
+            >
+              ×
+            </button>
+          </div>
+        )}
         <div
-          className={`exhibition-inventory-notice exhibition-inventory-notice--${notice.kind}`}
-          role='status'
+          className='exhibition-inventory-tabs'
+          role='tablist'
+          aria-label='Exhibition inventory lists'
         >
-          <span>{notice.text}</span>
           <button
             type='button'
-            aria-label='Dismiss message'
-            onClick={() => setNotice(null)}
+            role='tab'
+            aria-selected={activeTab === 'registered'}
+            className={activeTab === 'registered' ? 'is-active' : ''}
+            onClick={() => setActiveTab('registered')}
           >
-            ×
+            Registered Inventory <span>{registeredItems.length}</span>
+          </button>
+          <button
+            type='button'
+            role='tab'
+            aria-selected={activeTab === 'available'}
+            className={activeTab === 'available' ? 'is-active' : ''}
+            onClick={() => setActiveTab('available')}
+          >
+            Available Inventory <span>{availableItems.length}</span>
           </button>
         </div>
+        <div className='exhibition-inventory-table-card'>
+          {renderInventoryTable(sortedItems, activeTab === 'registered')}
+        </div>
+      </section>
+      {showExportDialog && (
+        <ExportDialog
+          configuration={{
+            title:
+              activeTab === 'registered'
+                ? 'Registered Exhibition Inventory'
+                : 'Available Exhibition Inventory',
+            filename:
+              activeTab === 'registered'
+                ? 'registered-exhibition-inventory.xlsx'
+                : 'available-exhibition-inventory.xlsx',
+            columns: EXHIBITION_INVENTORY_EXPORT_COLUMNS,
+            filteredRows: sortedItems,
+            getAllRows: async () => {
+              const source =
+                activeTab === 'registered' ? registeredItems : availableItems;
+              return [...source].sort((a, b) => {
+                const valueFor = (
+                  item: ExhibitionInventoryRow,
+                ): string | number => {
+                  if (
+                    sort.key === 'diamondDetails' ||
+                    sort.key === 'stoneDetails'
+                  ) {
+                    const totals = parseDetailTotals(item[sort.key]);
+                    return totals.reduce(
+                      (sum, detail) =>
+                        sum +
+                        (detail.unit === 'ct'
+                          ? detail.weight * 0.2
+                          : detail.unit === 'mg'
+                            ? detail.weight / 1000
+                            : detail.weight),
+                      0,
+                    );
+                  }
+                  const value = item[sort.key];
+                  return value == null
+                    ? ''
+                    : typeof value === 'number'
+                      ? value
+                      : String(value).toLocaleLowerCase();
+                };
+                const left = valueFor(a);
+                const right = valueFor(b);
+                const result =
+                  typeof left === 'number' && typeof right === 'number'
+                    ? left - right
+                    : String(left).localeCompare(String(right), undefined, {
+                        numeric: true,
+                        sensitivity: 'base',
+                      });
+                return sort.direction === 'asc' ? result : -result;
+              });
+            },
+          }}
+          defaultSelectedColumns={[
+            'itemNumber',
+            'grossWeight',
+            'netWeight',
+            'diamondDetails',
+            'stoneDetails',
+            'igiCertificateNumber',
+          ]}
+          onClose={() => setShowExportDialog(false)}
+        />
       )}
-      <div
-        className='exhibition-inventory-tabs'
-        role='tablist'
-        aria-label='Exhibition inventory lists'
-      >
-        <button
-          type='button'
-          role='tab'
-          aria-selected={activeTab === 'registered'}
-          className={activeTab === 'registered' ? 'is-active' : ''}
-          onClick={() => setActiveTab('registered')}
-        >
-          Registered Inventory <span>{registeredItems.length}</span>
-        </button>
-        <button
-          type='button'
-          role='tab'
-          aria-selected={activeTab === 'available'}
-          className={activeTab === 'available' ? 'is-active' : ''}
-          onClick={() => setActiveTab('available')}
-        >
-          Available Inventory <span>{availableItems.length}</span>
-        </button>
-      </div>
-      <div className='exhibition-inventory-table-card'>
-        {renderInventoryTable(sortedItems, activeTab === 'registered')}
-      </div>
-    </section>
-    {showExportDialog && (
-      <ExportDialog
-        configuration={{
-          title: activeTab === 'registered' ? 'Registered Exhibition Inventory' : 'Available Exhibition Inventory',
-          filename: activeTab === 'registered' ? 'registered-exhibition-inventory.xlsx' : 'available-exhibition-inventory.xlsx',
-          columns: EXHIBITION_INVENTORY_EXPORT_COLUMNS,
-          filteredRows: sortedItems,
-          getAllRows: async () => {
-            const source = activeTab === 'registered' ? registeredItems : availableItems;
-            return [...source].sort((a, b) => {
-              const valueFor = (item: ExhibitionInventoryRow): string | number => {
-                if (sort.key === 'diamondDetails' || sort.key === 'stoneDetails') {
-                  const totals = parseDetailWeights(item[sort.key]);
-                  return [...totals.entries()].reduce((sum, [unit, amount]) =>
-                    sum + (unit === 'ct' ? amount * 0.2 : unit === 'mg' ? amount / 1000 : amount), 0);
-                }
-                const value = item[sort.key];
-                return value == null ? '' : typeof value === 'number' ? value : String(value).toLocaleLowerCase();
-              };
-              const left = valueFor(a);
-              const right = valueFor(b);
-              const result = typeof left === 'number' && typeof right === 'number'
-                ? left - right
-                : String(left).localeCompare(String(right), undefined, { numeric: true, sensitivity: 'base' });
-              return (sort.direction === 'asc' ? result : -result);
-            });
-          },
-        }}
-        defaultSelectedColumns={[
-          'itemNumber',
-          'grossWeight',
-          'netWeight',
-          'diamondDetails',
-          'stoneDetails',
-          'igiCertificateNumber',
-        ]}
-        onClose={() => setShowExportDialog(false)}
-      />
-    )}
-    {showTagPreview && tagPreviewItems.length > 0 && (
-      <JewelryTagPreview
-        items={tagPreviewItems}
-        onClose={() => {
-          setShowTagPreview(false);
-          setSelectedIds([]);
-        }}
-      />
-    )}
+      {showTagPreview && tagPreviewItems.length > 0 && (
+        <JewelryTagPreview
+          items={tagPreviewItems}
+          onClose={() => {
+            setShowTagPreview(false);
+            setSelectedIds([]);
+          }}
+        />
+      )}
     </>
   );
 }
 
 function InventoryImage({ path }: { path: string }) {
   const [src, setSrc] = useState<string | null>(null);
-  const [preview, setPreview] = useState<{ left: number; top: number } | null>(null);
+  const [preview, setPreview] = useState<{ left: number; top: number } | null>(
+    null,
+  );
   const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const clearPreviewTimer = () => {

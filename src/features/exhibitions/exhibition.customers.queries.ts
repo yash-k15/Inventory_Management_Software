@@ -9,7 +9,7 @@ export interface ExhibitionCustomerRow {
   selectionId: number | null;
   activeItemCount: number;
   itemNumbers: string[];
-  orderNumbers: string[];
+  orderNumbers: { id: number; orderNumber: string }[];
   orderCreatedItemCount: number;
 }
 
@@ -35,8 +35,8 @@ export async function getExhibitionCustomers(exhibitionId: number, search: strin
         FROM selection_item si WHERE si.selection_id=s.id AND si.status='active'
         ORDER BY si.added_at DESC, si.id DESC LIMIT 3
       )) AS itemNumbersRaw,
-      (SELECT GROUP_CONCAT(orderNumber, '|') FROM (
-        SELECT 'ORD-' || printf('%04d', co.id) AS orderNumber
+      (SELECT GROUP_CONCAT(orderReference, '|') FROM (
+        SELECT co.id || ':' || 'ORD-' || printf('%04d', co.id) AS orderReference
         FROM customer_order co
         WHERE co.customer_id=c.id
           AND co.status <> 'Cancelled'
@@ -76,7 +76,15 @@ export async function getExhibitionCustomers(exhibitionId: number, search: strin
   return rows.map((row) => ({
     ...row,
     itemNumbers: row.itemNumbersRaw ? row.itemNumbersRaw.split('|') : [],
-    orderNumbers: row.orderNumbersRaw ? row.orderNumbersRaw.split('|') : [],
+    orderNumbers: row.orderNumbersRaw
+      ? row.orderNumbersRaw.split('|').map((reference) => {
+          const separator = reference.indexOf(':');
+          return {
+            id: Number(reference.slice(0, separator)),
+            orderNumber: reference.slice(separator + 1),
+          };
+        }).filter((order) => Number.isInteger(order.id) && order.id > 0)
+      : [],
   }));
 }
 

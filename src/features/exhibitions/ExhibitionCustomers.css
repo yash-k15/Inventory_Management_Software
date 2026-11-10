@@ -313,3 +313,31 @@
         width: 100%;
     }
 }
+
+
+.exhibition-customers-order-chip {
+    display: inline-flex;
+    align-items: center;
+    min-height: 27px;
+    padding: 0 10px;
+    border: 1px solid #d8c4aa;
+    border-radius: 99px;
+    background: #faf6f1;
+    color: #76552f;
+    font: inherit;
+    font-size: 12px;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background .15s ease, border-color .15s ease, color .15s ease;
+}
+
+.exhibition-customers-order-chip:hover {
+    border-color: #b9966d;
+    background: #f1e7da;
+    color: #51391f;
+}
+
+.exhibition-customers-order-chip:focus-visible {
+    outline: 2px solid #98713f;
+    outline-offset: 2px;
+}

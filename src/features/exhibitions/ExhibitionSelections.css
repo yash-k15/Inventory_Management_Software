@@ -21,7 +21,7 @@
 }
 
 /* Compact selected-items table */
-.selection-table-wrap{width:100%;overflow-x:auto;border:1px solid #eee4db;border-radius:10px}
+.selection-table-wrap{width:100%;overflow-x:auto;overflow-y:hidden;border:1px solid #eee4db;border-radius:10px}
 .selection-items-table{width:100%;min-width:790px;border-collapse:collapse;background:#fff;font-size:12px}
 .selection-items-table th{padding:11px 10px;background:#faf6f1;color:#74685d;text-align:left;font-size:11px;font-weight:700;white-space:nowrap;border-bottom:1px solid #e9dfd4}
 .selection-items-table td{padding:11px 10px;border-bottom:1px solid #f0e8e0;vertical-align:middle}
@@ -192,3 +192,15 @@
 }
 
 .selection-table-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px;min-width:0}.selection-table-actions>button{display:inline-flex;align-items:center;gap:7px}.selection-table-actions svg{width:16px;height:16px;flex:0 0 16px}.selection-order-actions{display:flex;align-items:center;gap:10px}.selection-order-actions>span{color:#81756a;font-size:12px}@media(max-width:900px){.selection-table-actions{flex-wrap:wrap}}@media(max-width:520px){.selection-table-actions{width:100%;justify-content:space-between}.selection-order-actions{flex-wrap:wrap}}
+
+
+/* Per-type diamond and stone totals in the selected-items footer. */
+.selection-items-table tfoot th.selection-details-total {
+  min-width: 150px;
+  white-space: normal;
+  line-height: 1.55;
+  vertical-align: top;
+}
+.selection-items-table tfoot th.selection-details-total > div + div {
+  margin-top: 3px;
+}

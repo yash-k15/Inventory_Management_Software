@@ -36,8 +36,16 @@ function App() {
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(
     null,
   );
-  const [selectedPaymentOrderId, setSelectedPaymentOrderId] = useState<number | null>(null);
-  const [selectedCustomerOrderId, setSelectedCustomerOrderId] = useState<number | null>(null);
+  const [selectedPaymentOrderId, setSelectedPaymentOrderId] = useState<
+    number | null
+  >(null);
+  const [selectedCustomerOrderId, setSelectedCustomerOrderId] = useState<
+    number | null
+  >(null);
+  const [selectedExhibitionOrderId, setSelectedExhibitionOrderId] = useState<
+    number | null
+  >(null);
+  const [returnToExhibitionCustomers] = useState(false);
 
   function canLeaveSettings() {
     if (view !== 'settings' || !settingsDirty) return true;
@@ -128,7 +136,16 @@ function App() {
                 onViewItem={openItemDetails}
               />
             )}
-            {view === 'orders' && selectedCustomerOrderId !== null ? (
+            {view === 'orders' && selectedExhibitionOrderId !== null ? (
+              <OrderDetailsScreen
+                orderId={selectedExhibitionOrderId}
+                backLabel='Exhibition customers'
+                onBack={() => {
+                  setSelectedExhibitionOrderId(null);
+                  setView('exhibition-workspace');
+                }}
+              />
+            ) : view === 'orders' && selectedCustomerOrderId !== null ? (
               <OrderDetailsScreen
                 orderId={selectedCustomerOrderId}
                 backLabel='Customer history'
@@ -180,6 +197,13 @@ function App() {
                 <ExhibitionWorkspace
                   exhibitionId={selectedExhibitionId}
                   onBack={openExhibitions}
+                  initialTab={
+                    returnToExhibitionCustomers ? 'customers' : 'overview'
+                  }
+                  onOpenOrder={(orderId) => {
+                    setSelectedExhibitionOrderId(orderId);
+                    setView('orders');
+                  }}
                 />
               )}
             {view === 'payments' && (

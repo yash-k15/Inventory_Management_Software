@@ -728,3 +728,16 @@
   }
 }
 
+
+
+/* Per-type material totals wrap onto separate lines in the footer. */
+.exhibition-inventory .exhibition-inventory-totals-details {
+  display: block;
+  min-width: 150px;
+  white-space: pre-line;
+  line-height: 1.55;
+}
+.exhibition-inventory .exhibition-inventory-totals-row td {
+  white-space: normal;
+  vertical-align: top;
+}

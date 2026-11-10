@@ -18,34 +18,67 @@ import {
 import CustomerPickerModal from './CustomerPickerModal';
 import CreateOrderModal from '../orders/CreateOrderModal';
 import ExportDialog from '../../components/export/ExportDialog';
-import { SELECTION_EXPORT_COLUMNS, SELECTION_ORDER_EXPORT_COLUMNS, SELECTION_ORDER_ITEM_EXPORT_COLUMNS, toSelectionOrderItemExportRow, type SelectionOrderItemExportRow } from './selection.export';
+import {
+  SELECTION_EXPORT_COLUMNS,
+  SELECTION_ORDER_EXPORT_COLUMNS,
+  SELECTION_ORDER_ITEM_EXPORT_COLUMNS,
+  toSelectionOrderItemExportRow,
+  type SelectionOrderItemExportRow,
+} from './selection.export';
 import './ExhibitionSelections.css';
 function weight(n: number | null) {
   return n == null ? '—' : `${(n / 1000).toFixed(3)}`;
 }
 
-function detailLines(details: SelectionRow['diamonds']) {
-  return details.map(
-    (detail) =>
-      `${detail.label}: ${weight(detail.weight_milli)}${detail.pieces == null ? '' : ` (${detail.pieces} pcs)`}`,
+function formatDetailWeight(
+  milli: number | null,
+  unit: 'ct' | 'g' | null = 'ct',
+) {
+  if (milli == null) return '—';
+  return (milli / 1000).toFixed(unit === 'g' ? 3 : 2);
+}
+
+function detailLines(
+  details: SelectionRow['diamonds'],
+  defaultUnit: 'ct' | 'g' = 'ct',
+) {
+  return details.map((detail) => {
+    const unit = detail.weight_unit ?? defaultUnit;
+    return `${detail.label}: ${formatDetailWeight(detail.weight_milli, unit)}${
+      detail.pieces == null ? '' : ` (${detail.pieces} pcs)`
+    }`;
+  });
+}
+
+function detailTotals(items: SelectionRow[], key: 'diamonds' | 'stones'): string[] {
+  const totals = new Map<
+    string,
+    { label: string; unit: 'ct' | 'g'; weight: number; pieces: number; hasPieces: boolean }
+  >();
+  for (const item of items) {
+    for (const detail of item[key]) {
+      const unit = key === 'diamonds' ? 'ct' : detail.weight_unit ?? 'ct';
+      const mapKey = `${detail.label.trim().toLocaleLowerCase()}|${unit}`;
+      const current = totals.get(mapKey) ?? {
+        label: detail.label,
+        unit,
+        weight: 0,
+        pieces: 0,
+        hasPieces: false,
+      };
+      current.weight += detail.weight_milli ?? 0;
+      current.pieces += detail.pieces ?? 0;
+      current.hasPieces ||= detail.pieces != null;
+      totals.set(mapKey, current);
+    }
+  }
+  if (!totals.size) return ['—'];
+  return [...totals.values()].map(
+    ({ label, unit, weight, pieces, hasPieces }) =>
+      `${label}: ${formatDetailWeight(weight, unit)} ${unit}${hasPieces ? ` (${pieces} pcs)` : ''}`,
   );
 }
 
-function detailTotals(items: SelectionRow[], key: 'diamonds' | 'stones') {
-  const total = items
-    .flatMap((item) => item[key])
-    .reduce(
-      (sum, detail) => ({
-        weight: sum.weight + (detail.weight_milli ?? 0),
-        pieces: sum.pieces + (detail.pieces ?? 0),
-        hasPieces: sum.hasPieces || detail.pieces != null,
-      }),
-      { weight: 0, pieces: 0, hasPieces: false },
-    );
-  return total.weight || total.pieces
-    ? `${weight(total.weight)}${total.hasPieces ? ` (${total.pieces} pcs)` : ''}`
-    : '—';
-}
 function Thumbnail({ path, alt }: { path: string | null; alt: string }) {
   const [src, setSrc] = useState<string | null>(null);
   useEffect(() => {
@@ -72,9 +105,21 @@ function Thumbnail({ path, alt }: { path: string | null; alt: string }) {
       {src ? (
         <img className='selection-thumbnail' src={src} alt={alt} />
       ) : (
-        <span className='selection-thumbnail selection-thumbnail--empty' aria-hidden='true'>◇</span>
+        <span
+          className='selection-thumbnail selection-thumbnail--empty'
+          aria-hidden='true'
+        >
+          ◇
+        </span>
       )}
-      {src && <span className='selection-thumbnail-preview-popover' aria-hidden='true'><img src={src} alt='' /></span>}
+      {src && (
+        <span
+          className='selection-thumbnail-preview-popover'
+          aria-hidden='true'
+        >
+          <img src={src} alt='' />
+        </span>
+      )}
     </span>
   );
 }
@@ -91,8 +136,11 @@ export default function ExhibitionSelections({
   const [selectedForOrder, setSelectedForOrder] = useState<number[]>([]);
   const [createOrderOpen, setCreateOrderOpen] = useState(false);
   const [showExportDialog, setShowExportDialog] = useState(false);
-  const [showDetailedOrdersExportDialog, setShowDetailedOrdersExportDialog] = useState(false);
-  const [detailedOrderExportRows, setDetailedOrderExportRows] = useState<SelectionOrderItemExportRow[]>([]);
+  const [showDetailedOrdersExportDialog, setShowDetailedOrdersExportDialog] =
+    useState(false);
+  const [detailedOrderExportRows, setDetailedOrderExportRows] = useState<
+    SelectionOrderItemExportRow[]
+  >([]);
   const [preparingDetailedExport, setPreparingDetailedExport] = useState(false);
   const [orders, setOrders] = useState<SelectionOrderSummary[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
@@ -105,7 +153,9 @@ export default function ExhibitionSelections({
   );
   const [selectionPage, setSelectionPage] = useState(1);
   const [ordersPage, setOrdersPage] = useState(1);
-  const [orderDetailPages, setOrderDetailPages] = useState<Record<number, number>>({});
+  const [orderDetailPages, setOrderDetailPages] = useState<
+    Record<number, number>
+  >({});
   const [pageSize, setPageSize] = useState(25);
   const [customers, setCustomers] = useState<SelectionCustomer[]>([]),
     [selectedId, setSelectedId] = useState<number | null>(null),
@@ -182,26 +232,87 @@ export default function ExhibitionSelections({
         ),
       [active],
     );
-  const selectionPageCount = Math.max(1, Math.ceil(sortedActive.length / pageSize));
-  const visibleSelectionItems = sortedActive.slice((selectionPage - 1) * pageSize, selectionPage * pageSize);
+  const selectionPageCount = Math.max(
+    1,
+    Math.ceil(sortedActive.length / pageSize),
+  );
+  const visibleSelectionItems = sortedActive.slice(
+    (selectionPage - 1) * pageSize,
+    selectionPage * pageSize,
+  );
   const ordersPageCount = Math.max(1, Math.ceil(orders.length / pageSize));
-  const visibleOrders = orders.slice((ordersPage - 1) * pageSize, ordersPage * pageSize);
-  function renderPagination(page: number, pageCount: number, setPage: (page: number) => void, total: number) {
+  const visibleOrders = orders.slice(
+    (ordersPage - 1) * pageSize,
+    ordersPage * pageSize,
+  );
+  function renderPagination(
+    page: number,
+    pageCount: number,
+    setPage: (page: number) => void,
+    total: number,
+  ) {
     const start = total ? (page - 1) * pageSize + 1 : 0;
     const end = Math.min(page * pageSize, total);
-    return <div className='selection-pagination'>
-      <span>Showing {start}–{end} of {total}</span>
-      <label>Rows <select value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }}>
-        {[10, 25, 50, 100].map((size) => <option key={size} value={size}>{size}</option>)}
-      </select></label>
-      <div className='selection-pagination-buttons'>
-        <button type='button' disabled={page <= 1} onClick={() => setPage(1)} aria-label='First page'>«</button>
-        <button type='button' disabled={page <= 1} onClick={() => setPage(page - 1)} aria-label='Previous page'>‹</button>
-        <span>Page {page} of {pageCount}</span>
-        <button type='button' disabled={page >= pageCount} onClick={() => setPage(page + 1)} aria-label='Next page'>›</button>
-        <button type='button' disabled={page >= pageCount} onClick={() => setPage(pageCount)} aria-label='Last page'>»</button>
+    return (
+      <div className='selection-pagination'>
+        <span>
+          Showing {start}–{end} of {total}
+        </span>
+        <label>
+          Rows{' '}
+          <select
+            value={pageSize}
+            onChange={(event) => {
+              setPageSize(Number(event.target.value));
+              setPage(1);
+            }}
+          >
+            {[10, 25, 50, 100].map((size) => (
+              <option key={size} value={size}>
+                {size}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className='selection-pagination-buttons'>
+          <button
+            type='button'
+            disabled={page <= 1}
+            onClick={() => setPage(1)}
+            aria-label='First page'
+          >
+            «
+          </button>
+          <button
+            type='button'
+            disabled={page <= 1}
+            onClick={() => setPage(page - 1)}
+            aria-label='Previous page'
+          >
+            ‹
+          </button>
+          <span>
+            Page {page} of {pageCount}
+          </span>
+          <button
+            type='button'
+            disabled={page >= pageCount}
+            onClick={() => setPage(page + 1)}
+            aria-label='Next page'
+          >
+            ›
+          </button>
+          <button
+            type='button'
+            disabled={page >= pageCount}
+            onClick={() => setPage(pageCount)}
+            aria-label='Last page'
+          >
+            »
+          </button>
+        </div>
       </div>
-    </div>;
+    );
   }
   async function reload() {
     const rows = await getSelectionCustomers(exhibitionId, customerSearch);
@@ -379,7 +490,10 @@ export default function ExhibitionSelections({
     const code = barcode.trim();
     if (!code || scanInProgressRef.current) return;
     if (!customer) {
-      setFeedback({ error: true, text: 'Select a customer before scanning items.' });
+      setFeedback({
+        error: true,
+        text: 'Select a customer before scanning items.',
+      });
       return;
     }
 
@@ -387,7 +501,9 @@ export default function ExhibitionSelections({
     setBarcode('');
     try {
       const found =
-        results.find((i) => i.itemNumber.toLowerCase() === code.toLowerCase()) ??
+        results.find(
+          (i) => i.itemNumber.toLowerCase() === code.toLowerCase(),
+        ) ??
         (await searchSelectionInventory(exhibitionId, code)).find(
           (i) => i.itemNumber.toLowerCase() === code.toLowerCase(),
         );
@@ -420,7 +536,8 @@ export default function ExhibitionSelections({
     } catch (e) {
       setFeedback({
         error: true,
-        text: e instanceof Error ? e.message : `Unable to process barcode ${code}.`,
+        text:
+          e instanceof Error ? e.message : `Unable to process barcode ${code}.`,
       });
     } finally {
       scanInProgressRef.current = false;
@@ -491,10 +608,12 @@ export default function ExhibitionSelections({
   const formatOrderDetails = (details: SelectionRow['diamonds']) =>
     details.length
       ? details
-          .map(
-            (d) =>
-              `${d.label}: ${((d.weight_milli ?? 0) / 1000).toFixed(3)} ct${d.pieces == null ? '' : ` (${d.pieces} pcs)`}`,
-          )
+          .map((detail) => {
+            const unit = detail.weight_unit ?? 'ct';
+            return `${detail.label}: ${formatDetailWeight(detail.weight_milli, unit)} ${unit}${
+              detail.pieces == null ? '' : ` (${detail.pieces} pcs)`
+            }`;
+          })
           .join('\n')
       : '—';
   const formatOrderDetailTotals = (details: SelectionRow['diamonds']) => {
@@ -507,8 +626,12 @@ export default function ExhibitionSelections({
       0,
     );
     const hasPieces = details.some((detail) => detail.pieces != null);
+    const unit =
+      details.length > 0 && details.every((detail) => detail.weight_unit === 'g')
+        ? 'g'
+        : 'ct';
     return weightMilli || pieces
-      ? `${(weightMilli / 1000).toFixed(3)} ct${hasPieces ? ` (${pieces} pcs)` : ''}`
+      ? `${formatDetailWeight(weightMilli, unit)} ${unit}${hasPieces ? ` (${pieces} pcs)` : ''}`
       : '—';
   };
   async function toggleOrder(orderId: number) {
@@ -542,18 +665,30 @@ export default function ExhibitionSelections({
           detail: await getSelectionOrderDetail(order.id),
         })),
       );
-      const rows = detailResults.flatMap(({ order, detail }) =>
-        detail?.items.map((item) => toSelectionOrderItemExportRow(order, item)) ?? [],
+      const rows = detailResults.flatMap(
+        ({ order, detail }) =>
+          detail?.items.map((item) =>
+            toSelectionOrderItemExportRow(order, item),
+          ) ?? [],
       );
       if (!rows.length) {
         setDetailedOrderExportRows([]);
-        setFeedback({ error: true, text: 'There are no item details to export for these orders.' });
+        setFeedback({
+          error: true,
+          text: 'There are no item details to export for these orders.',
+        });
         return;
       }
       setDetailedOrderExportRows(rows);
       setShowDetailedOrdersExportDialog(true);
     } catch (error) {
-      setFeedback({ error: true, text: error instanceof Error ? error.message : 'Unable to prepare detailed order export.' });
+      setFeedback({
+        error: true,
+        text:
+          error instanceof Error
+            ? error.message
+            : 'Unable to prepare detailed order export.',
+      });
     } finally {
       setPreparingDetailedExport(false);
     }
@@ -816,38 +951,60 @@ export default function ExhibitionSelections({
                   </button>
                 </div>
                 <div className='selection-table-actions'>
-                  {((activeTab === 'items' && active.length > 0) || (activeTab === 'orders' && orders.length > 0)) && (
+                  {((activeTab === 'items' && active.length > 0) ||
+                    (activeTab === 'orders' && orders.length > 0)) && (
                     <>
-                      <button type='button' className='selection-button' onClick={() => setShowExportDialog(true)}>
-                        <svg viewBox='0 0 20 20' aria-hidden='true'><path d='M10 2.5v9m0 0 3.5-3.5M10 11.5 6.5 8M3.5 12.5v4h13v-4' fill='none' stroke='currentColor' strokeWidth='1.5' strokeLinecap='round' strokeLinejoin='round' /></svg>
+                      <button
+                        type='button'
+                        className='selection-button'
+                        onClick={() => setShowExportDialog(true)}
+                      >
+                        <svg viewBox='0 0 20 20' aria-hidden='true'>
+                          <path
+                            d='M10 2.5v9m0 0 3.5-3.5M10 11.5 6.5 8M3.5 12.5v4h13v-4'
+                            fill='none'
+                            stroke='currentColor'
+                            strokeWidth='1.5'
+                            strokeLinecap='round'
+                            strokeLinejoin='round'
+                          />
+                        </svg>
                         Export
                       </button>
                       {activeTab === 'orders' && (
-                        <button type='button' className='selection-button' onClick={() => void prepareDetailedOrdersExport()} disabled={preparingDetailedExport}>
-                          {preparingDetailedExport ? 'Preparing…' : 'Export with item details'}
+                        <button
+                          type='button'
+                          className='selection-button'
+                          onClick={() => void prepareDetailedOrdersExport()}
+                          disabled={preparingDetailedExport}
+                        >
+                          {preparingDetailedExport
+                            ? 'Preparing…'
+                            : 'Export with item details'}
                         </button>
                       )}
                     </>
                   )}
-                {activeTab === 'items' && (
-                  <div className='selection-order-actions'>
-                    <span>{selectedForOrder.length} selected for order</span>
-                    <button
-                      type='button'
-                      className='selection-button selection-button--primary'
-                      disabled={
-                        !selectedForOrder.length ||
-                        selectedForOrder.some(
-                          (id) =>
-                            active.find((item) => item.id === id)?.locked === 1,
-                        )
-                      }
-                      onClick={() => setCreateOrderOpen(true)}
-                    >
-                      Create order
-                    </button>
-                  </div>
-                )}
+                  {activeTab === 'items' && (
+                    <div className='selection-order-actions'>
+                      <span>{selectedForOrder.length} selected for order</span>
+                      <button
+                        type='button'
+                        className='selection-button selection-button--primary'
+                        disabled={
+                          !selectedForOrder.length ||
+                          selectedForOrder.some(
+                            (id) =>
+                              active.find((item) => item.id === id)?.locked ===
+                              1,
+                          )
+                        }
+                        onClick={() => setCreateOrderOpen(true)}
+                      >
+                        Create order
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
               {activeTab === 'orders' ? (
@@ -916,43 +1073,58 @@ export default function ExhibitionSelections({
                                       <span>Stones</span>
                                       <span>Final price</span>
                                     </div>
-                                    {detail.items.slice(((orderDetailPages[order.id] ?? 1) - 1) * pageSize, (orderDetailPages[order.id] ?? 1) * pageSize).map((item, index) => (
-                                      <div
-                                        className='selection-order-review-row'
-                                        key={`${order.id}-${((orderDetailPages[order.id] ?? 1) - 1) * pageSize + index}`}
-                                      >
-                                        <span>{((orderDetailPages[order.id] ?? 1) - 1) * pageSize + index + 1}</span>
-                                        <div className='selection-order-review-item'>
-                                          <Thumbnail
-                                            path={item.imagePath}
-                                            alt={item.itemNumber}
-                                          />
+                                    {detail.items
+                                      .slice(
+                                        ((orderDetailPages[order.id] ?? 1) -
+                                          1) *
+                                          pageSize,
+                                        (orderDetailPages[order.id] ?? 1) *
+                                          pageSize,
+                                      )
+                                      .map((item, index) => (
+                                        <div
+                                          className='selection-order-review-row'
+                                          key={`${order.id}-${((orderDetailPages[order.id] ?? 1) - 1) * pageSize + index}`}
+                                        >
                                           <span>
-                                            <strong>{item.itemNumber}</strong>
-                                            <small>{item.categoryName}</small>
+                                            {((orderDetailPages[order.id] ??
+                                              1) -
+                                              1) *
+                                              pageSize +
+                                              index +
+                                              1}
                                           </span>
+                                          <div className='selection-order-review-item'>
+                                            <Thumbnail
+                                              path={item.imagePath}
+                                              alt={item.itemNumber}
+                                            />
+                                            <span>
+                                              <strong>{item.itemNumber}</strong>
+                                              <small>{item.categoryName}</small>
+                                            </span>
+                                          </div>
+                                          <span>
+                                            {formatReviewWeight(
+                                              item.grossWeightMilli,
+                                            )}
+                                          </span>
+                                          <span>
+                                            {formatReviewWeight(
+                                              item.netWeightMilli,
+                                            )}
+                                          </span>
+                                          <span className='selection-order-review-detail'>
+                                            {formatOrderDetails(item.diamonds)}
+                                          </span>
+                                          <span className='selection-order-review-detail'>
+                                            {formatOrderDetails(item.stones)}
+                                          </span>
+                                          <strong>
+                                            {formatMoney(item.pricePaise)}
+                                          </strong>
                                         </div>
-                                        <span>
-                                          {formatReviewWeight(
-                                            item.grossWeightMilli,
-                                          )}
-                                        </span>
-                                        <span>
-                                          {formatReviewWeight(
-                                            item.netWeightMilli,
-                                          )}
-                                        </span>
-                                        <span className='selection-order-review-detail'>
-                                          {formatOrderDetails(item.diamonds)}
-                                        </span>
-                                        <span className='selection-order-review-detail'>
-                                          {formatOrderDetails(item.stones)}
-                                        </span>
-                                        <strong>
-                                          {formatMoney(item.pricePaise)}
-                                        </strong>
-                                      </div>
-                                    ))}
+                                      ))}
                                     <div className='selection-order-review-row selection-order-review-total-row'>
                                       <span />
                                       <strong>Totals</strong>
@@ -1002,12 +1174,22 @@ export default function ExhibitionSelections({
                                       </strong>
                                     </div>
                                   </div>
-                                  {detail.items.length > 0 && renderPagination(
-                                    orderDetailPages[order.id] ?? 1,
-                                    Math.max(1, Math.ceil(detail.items.length / pageSize)),
-                                    (page) => setOrderDetailPages((current) => ({ ...current, [order.id]: page })),
-                                    detail.items.length,
-                                  )}
+                                  {detail.items.length > 0 &&
+                                    renderPagination(
+                                      orderDetailPages[order.id] ?? 1,
+                                      Math.max(
+                                        1,
+                                        Math.ceil(
+                                          detail.items.length / pageSize,
+                                        ),
+                                      ),
+                                      (page) =>
+                                        setOrderDetailPages((current) => ({
+                                          ...current,
+                                          [order.id]: page,
+                                        })),
+                                      detail.items.length,
+                                    )}
                                   <div className='selection-order-final-total'>
                                     <span>Final order total</span>
                                     <strong>
@@ -1098,7 +1280,9 @@ export default function ExhibitionSelections({
                     <tbody>
                       {visibleSelectionItems.map((i, index) => (
                         <tr key={i.id}>
-                          <td className='selection-serial-cell'>{(selectionPage - 1) * pageSize + index + 1}</td>
+                          <td className='selection-serial-cell'>
+                            {(selectionPage - 1) * pageSize + index + 1}
+                          </td>
                           <td className='selection-order-checkbox-cell'>
                             <input
                               type='checkbox'
@@ -1199,8 +1383,16 @@ export default function ExhibitionSelections({
                         <th colSpan={3}>Totals ({active.length} items)</th>
                         <th>{weight(totals.gross)} g</th>
                         <th>{totals.net ? `${weight(totals.net)} g` : '—'}</th>
-                        <th>{detailTotals(active, 'diamonds')}</th>
-                        <th>{detailTotals(active, 'stones')}</th>
+                        <th className='selection-details-total'>
+                          {detailTotals(active, 'diamonds').map((line, index) => (
+                            <div key={`diamond-total-${index}`}>{line}</div>
+                          ))}
+                        </th>
+                        <th className='selection-details-total'>
+                          {detailTotals(active, 'stones').map((line, index) => (
+                            <div key={`stone-total-${index}`}>{line}</div>
+                          ))}
+                        </th>
                         <th />
                         <th />
                       </tr>
@@ -1208,10 +1400,23 @@ export default function ExhibitionSelections({
                   </table>
                 </div>
               )}
-              {activeTab === 'orders' && !ordersLoading && orders.length > 0 &&
-                renderPagination(ordersPage, ordersPageCount, setOrdersPage, orders.length)}
-              {activeTab === 'items' && active.length > 0 &&
-                renderPagination(selectionPage, selectionPageCount, setSelectionPage, sortedActive.length)}
+              {activeTab === 'orders' &&
+                !ordersLoading &&
+                orders.length > 0 &&
+                renderPagination(
+                  ordersPage,
+                  ordersPageCount,
+                  setOrdersPage,
+                  orders.length,
+                )}
+              {activeTab === 'items' &&
+                active.length > 0 &&
+                renderPagination(
+                  selectionPage,
+                  selectionPageCount,
+                  setSelectionPage,
+                  sortedActive.length,
+                )}
               {removed.length > 0 && (
                 <details className='selection-history'>
                   <summary>Removed items ({removed.length})</summary>
@@ -1236,7 +1441,13 @@ export default function ExhibitionSelections({
             filteredRows: sortedActive,
             getAllRows: async () => sortedActive,
           }}
-          defaultSelectedColumns={['itemNumber', 'grossWeight', 'netWeight', 'diamondDetails', 'stoneDetails']}
+          defaultSelectedColumns={[
+            'itemNumber',
+            'grossWeight',
+            'netWeight',
+            'diamondDetails',
+            'stoneDetails',
+          ]}
           onClose={() => setShowExportDialog(false)}
         />
       )}

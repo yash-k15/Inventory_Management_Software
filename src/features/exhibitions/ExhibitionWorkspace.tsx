@@ -777,12 +777,16 @@ function SharedInterest({ exhibitionId }: { exhibitionId: number }) {
 export default function ExhibitionWorkspace({
   exhibitionId,
   onBack,
+  onOpenOrder,
+  initialTab = 'overview',
 }: {
   exhibitionId: number;
   onBack: () => void;
+  onOpenOrder: (orderId: number) => void;
+  initialTab?: WorkspaceTab;
 }) {
   const [exhibition, setExhibition] = useState<Exhibition | null>(null);
-  const [activeTab, setActiveTab] = useState<WorkspaceTab>('overview');
+  const [activeTab, setActiveTab] = useState<WorkspaceTab>(initialTab);
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(
     null,
   );
@@ -980,6 +984,7 @@ export default function ExhibitionWorkspace({
         ) : (
           <ExhibitionCustomers
             exhibitionId={exhibitionId}
+            onOpenOrder={onOpenOrder}
             onOpenSelection={(customerId) => {
               setSelectedCustomerId(customerId);
               setActiveTab('selections');

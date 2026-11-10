@@ -440,10 +440,14 @@
     color     : #85796e;
 }
 
+/* Keep action cells as native table-cells so every column shares row height. */
 .settings-row-actions {
-    display        : flex;
-    gap            : 6px;
-    justify-content: flex-end;
+    text-align : right;
+    white-space: nowrap;
+}
+
+.settings-row-actions > button + button {
+    margin-left: 6px;
 }
 
 .settings-reference-grid {

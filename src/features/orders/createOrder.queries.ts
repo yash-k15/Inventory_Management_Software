@@ -253,7 +253,7 @@ export async function getOrderPricingContext(
     `SELECT rate_key AS rateKey, value FROM global_rate`,
   );
   const settings = await db.select<{ key: string; value: string | null }[]>(
-    `SELECT key, value FROM app_setting WHERE key IN ('wastage_mode', 'gst_rate_bp')`,
+    `SELECT key, value FROM app_setting WHERE key IN ('wastage_pricing_method', 'gst_rate_bp')`,
   );
   const combinations = await db.select<
     { id: number; shapeId: number; rate: number }[]
@@ -335,7 +335,8 @@ export async function getOrderPricingContext(
   return {
     rates: {
       goldRatePaisePerGram: rateMap.gold_per_g_paise || 0,
-      wastageMode: settingMap.wastage_mode === 'per_g' ? 'per_g' : 'percent',
+      wastageMode:
+        settingMap.wastage_pricing_method === 'per_gram' ? 'per_g' : 'percent',
       wastagePercentBp: rateMap.wastage_percent_bp || 0,
       wastagePaisePerGram: rateMap.wastage_per_g_paise || 0,
       certificationPaisePerCarat: rateMap.certification_per_ct_paise || 0,

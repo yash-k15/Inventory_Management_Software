@@ -5,27 +5,47 @@ import { PAYMENT_EXPORT_COLUMNS } from './payments.export';
 import type { PaymentRow, PaymentSummary } from './payments.types';
 import './PaymentsScreen.css';
 
-interface PaymentsScreenProps { onViewOrder?: (orderId: number) => void }
-interface DropdownOption { value: string; label: string }
+interface PaymentsScreenProps {
+  onViewOrder?: (orderId: number) => void;
+}
+interface DropdownOption {
+  value: string;
+  label: string;
+}
 interface CustomDropdownProps {
-  label: string; value: string; options: DropdownOption[];
-  onChange: (value: string) => void; ariaLabel: string;
+  label: string;
+  value: string;
+  options: DropdownOption[];
+  onChange: (value: string) => void;
+  ariaLabel: string;
 }
 
-function CustomDropdown({ label, value, options, onChange, ariaLabel }: CustomDropdownProps) {
+function CustomDropdown({
+  label,
+  value,
+  options,
+  onChange,
+  ariaLabel,
+}: CustomDropdownProps) {
   const [open, setOpen] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
-  const selectedIndex = Math.max(0, options.findIndex((option) => option.value === value));
+  const selectedIndex = Math.max(
+    0,
+    options.findIndex((option) => option.value === value),
+  );
   const selectedOption = options[selectedIndex];
 
   useEffect(() => {
     if (!open) return;
     function onPointerDown(event: MouseEvent) {
-      if (rootRef.current && !rootRef.current.contains(event.target as Node)) setOpen(false);
+      if (rootRef.current && !rootRef.current.contains(event.target as Node))
+        setOpen(false);
     }
-    function onKeyDown(event: KeyboardEvent) { if (event.key === 'Escape') setOpen(false); }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setOpen(false);
+    }
     document.addEventListener('mousedown', onPointerDown);
     document.addEventListener('keydown', onKeyDown);
     return () => {
@@ -34,53 +54,128 @@ function CustomDropdown({ label, value, options, onChange, ariaLabel }: CustomDr
     };
   }, [open]);
 
-  useEffect(() => { if (open) optionRefs.current[highlightedIndex]?.focus(); }, [open, highlightedIndex]);
-  function choose(option: DropdownOption) { onChange(option.value); setOpen(false); }
+  useEffect(() => {
+    if (open) optionRefs.current[highlightedIndex]?.focus();
+  }, [open, highlightedIndex]);
+  function choose(option: DropdownOption) {
+    onChange(option.value);
+    setOpen(false);
+  }
   function triggerKeyDown(event: React.KeyboardEvent<HTMLButtonElement>) {
     if (['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(event.key)) {
-      event.preventDefault(); setHighlightedIndex(selectedIndex); setOpen(true);
+      event.preventDefault();
+      setHighlightedIndex(selectedIndex);
+      setOpen(true);
     }
   }
-  function optionKeyDown(event: React.KeyboardEvent<HTMLButtonElement>, index: number) {
-    if (event.key === 'ArrowDown') { event.preventDefault(); setHighlightedIndex((index + 1) % options.length); }
-    else if (event.key === 'ArrowUp') { event.preventDefault(); setHighlightedIndex((index - 1 + options.length) % options.length); }
-    else if (event.key === 'Home') { event.preventDefault(); setHighlightedIndex(0); }
-    else if (event.key === 'End') { event.preventDefault(); setHighlightedIndex(options.length - 1); }
-    else if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); choose(options[index]); }
-    else if (event.key === 'Tab') setOpen(false);
+  function optionKeyDown(
+    event: React.KeyboardEvent<HTMLButtonElement>,
+    index: number,
+  ) {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setHighlightedIndex((index + 1) % options.length);
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setHighlightedIndex((index - 1 + options.length) % options.length);
+    } else if (event.key === 'Home') {
+      event.preventDefault();
+      setHighlightedIndex(0);
+    } else if (event.key === 'End') {
+      event.preventDefault();
+      setHighlightedIndex(options.length - 1);
+    } else if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      choose(options[index]);
+    } else if (event.key === 'Tab') setOpen(false);
   }
 
-  return <div ref={rootRef} className={`payments-filter-control ${open ? 'payments-dropdown--open' : ''}`}>
-    <span className="payments-filter-label">{label}</span>
-    <button type="button" className="payments-dropdown-trigger" aria-label={ariaLabel}
-      aria-haspopup="listbox" aria-expanded={open}
-      onClick={() => { if (!open) setHighlightedIndex(selectedIndex); setOpen((current) => !current); }}
-      onKeyDown={triggerKeyDown}>
-      <span className="payments-dropdown-value">{selectedOption?.label}</span>
-      <svg className="payments-dropdown-chevron" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m5 7.5 5 5 5-5" /></svg>
-    </button>
-    {open && <div className="payments-dropdown-menu" role="listbox" aria-label={ariaLabel}>
-      {options.map((option, index) => <button key={option.value}
-        ref={(element) => { optionRefs.current[index] = element; }} type="button" role="option"
-        aria-selected={option.value === value} tabIndex={highlightedIndex === index ? 0 : -1}
-        className={`payments-dropdown-option ${option.value === value ? 'payments-dropdown-option--selected' : ''} ${highlightedIndex === index ? 'payments-dropdown-option--highlighted' : ''}`}
-        onMouseEnter={() => setHighlightedIndex(index)} onClick={() => choose(option)}
-        onKeyDown={(event) => optionKeyDown(event, index)}>
-        <span>{option.label}</span>
-        {option.value === value && <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m4 10 4 4 8-8" /></svg>}
-      </button>)}
-    </div>}
-  </div>;
+  return (
+    <div
+      ref={rootRef}
+      className={`payments-filter-control ${open ? 'payments-dropdown--open' : ''}`}
+    >
+      <span className='payments-filter-label'>{label}</span>
+      <button
+        type='button'
+        className='payments-dropdown-trigger'
+        aria-label={ariaLabel}
+        aria-haspopup='listbox'
+        aria-expanded={open}
+        onClick={() => {
+          if (!open) setHighlightedIndex(selectedIndex);
+          setOpen((current) => !current);
+        }}
+        onKeyDown={triggerKeyDown}
+      >
+        <span className='payments-dropdown-value'>{selectedOption?.label}</span>
+        <svg
+          className='payments-dropdown-chevron'
+          viewBox='0 0 20 20'
+          fill='none'
+          aria-hidden='true'
+        >
+          <path d='m5 7.5 5 5 5-5' />
+        </svg>
+      </button>
+      {open && (
+        <div
+          className='payments-dropdown-menu'
+          role='listbox'
+          aria-label={ariaLabel}
+        >
+          {options.map((option, index) => (
+            <button
+              key={option.value}
+              ref={(element) => {
+                optionRefs.current[index] = element;
+              }}
+              type='button'
+              role='option'
+              aria-selected={option.value === value}
+              tabIndex={highlightedIndex === index ? 0 : -1}
+              className={`payments-dropdown-option ${option.value === value ? 'payments-dropdown-option--selected' : ''} ${highlightedIndex === index ? 'payments-dropdown-option--highlighted' : ''}`}
+              onMouseEnter={() => setHighlightedIndex(index)}
+              onClick={() => choose(option)}
+              onKeyDown={(event) => optionKeyDown(event, index)}
+            >
+              <span>{option.label}</span>
+              {option.value === value && (
+                <svg viewBox='0 0 20 20' fill='none' aria-hidden='true'>
+                  <path d='m4 10 4 4 8-8' />
+                </svg>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
-const currency = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const emptySummary: PaymentSummary = { totalReceivedPaise: 0, totalOutstandingPaise: 0, transactionCount: 0 };
-function formatMoney(paise: number) { return currency.format(paise / 100); }
+const currency = new Intl.NumberFormat('en-IN', {
+  style: 'currency',
+  currency: 'INR',
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+const emptySummary: PaymentSummary = {
+  totalReceivedPaise: 0,
+  totalOutstandingPaise: 0,
+  transactionCount: 0,
+};
+function formatMoney(paise: number) {
+  return currency.format(paise / 100);
+}
 function formatDate(value: string | null | undefined) {
   if (!value) return '—';
   const date = new Date(`${value.slice(0, 10)}T00:00:00`);
   if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }).format(date);
+  return new Intl.DateTimeFormat('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  }).format(date);
 }
 
 function PaymentsScreen({ onViewOrder }: PaymentsScreenProps) {
@@ -99,145 +194,533 @@ function PaymentsScreen({ onViewOrder }: PaymentsScreenProps) {
   const [showExportDialog, setShowExportDialog] = useState(false);
 
   const loadPayments = useCallback(async () => {
-    setLoading(true); setError(null);
+    setLoading(true);
+    setError(null);
     try {
-      const [rows, totals] = await Promise.all([getPayments(), getPaymentSummary()]);
-      setPayments(rows); setSummary(totals);
+      const [rows, totals] = await Promise.all([
+        getPayments(),
+        getPaymentSummary(),
+      ]);
+      setPayments(rows);
+      setSummary(totals);
     } catch (err) {
       console.error('Failed to load payments:', err);
       setError('Could not load payments. Please try again.');
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   }, []);
-  useEffect(() => { void loadPayments(); }, [loadPayments]);
+  useEffect(() => {
+    void loadPayments();
+  }, [loadPayments]);
 
-  const customerOptions = useMemo<DropdownOption[]>(() => [
-    { value: 'all', label: 'All customers' },
-    ...Array.from(new Map(payments.filter((p) => p.customerId != null).map((p) => [String(p.customerId), p.customerName])).entries())
-      .map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label)),
-  ], [payments]);
-  const exhibitionOptions = useMemo<DropdownOption[]>(() => [
-    { value: 'all', label: 'All exhibitions' },
-    ...Array.from(new Map(payments.filter((p) => p.exhibitionId != null && p.exhibitionName != null).map((p) => [String(p.exhibitionId), p.exhibitionName as string])).entries())
-      .map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label)),
-  ], [payments]);
-  const methodOptions = useMemo<DropdownOption[]>(() => [
-    { value: 'all', label: 'All methods' },
-    ...Array.from(new Set(payments.map((p) => p.paymentMethod || 'Not specified'))).sort()
-      .map((method) => ({ value: method, label: method })),
-  ], [payments]);
+  const customerOptions = useMemo<DropdownOption[]>(
+    () => [
+      { value: 'all', label: 'All customers' },
+      ...Array.from(
+        new Map(
+          payments
+            .filter((p) => p.customerId != null)
+            .map((p) => [String(p.customerId), p.customerName]),
+        ).entries(),
+      )
+        .map(([value, label]) => ({ value, label }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    ],
+    [payments],
+  );
+  const exhibitionOptions = useMemo<DropdownOption[]>(
+    () => [
+      { value: 'all', label: 'All exhibitions' },
+      ...Array.from(
+        new Map(
+          payments
+            .filter((p) => p.exhibitionId != null && p.exhibitionName != null)
+            .map((p) => [String(p.exhibitionId), p.exhibitionName as string]),
+        ).entries(),
+      )
+        .map(([value, label]) => ({ value, label }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    ],
+    [payments],
+  );
+  const methodOptions = useMemo<DropdownOption[]>(
+    () => [
+      { value: 'all', label: 'All methods' },
+      ...Array.from(
+        new Set(payments.map((p) => p.paymentMethod || 'Not specified')),
+      )
+        .sort()
+        .map((method) => ({ value: method, label: method })),
+    ],
+    [payments],
+  );
   const dateOptions: DropdownOption[] = [
-    { value: 'all', label: 'Any time' }, { value: '30', label: 'Last 30 days' },
-    { value: '90', label: 'Last 90 days' }, { value: '365', label: 'Last 12 months' },
+    { value: 'all', label: 'Any time' },
+    { value: '30', label: 'Last 30 days' },
+    { value: '90', label: 'Last 90 days' },
+    { value: '365', label: 'Last 12 months' },
   ];
 
   const filteredPayments = useMemo(() => {
-    const cutoff = dateFilter === 'all' ? null : new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() - Number(dateFilter));
+    const cutoff =
+      dateFilter === 'all'
+        ? null
+        : new Date(
+            new Date().getFullYear(),
+            new Date().getMonth(),
+            new Date().getDate() - Number(dateFilter),
+          );
     const term = search.trim().toLocaleLowerCase();
     return payments.filter((payment) => {
-      const searchable = [payment.orderNumber ?? '', payment.customerName, payment.exhibitionName ?? '', payment.paymentMethod ?? '', payment.notes ?? '', String(payment.id)].join(' ').toLocaleLowerCase();
+      const searchable = [
+        payment.orderNumber ?? '',
+        payment.customerName,
+        payment.exhibitionName ?? '',
+        payment.paymentMethod ?? '',
+        payment.notes ?? '',
+        String(payment.id),
+      ]
+        .join(' ')
+        .toLocaleLowerCase();
       const date = new Date(`${payment.paymentDate.slice(0, 10)}T00:00:00`);
       if (term && !searchable.includes(term)) return false;
-      if (customerFilter !== 'all' && String(payment.customerId ?? '') !== customerFilter) return false;
-      if (exhibitionFilter !== 'all' && String(payment.exhibitionId ?? '') !== exhibitionFilter) return false;
-      if (methodFilter !== 'all' && (payment.paymentMethod || 'Not specified') !== methodFilter) return false;
-      if (cutoff && (Number.isNaN(date.getTime()) || date < cutoff)) return false;
+      if (
+        customerFilter !== 'all' &&
+        String(payment.customerId ?? '') !== customerFilter
+      )
+        return false;
+      if (
+        exhibitionFilter !== 'all' &&
+        String(payment.exhibitionId ?? '') !== exhibitionFilter
+      )
+        return false;
+      if (
+        methodFilter !== 'all' &&
+        (payment.paymentMethod || 'Not specified') !== methodFilter
+      )
+        return false;
+      if (cutoff && (Number.isNaN(date.getTime()) || date < cutoff))
+        return false;
       return true;
     });
-  }, [payments, search, customerFilter, exhibitionFilter, methodFilter, dateFilter]);
+  }, [
+    payments,
+    search,
+    customerFilter,
+    exhibitionFilter,
+    methodFilter,
+    dateFilter,
+  ]);
 
-  useEffect(() => { setCurrentPage(1); }, [search, customerFilter, exhibitionFilter, methodFilter, dateFilter, pageSize]);
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [
+    search,
+    customerFilter,
+    exhibitionFilter,
+    methodFilter,
+    dateFilter,
+    pageSize,
+  ]);
 
   const totalPages = Math.max(1, Math.ceil(filteredPayments.length / pageSize));
   const safeCurrentPage = Math.min(currentPage, totalPages);
-  const pageStart = filteredPayments.length ? (safeCurrentPage - 1) * pageSize : 0;
+  const pageStart = filteredPayments.length
+    ? (safeCurrentPage - 1) * pageSize
+    : 0;
   const pageEnd = Math.min(pageStart + pageSize, filteredPayments.length);
   const visiblePayments = filteredPayments.slice(pageStart, pageEnd);
   const selectedPayments = useMemo(
     () => payments.filter((payment) => selectedPaymentIds.includes(payment.id)),
     [payments, selectedPaymentIds],
   );
-  const allVisibleSelected = visiblePayments.length > 0 && visiblePayments.every((payment) => selectedPaymentIds.includes(payment.id));
+  const allVisibleSelected =
+    visiblePayments.length > 0 &&
+    visiblePayments.every((payment) => selectedPaymentIds.includes(payment.id));
 
   function togglePaymentSelection(paymentId: number, checked: boolean) {
-    setSelectedPaymentIds((current) => checked
-      ? (current.includes(paymentId) ? current : [...current, paymentId])
-      : current.filter((id) => id !== paymentId));
+    setSelectedPaymentIds((current) =>
+      checked
+        ? current.includes(paymentId)
+          ? current
+          : [...current, paymentId]
+        : current.filter((id) => id !== paymentId),
+    );
   }
 
   function toggleVisiblePayments(checked: boolean) {
     const visibleIds = new Set(visiblePayments.map((payment) => payment.id));
-    setSelectedPaymentIds((current) => checked
-      ? [...new Set([...current, ...visibleIds])]
-      : current.filter((id) => !visibleIds.has(id)));
+    setSelectedPaymentIds((current) =>
+      checked
+        ? [...new Set([...current, ...visibleIds])]
+        : current.filter((id) => !visibleIds.has(id)),
+    );
   }
 
   function resetFilters() {
-    setSearch(''); setCustomerFilter('all'); setExhibitionFilter('all'); setMethodFilter('all'); setDateFilter('all');
+    setSearch('');
+    setCustomerFilter('all');
+    setExhibitionFilter('all');
+    setMethodFilter('all');
+    setDateFilter('all');
   }
 
-  return <section className="payments-screen">
-    <header className="payments-page-heading"><div>
-      <h1 className="payments-page-title">Payments</h1>
-      <p className="payments-page-description">A history of payments recorded against orders.</p>
-    </div>
-      <div className="payments-heading-actions">
-        {selectedPaymentIds.length > 0 && <span className="payments-selection-count">{selectedPaymentIds.length} selected</span>}
-        {selectedPaymentIds.length > 0 && <button type="button" className="payments-clear-selection" onClick={() => setSelectedPaymentIds([])}>Clear selection</button>}
-        <button type="button" className="payments-export-button" onClick={() => setShowExportDialog(true)}><span aria-hidden="true">⇩</span> Export</button>
-      </div>
-    </header>
-
-    <section className="payments-summary" aria-label="Payment summary">
-      <div className="payments-summary-card"><span className="payments-summary-label">Total received</span><strong className="payments-summary-value">{formatMoney(summary.totalReceivedPaise)}</strong><span className="payments-summary-note">All recorded payment transactions</span></div>
-      <div className="payments-summary-card"><span className="payments-summary-label">Transactions</span><strong className="payments-summary-value">{summary.transactionCount}</strong><span className="payments-summary-note">Historical payment entries</span></div>
-    </section>
-
-    <section className="payments-filters" aria-label="Filter payments">
-      <label className="payments-search"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8" /><path d="m16 16 4.5 4.5" /></svg><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Customer, exhibition, method or notes..." aria-label="Search payments" /></label>
-      <CustomDropdown label="Customer" ariaLabel="Filter by customer" value={customerFilter} options={customerOptions} onChange={setCustomerFilter} />
-      <CustomDropdown label="Exhibition" ariaLabel="Filter by exhibition" value={exhibitionFilter} options={exhibitionOptions} onChange={setExhibitionFilter} />
-      <CustomDropdown label="Method" ariaLabel="Filter by payment method" value={methodFilter} options={methodOptions} onChange={setMethodFilter} />
-      <CustomDropdown label="Date" ariaLabel="Filter by date" value={dateFilter} options={dateOptions} onChange={setDateFilter} />
-      <button type="button" className="payments-reset-button" onClick={resetFilters}>Reset filters</button>
-    </section>
-
-    {error && <div className="payments-error" role="alert"><span>{error}</span><button type="button" onClick={() => void loadPayments()}>Retry</button></div>}
-    <section className="payments-table-card" aria-label="Payment transactions"><div className="payments-table-scroll"><table className="payments-table"><thead><tr><th className="payments-checkbox-cell"><input type="checkbox" aria-label="Select all payments on this page" checked={allVisibleSelected} onChange={(event) => toggleVisiblePayments(event.target.checked)} /></th><th className="payments-sno-cell">S.No.</th><th>Payment date</th><th>Order</th><th>Customer</th><th>Exhibition / source</th><th>Payment method</th><th>Notes</th><th className="payments-number-cell">Amount received</th></tr></thead><tbody>
-      {!loading && !error && visiblePayments.map((payment, index) => <tr key={payment.id} className={selectedPaymentIds.includes(payment.id) ? 'payments-row-selected' : ''}><td className="payments-checkbox-cell"><input type="checkbox" aria-label={`Select payment ${payment.id}`} checked={selectedPaymentIds.includes(payment.id)} onChange={(event) => togglePaymentSelection(payment.id, event.target.checked)} /></td><td className="payments-sno-cell">{pageStart + index + 1}</td><td className="payments-date">{formatDate(payment.paymentDate)}</td><td><div className="payments-primary-cell">{payment.orderId !== null && payment.orderId !== undefined && onViewOrder ? <button type="button" className="payments-order-link" onClick={() => onViewOrder(payment.orderId as number)}>{payment.orderNumber || `Order ${payment.orderId}`}<span aria-hidden="true"> ↗</span></button> : payment.orderNumber || 'Legacy payment'}</div></td><td><div className="payments-primary-cell">{payment.customerName || '—'}</div></td><td><div className="payments-primary-cell">{payment.exhibitionName || (payment.orderId ? 'Direct order' : 'Unallocated legacy payment')}</div></td><td><span className="payments-method-badge">{payment.paymentMethod || 'Not specified'}</span></td><td className="payments-notes" title={payment.notes || undefined}>{payment.notes || '—'}</td><td className="payments-number-cell payments-amount">{formatMoney(payment.amountPaise)}</td></tr>)}
-      {loading && <tr><td colSpan={9} className="payments-table-message">Loading payments…</td></tr>}
-      {!loading && !error && filteredPayments.length === 0 && <tr><td colSpan={8} className="payments-table-message">{payments.length ? 'No payments match these filters.' : 'No payments recorded yet.'}</td></tr>}
-    </tbody></table></div>
-      <footer className="payments-table-footer">
-        <span>Showing {filteredPayments.length ? pageStart + 1 : 0}–{pageEnd} of {filteredPayments.length} filtered payments ({payments.length} total).</span>
-        <div className="payments-pagination">
-          <label className="payments-page-size">Rows
-            <select value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))} aria-label="Payments per page">
-              {[10, 25, 50, 100].map((size) => <option key={size} value={size}>{size}</option>)}
-            </select>
-            <span>per page</span>
-          </label>
-          <div className="payments-page-buttons">
-            <button type="button" onClick={() => setCurrentPage(1)} disabled={safeCurrentPage <= 1} aria-label="First page">«</button>
-            <button type="button" onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} disabled={safeCurrentPage <= 1} aria-label="Previous page">‹</button>
-            <span>Page {safeCurrentPage} of {totalPages}</span>
-            <button type="button" onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))} disabled={safeCurrentPage >= totalPages} aria-label="Next page">›</button>
-            <button type="button" onClick={() => setCurrentPage(totalPages)} disabled={safeCurrentPage >= totalPages} aria-label="Last page">»</button>
-          </div>
+  return (
+    <section className='payments-screen'>
+      <header className='payments-page-heading'>
+        <div>
+          <h1 className='payments-page-title'>Payments</h1>
+          <p className='payments-page-description'>
+            A history of payments recorded against orders.
+          </p>
         </div>
-      </footer></section>
+        <div className='payments-heading-actions'>
+          {selectedPaymentIds.length > 0 && (
+            <span className='payments-selection-count'>
+              {selectedPaymentIds.length} selected
+            </span>
+          )}
+          {selectedPaymentIds.length > 0 && (
+            <button
+              type='button'
+              className='payments-clear-selection'
+              onClick={() => setSelectedPaymentIds([])}
+            >
+              Clear selection
+            </button>
+          )}
+          <button
+            type='button'
+            className='payments-export-button'
+            onClick={() => setShowExportDialog(true)}
+            title={
+              selectedPaymentIds.length > 0
+                ? `Export ${selectedPaymentIds.length} selected payments`
+                : 'Export filtered payments'
+            }
+          >
+            <svg
+              viewBox='0 0 20 20'
+              width='15'
+              height='15'
+              fill='none'
+              aria-hidden='true'
+            >
+              <path
+                d='M10 2.5v9'
+                stroke='currentColor'
+                strokeWidth='1.6'
+                strokeLinecap='round'
+              />
+              <path
+                d='m6.5 8.5 3.5 3.5 3.5-3.5'
+                stroke='currentColor'
+                strokeWidth='1.6'
+                strokeLinecap='round'
+                strokeLinejoin='round'
+              />
+              <path
+                d='M3.5 13.5v3h13v-3'
+                stroke='currentColor'
+                strokeWidth='1.6'
+                strokeLinecap='round'
+                strokeLinejoin='round'
+              />
+            </svg>
+            Export
+          </button>
+        </div>
+      </header>
 
-    {showExportDialog && <ExportDialog<PaymentRow>
-      configuration={{
-        title: 'Payments Export',
-        filename: 'payments.xlsx',
-        columns: PAYMENT_EXPORT_COLUMNS,
-        filteredRows: filteredPayments,
-        getAllRows: getPayments,
-      }}
-      selectedRows={selectedPayments.length > 0 ? selectedPayments : undefined}
-      onClose={() => setShowExportDialog(false)}
-    />}
-  </section>;
+      <section className='payments-summary' aria-label='Payment summary'>
+        <div className='payments-summary-card'>
+          <span className='payments-summary-label'>Total received</span>
+          <strong className='payments-summary-value'>
+            {formatMoney(summary.totalReceivedPaise)}
+          </strong>
+          <span className='payments-summary-note'>
+            All recorded payment transactions
+          </span>
+        </div>
+        <div className='payments-summary-card'>
+          <span className='payments-summary-label'>Transactions</span>
+          <strong className='payments-summary-value'>
+            {summary.transactionCount}
+          </strong>
+          <span className='payments-summary-note'>
+            Historical payment entries
+          </span>
+        </div>
+      </section>
+
+      <section className='payments-filters' aria-label='Filter payments'>
+        <label className='payments-search'>
+          <svg viewBox='0 0 24 24' fill='none' aria-hidden='true'>
+            <circle cx='10.8' cy='10.8' r='6.8' />
+            <path d='m16 16 4.5 4.5' />
+          </svg>
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder='Customer, exhibition, method or notes...'
+            aria-label='Search payments'
+          />
+        </label>
+        <CustomDropdown
+          label='Customer'
+          ariaLabel='Filter by customer'
+          value={customerFilter}
+          options={customerOptions}
+          onChange={setCustomerFilter}
+        />
+        <CustomDropdown
+          label='Exhibition'
+          ariaLabel='Filter by exhibition'
+          value={exhibitionFilter}
+          options={exhibitionOptions}
+          onChange={setExhibitionFilter}
+        />
+        <CustomDropdown
+          label='Method'
+          ariaLabel='Filter by payment method'
+          value={methodFilter}
+          options={methodOptions}
+          onChange={setMethodFilter}
+        />
+        <CustomDropdown
+          label='Date'
+          ariaLabel='Filter by date'
+          value={dateFilter}
+          options={dateOptions}
+          onChange={setDateFilter}
+        />
+        <button
+          type='button'
+          className='payments-reset-button'
+          onClick={resetFilters}
+        >
+          Reset filters
+        </button>
+      </section>
+
+      {error && (
+        <div className='payments-error' role='alert'>
+          <span>{error}</span>
+          <button type='button' onClick={() => void loadPayments()}>
+            Retry
+          </button>
+        </div>
+      )}
+      <section
+        className='payments-table-card'
+        aria-label='Payment transactions'
+      >
+        <div className='payments-table-scroll'>
+          <table className='payments-table'>
+            <thead>
+              <tr>
+                <th className='payments-checkbox-cell'>
+                  <input
+                    type='checkbox'
+                    aria-label='Select all payments on this page'
+                    checked={allVisibleSelected}
+                    onChange={(event) =>
+                      toggleVisiblePayments(event.target.checked)
+                    }
+                  />
+                </th>
+                <th className='payments-sno-cell'>S.No.</th>
+                <th>Order</th>
+                <th>Payment date</th>
+                <th>Customer</th>
+                <th>Exhibition / source</th>
+                <th>Payment method</th>
+                <th>Notes</th>
+                <th className='payments-number-cell'>Amount received</th>
+              </tr>
+            </thead>
+            <tbody>
+              {!loading &&
+                !error &&
+                visiblePayments.map((payment, index) => (
+                  <tr
+                    key={payment.id}
+                    className={
+                      selectedPaymentIds.includes(payment.id)
+                        ? 'payments-row-selected'
+                        : ''
+                    }
+                  >
+                    <td className='payments-checkbox-cell'>
+                      <input
+                        type='checkbox'
+                        aria-label={`Select payment ${payment.id}`}
+                        checked={selectedPaymentIds.includes(payment.id)}
+                        onChange={(event) =>
+                          togglePaymentSelection(
+                            payment.id,
+                            event.target.checked,
+                          )
+                        }
+                      />
+                    </td>
+                    <td className='payments-sno-cell'>
+                      {pageStart + index + 1}
+                    </td>
+                    <td>
+                      <div className='payments-primary-cell'>
+                        {payment.orderId !== null &&
+                        payment.orderId !== undefined &&
+                        onViewOrder ? (
+                          <button
+                            type='button'
+                            className='payments-order-link'
+                            onClick={() =>
+                              onViewOrder(payment.orderId as number)
+                            }
+                          >
+                            {payment.orderNumber || `Order ${payment.orderId}`}
+                            <span aria-hidden='true'> ↗</span>
+                          </button>
+                        ) : (
+                          payment.orderNumber || 'Legacy payment'
+                        )}
+                      </div>
+                    </td>
+                    <td className='payments-date'>
+                      {formatDate(payment.paymentDate)}
+                    </td>
+                    <td>
+                      <div className='payments-primary-cell'>
+                        {payment.customerName || '—'}
+                      </div>
+                    </td>
+                    <td>
+                      <div className='payments-primary-cell'>
+                        {payment.exhibitionName ||
+                          (payment.orderId
+                            ? 'Direct order'
+                            : 'Unallocated legacy payment')}
+                      </div>
+                    </td>
+                    <td>
+                      <span className='payments-method-badge'>
+                        {payment.paymentMethod || 'Not specified'}
+                      </span>
+                    </td>
+                    <td
+                      className='payments-notes'
+                      title={payment.notes || undefined}
+                    >
+                      {payment.notes || '—'}
+                    </td>
+                    <td className='payments-number-cell payments-amount'>
+                      {formatMoney(payment.amountPaise)}
+                    </td>
+                  </tr>
+                ))}
+              {loading && (
+                <tr>
+                  <td colSpan={9} className='payments-table-message'>
+                    Loading payments…
+                  </td>
+                </tr>
+              )}
+              {!loading && !error && filteredPayments.length === 0 && (
+                <tr>
+                  <td colSpan={9} className='payments-table-message'>
+                    {payments.length
+                      ? 'No payments match these filters.'
+                      : 'No payments recorded yet.'}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        <footer className='payments-table-footer'>
+          <span>
+            Showing {filteredPayments.length ? pageStart + 1 : 0}–{pageEnd} of{' '}
+            {filteredPayments.length} filtered payments ({payments.length}{' '}
+            total).
+          </span>
+          <div className='payments-pagination'>
+            <label className='payments-page-size'>
+              Rows
+              <select
+                value={pageSize}
+                onChange={(event) => setPageSize(Number(event.target.value))}
+                aria-label='Payments per page'
+              >
+                {[10, 25, 50, 100].map((size) => (
+                  <option key={size} value={size}>
+                    {size}
+                  </option>
+                ))}
+              </select>
+              <span>per page</span>
+            </label>
+            <div className='payments-page-buttons'>
+              <button
+                type='button'
+                onClick={() => setCurrentPage(1)}
+                disabled={safeCurrentPage <= 1}
+                aria-label='First page'
+              >
+                «
+              </button>
+              <button
+                type='button'
+                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                disabled={safeCurrentPage <= 1}
+                aria-label='Previous page'
+              >
+                ‹
+              </button>
+              <span>
+                Page {safeCurrentPage} of {totalPages}
+              </span>
+              <button
+                type='button'
+                onClick={() =>
+                  setCurrentPage((page) => Math.min(totalPages, page + 1))
+                }
+                disabled={safeCurrentPage >= totalPages}
+                aria-label='Next page'
+              >
+                ›
+              </button>
+              <button
+                type='button'
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={safeCurrentPage >= totalPages}
+                aria-label='Last page'
+              >
+                »
+              </button>
+            </div>
+          </div>
+        </footer>
+      </section>
+
+      {showExportDialog && (
+        <ExportDialog<PaymentRow>
+          configuration={{
+            title: 'Payments Export',
+            filename: 'payments.xlsx',
+            columns: PAYMENT_EXPORT_COLUMNS,
+            filteredRows: filteredPayments,
+            getAllRows: getPayments,
+          }}
+          selectedRows={
+            selectedPayments.length > 0 ? selectedPayments : undefined
+          }
+          onClose={() => setShowExportDialog(false)}
+        />
+      )}
+    </section>
+  );
 }
 
 export default PaymentsScreen;

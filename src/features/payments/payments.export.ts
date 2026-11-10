@@ -24,9 +24,8 @@ function formatDate(value: string | null | undefined) {
 }
 
 export const PAYMENT_EXPORT_COLUMNS: ExportColumn<PaymentRow>[] = [
-  { key: 'id', label: 'Payment ID', value: (payment) => payment.id },
-  { key: 'paymentDate', label: 'Payment date', value: (payment) => formatDate(payment.paymentDate) },
   { key: 'orderNumber', label: 'Order', value: (payment) => payment.orderNumber ?? (payment.orderId ? `Order ${payment.orderId}` : 'Legacy payment') },
+  { key: 'paymentDate', label: 'Payment date', value: (payment) => formatDate(payment.paymentDate) },
   { key: 'customerName', label: 'Customer', value: (payment) => payment.customerName || '' },
   { key: 'exhibitionName', label: 'Exhibition / source', value: (payment) => payment.exhibitionName ?? (payment.orderId ? 'Direct order' : 'Unallocated legacy payment') },
   { key: 'paymentMethod', label: 'Payment method', value: (payment) => payment.paymentMethod ?? 'Not specified' },

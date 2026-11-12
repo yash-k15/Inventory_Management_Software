@@ -45,7 +45,8 @@ function App() {
   const [selectedExhibitionOrderId, setSelectedExhibitionOrderId] = useState<
     number | null
   >(null);
-  const [returnToExhibitionCustomers] = useState(false);
+  const [returnToExhibitionCustomers, setReturnToExhibitionCustomers] =
+    useState(false);
 
   function canLeaveSettings() {
     if (view !== 'settings' || !settingsDirty) return true;
@@ -70,6 +71,7 @@ function App() {
 
   function openExhibitionWorkspace(exhibitionId: number) {
     setNotice(null);
+    setReturnToExhibitionCustomers(false);
     setSelectedExhibitionId(exhibitionId);
     setView('exhibition-workspace');
   }
@@ -107,6 +109,8 @@ function App() {
           setSelectedCustomerId(null);
           setSelectedPaymentOrderId(null);
           setSelectedCustomerOrderId(null);
+          setSelectedExhibitionOrderId(null);
+          setReturnToExhibitionCustomers(false);
           setView(nextView);
         }}
         onAddItem={openAddItem}
@@ -201,6 +205,7 @@ function App() {
                     returnToExhibitionCustomers ? 'customers' : 'overview'
                   }
                   onOpenOrder={(orderId) => {
+                    setReturnToExhibitionCustomers(true);
                     setSelectedExhibitionOrderId(orderId);
                     setView('orders');
                   }}

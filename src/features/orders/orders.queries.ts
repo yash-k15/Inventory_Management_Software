@@ -323,7 +323,16 @@ export async function getOrderDetails(
       COALESCE(vob.paid_paise, 0) AS paymentReceivedPaise,
       COALESCE(vob.outstanding_paise, 0) AS paymentPendingPaise,
       (SELECT osh.changed_at FROM order_status_history osh WHERE osh.order_id = co.id AND osh.status = 'Confirmed' ORDER BY osh.changed_at LIMIT 1) AS confirmedAt,
-      (SELECT osh.notes FROM order_status_history osh WHERE osh.order_id = co.id AND osh.notes IS NOT NULL AND trim(osh.notes) <> '' ORDER BY osh.changed_at DESC, osh.id DESC LIMIT 1) AS notes
+      COALESCE(
+        NULLIF(trim(co.notes), ''),
+        (SELECT osh.notes
+         FROM order_status_history osh
+         WHERE osh.order_id = co.id
+           AND osh.notes IS NOT NULL
+           AND trim(osh.notes) <> ''
+         ORDER BY osh.changed_at DESC, osh.id DESC
+         LIMIT 1)
+      ) AS notes
     FROM customer_order co
     LEFT JOIN customer c ON c.id = co.customer_id
     LEFT JOIN exhibition e ON e.id = co.exhibition_id

@@ -165,6 +165,10 @@ export default function ExhibitionInventory({
           ...item,
           diamondDetails: item.diamondDetails,
           stoneDetails: item.stoneDetails,
+          stoneBreakdown: item.stoneBreakdown?.map((detail) => ({
+            ...detail,
+            weightUnit: 'ct' as const,
+          })),
           purityName: null,
           purityPercentBp: null,
           notes: null,

@@ -39,6 +39,7 @@ export interface SelectionRow {
     tagLabel: string;
     label: string;
     sortOrder?: number;
+    weightUnit: 'ct';
     weightMilli: number;
     pieces: number;
   }>;
@@ -318,6 +319,7 @@ export async function getSelectionItems(selectionId: number) {
         tagLabel: entry.label,
         label: entry.label,
         sortOrder: (entry as SelectionDetail & { sortOrder?: number }).sortOrder,
+        weightUnit: 'ct' as const,
         weightMilli: entry.weight_milli ?? 0,
         pieces: entry.pieces ?? 0,
       })),

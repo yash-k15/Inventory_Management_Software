@@ -42,34 +42,6 @@ fn write_export_file(path: String, bytes: Vec<u8>) -> Result<(), String> {
 }
 
 
-#[tauri::command]
-fn open_print_preview(bytes: Vec<u8>) -> Result<(), String> {
-    use std::process::Command;
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    #[cfg(target_os = "macos")]
-    {
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_err(|error| format!("Could not create print preview filename: {error}"))?
-            .as_millis();
-        let path = std::env::temp_dir().join(format!("inventory-print-{timestamp}.pdf"));
-        std::fs::write(&path, bytes)
-            .map_err(|error| format!("Could not prepare print preview PDF: {error}"))?;
-        Command::new("open")
-            .arg(&path)
-            .spawn()
-            .map_err(|error| format!("Could not open the print preview PDF: {error}"))?;
-        Ok(())
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        let _ = (bytes, Command::new("open"));
-        Err("Opening a print preview is currently configured for macOS.".to_string())
-    }
-}
-
 fn build_tag_print_job(bitmap: &[u8]) -> Vec<u8> {
     let mut job = Vec::with_capacity(256 + bitmap.len());
     job.extend_from_slice(
@@ -336,7 +308,6 @@ pub fn run() {
         allow_image_preview,
         print_tag_bitmap,
         write_export_file,
-        open_print_preview,
         item_number::preview_item_number,
         item_number::create_item,
         item_number::update_item,
@@ -364,7 +335,6 @@ pub fn run() {
         allow_image_preview,
         print_tag_bitmap,
         write_export_file,
-        open_print_preview,
         item_number::update_item,
         item_number::preview_item_number,
         item_number::create_item,

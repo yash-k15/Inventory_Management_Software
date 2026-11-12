@@ -3,7 +3,7 @@ use std::{fs, io::{Read, Seek, Write}, path::{Path, PathBuf}, time::{SystemTime,
 use zip::{write::SimpleFileOptions, CompressionMethod, ZipArchive, ZipWriter};
 use tauri::{AppHandle, Manager};
 
-const SCHEMA_VERSION: u32 = 16;
+const SCHEMA_VERSION: u32 = 17;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]

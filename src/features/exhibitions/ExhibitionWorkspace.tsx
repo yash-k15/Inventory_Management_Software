@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
-import { convertFileSrc } from '@tauri-apps/api/core';
+import { useEffect, useRef, useState, type MouseEvent } from 'react';
+import { convertFileSrc, invoke } from '@tauri-apps/api/core';
+import { appDataDir, join } from '@tauri-apps/api/path';
 import { getExhibitions, getSharedInterestItems } from './exhibition.queries';
 import {
   getRecentSelectionActivity,
@@ -474,9 +475,25 @@ type SharedInterestSortKey =
   | 'customerNames';
 type SortDirection = 'asc' | 'desc';
 
-function SharedInterest({ exhibitionId }: { exhibitionId: number }) {
+function SharedInterest({
+  exhibitionId,
+  onCountChange,
+}: {
+  exhibitionId: number;
+  onCountChange: (count: number) => void;
+}) {
   const [items, setItems] = useState<SharedInterestItem[]>([]);
+  const [imageUrls, setImageUrls] = useState<Record<number, string>>({});
   const [imageErrors, setImageErrors] = useState<Set<number>>(() => new Set());
+  const [previewImage, setPreviewImage] = useState<{
+    itemId: number;
+    url: string;
+    left: number;
+    top: number;
+  } | null>(null);
+  const imagePreviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [search, setSearch] = useState('');
@@ -486,6 +503,46 @@ function SharedInterest({ exhibitionId }: { exhibitionId: number }) {
   const [sortKey, setSortKey] =
     useState<SharedInterestSortKey>('customerCount');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+
+  const clearImagePreviewTimer = () => {
+    if (imagePreviewTimerRef.current !== null) {
+      clearTimeout(imagePreviewTimerRef.current);
+      imagePreviewTimerRef.current = null;
+    }
+  };
+
+  const handleImageMouseEnter = (
+    itemId: number,
+    url: string,
+    event: MouseEvent<HTMLImageElement>,
+  ) => {
+    clearImagePreviewTimer();
+    const rect = event.currentTarget.getBoundingClientRect();
+    const previewWidth = Math.min(420, window.innerWidth - 32);
+    const previewHeight = Math.min(560, window.innerHeight - 32);
+    const left =
+      rect.right + previewWidth + 16 <= window.innerWidth
+        ? rect.right + 16
+        : Math.max(16, rect.left - previewWidth - 16);
+    const top = Math.min(
+      Math.max(16, rect.top),
+      Math.max(16, window.innerHeight - previewHeight - 16),
+    );
+
+    imagePreviewTimerRef.current = setTimeout(() => {
+      setPreviewImage({ itemId, url, left, top });
+      imagePreviewTimerRef.current = null;
+    }, 1500);
+  };
+
+  const handleImageMouseLeave = () => {
+    clearImagePreviewTimer();
+    setPreviewImage(null);
+  };
+
+  useEffect(() => () => clearImagePreviewTimer(), []);
 
   useEffect(() => {
     if (!categoryMenuOpen) return;
@@ -511,10 +568,17 @@ function SharedInterest({ exhibitionId }: { exhibitionId: number }) {
       setError(false);
       try {
         const result = await getSharedInterestItems(exhibitionId);
-        if (!cancelled) setItems(result);
+        if (!cancelled) {
+          setItems(result);
+          onCountChange(result.length);
+          setImageErrors(new Set());
+        }
       } catch (err) {
         console.error('Unable to load shared interest:', err);
-        if (!cancelled) setError(true);
+        if (!cancelled) {
+          setError(true);
+          onCountChange(0);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -523,7 +587,40 @@ function SharedInterest({ exhibitionId }: { exhibitionId: number }) {
     return () => {
       cancelled = true;
     };
-  }, [exhibitionId]);
+  }, [exhibitionId, onCountChange]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadItemImages() {
+      const itemsWithImages = items.filter((item) => item.imagePath);
+
+      if (itemsWithImages.length === 0) {
+        setImageUrls({});
+        return;
+      }
+
+      try {
+        const dataDirectory = await appDataDir();
+        const entries = await Promise.all(
+          itemsWithImages.map(async (item) => {
+            const imagePath = await join(dataDirectory, item.imagePath!);
+            await invoke('allow_image_preview', { path: imagePath });
+            return [item.itemId, convertFileSrc(imagePath)] as const;
+          }),
+        );
+
+        if (!cancelled) setImageUrls(Object.fromEntries(entries));
+      } catch (err) {
+        console.error('Failed to load shared-interest images:', err);
+      }
+    }
+
+    void loadItemImages();
+    return () => {
+      cancelled = true;
+    };
+  }, [items]);
 
   const categories = [...new Set(items.map((item) => item.categoryName))].sort(
     (a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }),
@@ -558,6 +655,18 @@ function SharedInterest({ exhibitionId }: { exhibitionId: number }) {
       });
     return sortDirection === 'asc' ? comparison : -comparison;
   });
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, categoryFilter, sortKey, sortDirection]);
+
+  const totalPages = Math.max(1, Math.ceil(sortedItems.length / pageSize));
+  const pageStartIndex = (currentPage - 1) * pageSize;
+  const visibleItems = sortedItems.slice(pageStartIndex, pageStartIndex + pageSize);
+
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [currentPage, totalPages]);
 
   function changeSort(key: SharedInterestSortKey) {
     if (sortKey === key)
@@ -683,13 +792,15 @@ function SharedInterest({ exhibitionId }: { exhibitionId: number }) {
           <table className='exhibition-shared-interest-table'>
             <thead>
               <tr>
-                <th></th>
-                <th>
+                <th className='exhibition-shared-interest-serial-heading'>
+                  Sr. No.
+                </th>
+                <th className='exhibition-shared-interest-item-heading'>
                   <button
                     type='button'
                     onClick={() => changeSort('itemNumber')}
                   >
-                    Item No.{sortLabel('itemNumber')}
+                    Item{sortLabel('itemNumber')}
                   </button>
                 </th>
                 <th>
@@ -719,32 +830,46 @@ function SharedInterest({ exhibitionId }: { exhibitionId: number }) {
               </tr>
             </thead>
             <tbody>
-              {sortedItems.map((item) => (
+              {visibleItems.map((item, index) => (
                 <tr key={item.itemId}>
-                  <td className='exhibition-shared-interest-image-cell'>
-                    {item.imagePath && !imageErrors.has(item.itemId) ? (
-                      <img
-                        className='exhibition-shared-interest-image'
-                        src={convertFileSrc(item.imagePath)}
-                        alt={`${item.itemNumber}`}
-                        onError={() =>
-                          setImageErrors((current) =>
-                            new Set(current).add(item.itemId),
-                          )
-                        }
-                      />
-                    ) : (
-                      <span
-                        className='exhibition-shared-interest-image-fallback'
-                        aria-label='No image available'
-                        title='No image available'
-                      >
-                        ◇
-                      </span>
-                    )}
+                  <td className='exhibition-shared-interest-serial'>
+                    {pageStartIndex + index + 1}
                   </td>
-                  <td className='exhibition-shared-interest-item-number'>
-                    {item.itemNumber}
+                  <td className='exhibition-shared-interest-item-heading'>
+                    <div className='exhibition-shared-interest-item-cell'>
+                      {imageUrls[item.itemId] && !imageErrors.has(item.itemId) ? (
+                        <img
+                          className='exhibition-shared-interest-image'
+                          src={imageUrls[item.itemId]}
+                          alt={`${item.itemNumber} jewelry design`}
+                          onMouseEnter={(event) =>
+                            handleImageMouseEnter(
+                              item.itemId,
+                              imageUrls[item.itemId],
+                              event,
+                            )
+                          }
+                          onMouseLeave={handleImageMouseLeave}
+                          onError={() => {
+                            setImageErrors((current) =>
+                              new Set(current).add(item.itemId),
+                            );
+                            handleImageMouseLeave();
+                          }}
+                        />
+                      ) : (
+                        <span
+                          className='exhibition-shared-interest-image-fallback'
+                          aria-label='No image available'
+                          title='No image available'
+                        >
+                          ◇
+                        </span>
+                      )}
+                      <strong className='exhibition-shared-interest-item-number'>
+                        {item.itemNumber}
+                      </strong>
+                    </div>
                   </td>
                   <td>{item.categoryName}</td>
                   <td className='is-numeric'>
@@ -768,6 +893,74 @@ function SharedInterest({ exhibitionId }: { exhibitionId: number }) {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+      {!loading && !error && sortedItems.length > 0 && (
+        <div className='exhibition-shared-interest-pagination'>
+          <span>
+            Showing {pageStartIndex + 1}–
+            {Math.min(pageStartIndex + pageSize, sortedItems.length)} of{' '}
+            {sortedItems.length} matching pieces
+          </span>
+          <div className='exhibition-shared-interest-pagination-controls'>
+            <label>
+              Rows per page
+              <select
+                value={pageSize}
+                onChange={(event) => {
+                  setPageSize(Number(event.target.value));
+                  setCurrentPage(1);
+                }}
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </label>
+            <span className='exhibition-shared-interest-page-count'>
+              Page {currentPage} of {totalPages}
+            </span>
+            <button
+              type='button'
+              onClick={() => setCurrentPage(1)}
+              disabled={currentPage === 1}
+              aria-label='First page'
+            >
+              «
+            </button>
+            <button
+              type='button'
+              onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+              disabled={currentPage === 1}
+            >
+              Previous
+            </button>
+            <button
+              type='button'
+              onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+              disabled={currentPage >= totalPages}
+            >
+              Next
+            </button>
+            <button
+              type='button'
+              onClick={() => setCurrentPage(totalPages)}
+              disabled={currentPage >= totalPages}
+              aria-label='Last page'
+            >
+              »
+            </button>
+          </div>
+        </div>
+      )}
+      {previewImage && (
+        <div
+          className='inventory-image-preview'
+          aria-hidden='true'
+          style={{ left: previewImage.left, top: previewImage.top }}
+        >
+          <img src={previewImage.url} alt='' />
         </div>
       )}
     </section>
@@ -980,7 +1173,10 @@ export default function ExhibitionWorkspace({
             onRefreshExhibition={refreshExhibition}
           />
         ) : activeTab === 'shared-interest' ? (
-          <SharedInterest exhibitionId={exhibitionId} />
+          <SharedInterest
+            exhibitionId={exhibitionId}
+            onCountChange={setSharedInterestCount}
+          />
         ) : (
           <ExhibitionCustomers
             exhibitionId={exhibitionId}

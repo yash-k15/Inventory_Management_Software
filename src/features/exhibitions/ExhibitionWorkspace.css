@@ -2127,3 +2127,252 @@
 .exhibition-shared-interest-table td:nth-child(2) {
   width: 58px;
 }
+
+
+/* Shared Interest table: align structure and behaviour with Inventory. */
+.exhibition-shared-interest-table-wrap {
+  overflow-x: auto;
+  border: 1px solid #e6ddd3;
+  border-radius: 15px;
+  background: #fff;
+}
+
+.exhibition-shared-interest-table {
+  width: 100%;
+  min-width: 880px;
+  border-collapse: separate;
+  border-spacing: 0;
+  color: #302823;
+  text-align: left;
+  font-size: 12px;
+}
+
+.exhibition-shared-interest-table th {
+  height: 39px;
+  padding: 0 11px;
+  border-bottom: 1px solid #e6ddd3;
+  background: #faf8f5;
+  color: #786f66;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.exhibition-shared-interest-table th button {
+  display: inline-block;
+  width: auto;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  text-align: inherit;
+  text-transform: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.exhibition-shared-interest-table th button:hover {
+  color: #95672e;
+}
+
+.exhibition-shared-interest-table td {
+  padding: 13px 11px;
+  border-bottom: 1px solid #eee6dd;
+  color: #302823;
+  font-size: 13px;
+  vertical-align: middle;
+  text-align: center;
+}
+
+.exhibition-shared-interest-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.exhibition-shared-interest-table tbody tr:hover td {
+  background: #fdfbf8;
+}
+
+.exhibition-shared-interest-table th:first-child,
+.exhibition-shared-interest-table td:first-child {
+  padding-left: 20px;
+}
+
+.exhibition-shared-interest-table th:last-child,
+.exhibition-shared-interest-table td:last-child {
+  padding-right: 20px;
+}
+
+.exhibition-shared-interest-table .exhibition-shared-interest-serial-heading,
+.exhibition-shared-interest-table .exhibition-shared-interest-serial {
+  width: 64px;
+  min-width: 64px;
+  color: #786f66;
+  font-size: 12px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.exhibition-shared-interest-table .exhibition-shared-interest-item-heading {
+  min-width: 190px;
+  text-align: left;
+}
+
+.exhibition-shared-interest-table th.exhibition-shared-interest-item-heading button {
+  text-align: left;
+}
+
+.exhibition-shared-interest-item-cell {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  min-width: 155px;
+}
+
+.exhibition-shared-interest-image,
+.exhibition-shared-interest-image-fallback {
+  display: grid;
+  flex: 0 0 48px;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid #eee5da;
+  border-radius: 10px;
+  background: #f2ece3;
+  object-fit: cover;
+  color: #a27b45;
+  font-size: 23px;
+}
+
+.exhibition-shared-interest-image-fallback {
+  border-color: transparent;
+}
+
+.exhibition-shared-interest-item-number {
+  color: #342b25;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.exhibition-shared-interest-table .is-numeric {
+  text-align: center;
+}
+
+.exhibition-shared-interest-count {
+  display: inline-flex;
+  min-width: 28px;
+  min-height: 25px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  border-radius: 20px;
+  background: #eee4d4;
+  color: #75552e;
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.exhibition-shared-interest-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 18px;
+  padding: 13px 16px;
+  border: 1px solid #e6ddd3;
+  border-radius: 12px;
+  background: #fff;
+  color: #766d65;
+  font-size: 12px;
+}
+
+.exhibition-shared-interest-pagination-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.exhibition-shared-interest-pagination-controls label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #766d65;
+  font-size: 12px;
+}
+
+.exhibition-shared-interest-pagination-controls select,
+.exhibition-shared-interest-pagination-controls button {
+  min-height: 31px;
+  padding: 0 9px;
+  border: 1px solid #ded2c4;
+  border-radius: 7px;
+  background: #fff;
+  color: #302823;
+  font: inherit;
+}
+
+.exhibition-shared-interest-pagination-controls button {
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.exhibition-shared-interest-pagination-controls button:hover:not(:disabled) {
+  border-color: #b9a58e;
+  background: #faf7f2;
+}
+
+.exhibition-shared-interest-pagination-controls button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.exhibition-shared-interest-page-count {
+  padding: 0 5px;
+  color: #51463c;
+  white-space: nowrap;
+}
+
+@media (max-width: 700px) {
+  .exhibition-shared-interest-pagination {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .exhibition-shared-interest-pagination-controls {
+    width: 100%;
+  }
+}
+
+
+/* Inventory-style hover preview for Shared Interest thumbnails. */
+.inventory-image-preview {
+  position: fixed;
+  z-index: 1100;
+  display: block;
+  max-width: min(420px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  pointer-events: none;
+}
+
+.inventory-image-preview img {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: min(420px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  border: 1px solid #e6ddd3;
+  border-radius: 9px;
+  background: transparent;
+  box-shadow: 0 12px 32px rgb(48 40 35 / 24%);
+  object-fit: contain;
+}

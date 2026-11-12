@@ -31,8 +31,11 @@ type LoadedItem = {
 function formatWeight(
   milli: number | null | undefined,
   unit: 'g' | 'ct',
+  decimalPlaces = 3,
 ): string {
-  return milli == null ? '—' : `${(milli / 1000).toFixed(3)} ${unit}`;
+  return milli == null
+    ? '—'
+    : `${(milli / 1000).toFixed(decimalPlaces)} ${unit}`;
 }
 
 function formatDate(value: string | null | undefined): string {
@@ -453,7 +456,7 @@ function ItemDetailsScreen({ itemId, onBack, onEdit }: Props) {
             <StatCard
               label='Diamonds'
               value={`${totalDiamondPieces} pcs`}
-              helper={`${(totalDiamondWeight / 1000).toFixed(3)} ct total weight`}
+              helper={`${(totalDiamondWeight / 1000).toFixed(2)} ct total weight`}
             />
 
             <StatCard
@@ -485,7 +488,7 @@ function ItemDetailsScreen({ itemId, onBack, onEdit }: Props) {
               {' · '}
               {totalDiamondPieces} pcs
               {' · '}
-              {(totalDiamondWeight / 1000).toFixed(3)} ct
+              {(totalDiamondWeight / 1000).toFixed(2)} ct
             </p>
 
             {diamonds.length === 0 ? (
@@ -506,14 +509,14 @@ function ItemDetailsScreen({ itemId, onBack, onEdit }: Props) {
                       <tr key={diamond.id}>
                         <td>{diamond.shapeName}</td>
                         <td>{diamond.pieces ?? '—'}</td>
-                        <td>{formatWeight(diamond.weightMilli, 'ct')}</td>
+                        <td>{formatWeight(diamond.weightMilli, 'ct', 2)}</td>
                         <td>{diamond.combinationQuality ?? '—'}</td>
                       </tr>
                     ))}
                     <tr className='item-details-total-row'>
                       <td>Total</td>
                       <td>{totalDiamondPieces}</td>
-                      <td>{(totalDiamondWeight / 1000).toFixed(3)} ct</td>
+                      <td>{(totalDiamondWeight / 1000).toFixed(2)} ct</td>
                       <td />
                     </tr>
                   </tbody>
@@ -529,7 +532,7 @@ function ItemDetailsScreen({ itemId, onBack, onEdit }: Props) {
               {' · '}
               {totalStonePieces} pcs
               {' · '}
-              {(totalStoneWeight / 1000).toFixed(3)} ct
+              {(totalStoneWeight / 1000).toFixed(2)} ct
             </p>
 
             {stones.length === 0 ? (
@@ -553,6 +556,7 @@ function ItemDetailsScreen({ itemId, onBack, onEdit }: Props) {
                           {formatWeight(
                             stone.weightMilli,
                             stone.weightUnit === 'g' ? 'g' : 'ct',
+                            2,
                           )}
                         </td>
                       </tr>
@@ -560,7 +564,7 @@ function ItemDetailsScreen({ itemId, onBack, onEdit }: Props) {
                     <tr className='item-details-total-row'>
                       <td>Total</td>
                       <td>{totalStonePieces}</td>
-                      <td>{(totalStoneWeight / 1000).toFixed(3)} ct</td>
+                      <td>{(totalStoneWeight / 1000).toFixed(2)} ct</td>
                     </tr>
                   </tbody>
                 </table>

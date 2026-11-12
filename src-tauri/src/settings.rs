@@ -73,6 +73,23 @@ pub fn save_category_settings(
     let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(|error| format!("Could not start category transaction: {error}"))?;
 
+    let duplicate_prefix: bool = transaction.query_row(
+        "SELECT EXISTS(
+            SELECT 1
+            FROM item_series
+            WHERE lower(trim(prefix)) = lower(trim(?))
+              AND (? IS NULL OR id != (
+                  SELECT series_id FROM category WHERE id = ?
+              ))
+        )",
+        params![prefix, category_id, category_id],
+        |row| row.get(0),
+    ).map_err(|error| format!("Could not validate category prefix: {error}"))?;
+
+    if duplicate_prefix {
+        return Err("Category prefix is already in use. Each category must have a unique prefix.".to_string());
+    }
+
     if let Some(category_id) = category_id {
         let (series_id, current_next): (i64, i64) = transaction.query_row(
             "SELECT series_id, next_number FROM category JOIN item_series ON item_series.id = category.series_id WHERE category.id = ?",

@@ -116,6 +116,7 @@ export interface InventoryDiamondBreakdown {
 
 export interface InventoryStoneBreakdown {
   tagLabel: string;
+  weightUnit: 'ct';
   weightMilli: number;
   pieces: number;
 }

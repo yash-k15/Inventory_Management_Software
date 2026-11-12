@@ -60,6 +60,7 @@ export interface SelectionOrderItemExportRow {
   }>;
   stoneBreakdown: Array<{
     tagLabel: string;
+    weightUnit: 'ct';
     weightMilli: number;
     pieces: number;
   }>;
@@ -128,6 +129,7 @@ export function toSelectionOrderItemExportRow(
     })),
     stoneBreakdown: item.stones.map((entry) => ({
       tagLabel: entry.label,
+      weightUnit: 'ct',
       weightMilli: entry.weight_milli ?? 0,
       pieces: entry.pieces ?? 0,
     })),

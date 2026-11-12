@@ -411,6 +411,7 @@ export async function getInventoryItems(
     const list = stonesByItem.get(stone.itemId) ?? [];
     list.push({
       tagLabel: stone.tagLabel,
+      weightUnit: 'ct',
       weightMilli: stone.weightMilli,
       pieces: stone.pieces,
     });

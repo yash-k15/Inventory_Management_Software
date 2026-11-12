@@ -170,6 +170,7 @@ export default function ExhibitionSelections({
   }>({ key: 'added', direction: 'desc' });
   const scanRef = useRef<HTMLInputElement>(null),
     scanInProgressRef = useRef(false),
+    appliedInitialCustomerIdRef = useRef<number | null | undefined>(undefined),
     customer = customers.find((c) => c.id === selectedId) ?? null,
     active = useMemo(() => items.filter((i) => i.status === 'active'), [items]),
     removed = useMemo(
@@ -325,12 +326,6 @@ export default function ExhibitionSelections({
         if (!dead) {
           setCustomers(rows);
           if (
-            initialCustomerId !== null &&
-            initialCustomerId !== undefined &&
-            rows.some((c) => c.id === initialCustomerId)
-          )
-            setSelectedId(initialCustomerId);
-          else if (
             selectedId !== null &&
             !rows.some((c) => c.id === selectedId)
           )
@@ -350,7 +345,23 @@ export default function ExhibitionSelections({
     return () => {
       dead = true;
     };
-  }, [exhibitionId, customerSearch, initialCustomerId]);
+  }, [exhibitionId, customerSearch]);
+
+  useEffect(() => {
+    if (initialCustomerId == null) {
+      appliedInitialCustomerIdRef.current = null;
+      return;
+    }
+
+    if (
+      appliedInitialCustomerIdRef.current === initialCustomerId ||
+      !customers.some((customer) => customer.id === initialCustomerId)
+    )
+      return;
+
+    setSelectedId(initialCustomerId);
+    appliedInitialCustomerIdRef.current = initialCustomerId;
+  }, [initialCustomerId, customers]);
   useEffect(() => {
     setStaged([]);
     setFeedback(null);

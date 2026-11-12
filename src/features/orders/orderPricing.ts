@@ -9,7 +9,7 @@ export interface PricingRates {
   certificationPaisePerCarat: number;
   gstRateBp: number;
   diamondRatesPaisePerCarat: Record<string, number>;
-  stoneRatesPaisePerUnit: Record<string, number>;
+  stoneRatesPaisePerCarat: Record<string, number>;
 }
 
 export interface PricingDiamond {
@@ -24,7 +24,6 @@ export interface PricingDiamond {
 export interface PricingStone {
   stoneTypeId: number;
   stone: string;
-  weightUnit: 'ct' | 'g';
   weightMilli: number;
   pieces: number | null;
 }
@@ -59,7 +58,7 @@ export interface PricingBreakdown {
   agreed_price_paise: number;
   rates_snapshot: PricingRates;
   diamond_lines: Array<{ shape: string; quality: string | null; pieces: number | null; weight_ct: number; rate_paise_per_ct: number; value_paise: number }>;
-  stone_lines: Array<{ stone: string; pieces: number | null; weight: number; unit: 'ct' | 'g'; rate_paise_per_unit: number; value_paise: number }>;
+  stone_lines: Array<{ stone: string; pieces: number | null; weight_ct: number; rate_paise_per_ct: number; value_paise: number }>;
 }
 
 const roundMoney = (value: number) => Math.max(0, Math.round(value));
@@ -85,9 +84,9 @@ export function calculateItemPrice(
     return { shape: diamond.shape, quality: diamond.quality, pieces: diamond.pieces, weight_ct: weight, rate_paise_per_ct: rate, value_paise: roundMoney(weight * rate) };
   });
   const stoneLines = item.stones.map((stone) => {
-    const rate = rates.stoneRatesPaisePerUnit[String(stone.stoneTypeId)] ?? 0;
+    const rate = rates.stoneRatesPaisePerCarat[String(stone.stoneTypeId)] ?? 0;
     const weight = stone.weightMilli / 1000;
-    return { stone: stone.stone, pieces: stone.pieces, weight, unit: stone.weightUnit, rate_paise_per_unit: rate, value_paise: roundMoney(weight * rate) };
+    return { stone: stone.stone, pieces: stone.pieces, weight_ct: weight, rate_paise_per_ct: rate, value_paise: roundMoney(weight * rate) };
   });
   const diamondValue = diamondLines.reduce((sum, line) => sum + line.value_paise, 0);
   const stoneValue = stoneLines.reduce((sum, line) => sum + line.value_paise, 0);

@@ -14,7 +14,6 @@ export interface SelectionDetail {
   label: string;
   pieces: number | null;
   weight_milli: number | null;
-  weight_unit?: 'ct' | 'g' | null;
 }
 
 export interface SelectionRow {
@@ -40,7 +39,6 @@ export interface SelectionRow {
     tagLabel: string;
     label: string;
     sortOrder?: number;
-    weightUnit: 'ct' | 'g';
     weightMilli: number;
     pieces: number;
   }>;
@@ -239,8 +237,7 @@ export async function getSelectionItems(selectionId: number) {
          (SELECT json_group_array(json_object(
            'label', st.tag_label,
            'pieces', s.pieces,
-           'weight_milli', s.weight_milli,
-           'weight_unit', st.weight_unit
+           'weight_milli', s.weight_milli
          ))
          FROM item_stone s
          JOIN stone_type st ON st.id = s.stone_type_id
@@ -282,9 +279,6 @@ export async function getSelectionItems(selectionId: number) {
           pieces: detail.pieces == null ? null : Number(detail.pieces),
           weight_milli:
             detail.weight_milli == null ? null : Number(detail.weight_milli),
-          weight_unit:
-            detail.weight_unit === 'g' ? 'g' :
-            detail.weight_unit === 'ct' ? 'ct' : null,
         }));
       } catch {
         return [];
@@ -324,7 +318,6 @@ export async function getSelectionItems(selectionId: number) {
         tagLabel: entry.label,
         label: entry.label,
         sortOrder: (entry as SelectionDetail & { sortOrder?: number }).sortOrder,
-        weightUnit: entry.weight_unit ?? 'ct',
         weightMilli: entry.weight_milli ?? 0,
         pieces: entry.pieces ?? 0,
       })),
@@ -452,8 +445,7 @@ export async function addSelectionItem(
     `SELECT
        st.tag_label AS label,
        s.pieces,
-       s.weight_milli AS weight_milli,
-       st.weight_unit AS weight_unit
+       s.weight_milli AS weight_milli
      FROM item_stone s
      JOIN stone_type st ON st.id = s.stone_type_id
      WHERE s.item_id = ?
@@ -760,9 +752,6 @@ export async function getSelectionOrderDetail(
               ? null
               : Number(detail.weightMilli)
             : Number(detail.weight_milli),
-        weight_unit:
-          detail.weight_unit === 'g' || detail.weightUnit === 'g' ? 'g' :
-          detail.weight_unit === 'ct' || detail.weightUnit === 'ct' ? 'ct' : null,
       }));
     } catch {
       return [];
@@ -775,8 +764,8 @@ export async function getSelectionOrderDetail(
     db.select<Array<{ code: string; name: string }>>(
       `SELECT code, name FROM diamond_shape`,
     ),
-    db.select<Array<{ name: string; tagLabel: string; weightUnit: 'ct' | 'g' }>>(
-      `SELECT name, tag_label AS tagLabel, weight_unit AS weightUnit FROM stone_type`,
+    db.select<Array<{ name: string; tagLabel: string }>>(
+      `SELECT name, tag_label AS tagLabel FROM stone_type`,
     ),
   ]);
 
@@ -787,9 +776,9 @@ export async function getSelectionOrderDetail(
     diamondCodeByLabel.set(normalize(name), code);
   });
 
-  const stoneByLabel = new Map<string, { tagLabel: string; weightUnit: 'ct' | 'g' }>();
-  stoneTypes.forEach(({ name, tagLabel, weightUnit }) => {
-    const entry = { tagLabel, weightUnit };
+  const stoneByLabel = new Map<string, { tagLabel: string }>();
+  stoneTypes.forEach(({ name, tagLabel }) => {
+    const entry = { tagLabel };
     stoneByLabel.set(normalize(name), entry);
     stoneByLabel.set(normalize(tagLabel), entry);
   });
@@ -805,16 +794,12 @@ export async function getSelectionOrderDetail(
       diamonds: parse(row.diamondsJson).map((detail) => ({
         ...detail,
         label: diamondCodeByLabel.get(normalize(detail.label)) ?? detail.label,
-        weight_unit: 'ct',
       })),
       stones: parse(row.stonesJson).map((detail) => {
         const reference = stoneByLabel.get(normalize(detail.label));
         return {
           ...detail,
           label: reference?.tagLabel ?? detail.label,
-          // Older order snapshots omit stone units, so use the configured
-          // stone type unit only when the snapshot has no explicit unit.
-          weight_unit: detail.weight_unit ?? reference?.weightUnit ?? 'ct',
         };
       }),
       pricePaise: row.pricePaise,

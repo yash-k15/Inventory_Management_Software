@@ -23,7 +23,7 @@ function parseDetails(value: string | null, kind: Detail['kind']): Detail[] {
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line) => {
-      // Inventory query format: LABEL: 1.200 ct (120 pcs), or LABEL: 1.200 g (120 pcs).
+      // Inventory query format: LABEL: 1.200 ct (120 pcs).
       const match = line.match(/^(.+?):\s*(.*?)\s*\((\d+)\s+pcs?\)$/i);
       if (match)
         return {
@@ -36,10 +36,20 @@ function parseDetails(value: string | null, kind: Detail['kind']): Detail[] {
     });
 }
 
+function formatCaratWeight(weight: string): string {
+  // The stored weight is already in carats. Normalize only the displayed
+  // suffix so both diamond and other-stone details consistently show ct.
+  const value = weight
+    .trim()
+    .replace(/\s*(?:cts?|g|gms?|grams?|carats?)$/i, '')
+    .trim();
+  return `${value} ct`;
+}
+
 function formatDetail(detail: Detail) {
   const label = detail.kind === 'diamond' ? `D ${detail.label}` : detail.label;
   return detail.weight
-    ? `${label}: ${detail.pieces} pcs / ${detail.weight}`
+    ? `${label}: ${detail.pieces} pcs / ${formatCaratWeight(detail.weight)}`
     : label;
 }
 

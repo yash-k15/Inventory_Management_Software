@@ -5,7 +5,6 @@ export type InventoryCertificationFilter = 'all' | 'certified' | 'uncertified';
 export type InventoryItemStatus = 'active' | 'archived';
 export type InventoryHuidStatus = 'present' | 'missing';
 export type InventoryStonePresence = 'any' | 'has-stones' | 'no-stones';
-export type InventoryStoneWeightUnit = 'ct' | 'g';
 export type InventorySortDirection = 'asc' | 'desc';
 
 export type InventorySortField =
@@ -54,7 +53,6 @@ export interface InventoryFilters {
   stonePresence?: InventoryStonePresence;
   stonePiecesMin?: number | null;
   stonePiecesMax?: number | null;
-  stoneWeightUnit?: InventoryStoneWeightUnit | null;
   stoneWeightMin?: number | null;
   stoneWeightMax?: number | null;
 
@@ -99,7 +97,6 @@ export interface InventoryStoneTypeOption {
   id: number;
   name: string;
   tagLabel: string;
-  weightUnit: InventoryStoneWeightUnit;
 }
 
 export interface InventoryFilterOptions {
@@ -119,7 +116,6 @@ export interface InventoryDiamondBreakdown {
 
 export interface InventoryStoneBreakdown {
   tagLabel: string;
-  weightUnit: InventoryStoneWeightUnit;
   weightMilli: number;
   pieces: number;
 }

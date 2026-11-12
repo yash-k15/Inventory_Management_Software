@@ -254,6 +254,7 @@ pub fn run() {
     let order_final_total = include_str!("../../src/db/migrations/014_order_final_total.sql");
     let order_notes_and_final_total = include_str!("../../src/db/migrations/015_order_notes_and_final_total.sql");
     let order_linked_payments = include_str!("../../src/db/migrations/016_order_linked_payments.sql");
+    let stone_weights_in_carats = include_str!("../../src/db/migrations/017_stone_weights_in_carats.sql");
 
     let migrations = || {
         vec![
@@ -281,6 +282,12 @@ pub fn run() {
                 version: 16,
                 description: "link payments to individual orders",
                 sql: order_linked_payments,
+                kind: MigrationKind::Up,
+            },
+            Migration {
+                version: 17,
+                description: "standardize all other-stone weights to carats",
+                sql: stone_weights_in_carats,
                 kind: MigrationKind::Up,
             },
         ]

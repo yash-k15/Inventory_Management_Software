@@ -30,38 +30,30 @@ function weight(n: number | null) {
   return n == null ? '—' : `${(n / 1000).toFixed(3)}`;
 }
 
-function formatDetailWeight(
-  milli: number | null,
-  unit: 'ct' | 'g' | null = 'ct',
-) {
+function formatDetailWeight(milli: number | null) {
   if (milli == null) return '—';
-  return (milli / 1000).toFixed(unit === 'g' ? 3 : 2);
+  return (milli / 1000).toFixed(2);
 }
 
-function detailLines(
-  details: SelectionRow['diamonds'],
-  defaultUnit: 'ct' | 'g' = 'ct',
-) {
-  return details.map((detail) => {
-    const unit = detail.weight_unit ?? defaultUnit;
-    return `${detail.label}: ${formatDetailWeight(detail.weight_milli, unit)}${
-      detail.pieces == null ? '' : ` (${detail.pieces} pcs)`
-    }`;
-  });
+function detailLines(details: SelectionRow['diamonds']) {
+  return details.map(
+    (detail) =>
+      `${detail.label}: ${formatDetailWeight(detail.weight_milli)}${
+        detail.pieces == null ? '' : ` (${detail.pieces} pcs)`
+      }`,
+  );
 }
 
 function detailTotals(items: SelectionRow[], key: 'diamonds' | 'stones'): string[] {
   const totals = new Map<
     string,
-    { label: string; unit: 'ct' | 'g'; weight: number; pieces: number; hasPieces: boolean }
+    { label: string; weight: number; pieces: number; hasPieces: boolean }
   >();
   for (const item of items) {
     for (const detail of item[key]) {
-      const unit = key === 'diamonds' ? 'ct' : detail.weight_unit ?? 'ct';
-      const mapKey = `${detail.label.trim().toLocaleLowerCase()}|${unit}`;
+      const mapKey = detail.label.trim().toLocaleLowerCase();
       const current = totals.get(mapKey) ?? {
         label: detail.label,
-        unit,
         weight: 0,
         pieces: 0,
         hasPieces: false,
@@ -74,8 +66,8 @@ function detailTotals(items: SelectionRow[], key: 'diamonds' | 'stones'): string
   }
   if (!totals.size) return ['—'];
   return [...totals.values()].map(
-    ({ label, unit, weight, pieces, hasPieces }) =>
-      `${label}: ${formatDetailWeight(weight, unit)} ${unit}${hasPieces ? ` (${pieces} pcs)` : ''}`,
+    ({ label, weight, pieces, hasPieces }) =>
+      `${label}: ${formatDetailWeight(weight)} ct${hasPieces ? ` (${pieces} pcs)` : ''}`,
   );
 }
 
@@ -608,12 +600,12 @@ export default function ExhibitionSelections({
   const formatOrderDetails = (details: SelectionRow['diamonds']) =>
     details.length
       ? details
-          .map((detail) => {
-            const unit = detail.weight_unit ?? 'ct';
-            return `${detail.label}: ${formatDetailWeight(detail.weight_milli, unit)} ${unit}${
-              detail.pieces == null ? '' : ` (${detail.pieces} pcs)`
-            }`;
-          })
+          .map(
+            (detail) =>
+              `${detail.label}: ${formatDetailWeight(detail.weight_milli)} ct${
+                detail.pieces == null ? '' : ` (${detail.pieces} pcs)`
+              }`,
+          )
           .join('\n')
       : '—';
   const formatOrderDetailTotals = (details: SelectionRow['diamonds']) => {
@@ -626,12 +618,8 @@ export default function ExhibitionSelections({
       0,
     );
     const hasPieces = details.some((detail) => detail.pieces != null);
-    const unit =
-      details.length > 0 && details.every((detail) => detail.weight_unit === 'g')
-        ? 'g'
-        : 'ct';
     return weightMilli || pieces
-      ? `${formatDetailWeight(weightMilli, unit)} ${unit}${hasPieces ? ` (${pieces} pcs)` : ''}`
+      ? `${formatDetailWeight(weightMilli)} ct${hasPieces ? ` (${pieces} pcs)` : ''}`
       : '—';
   };
   async function toggleOrder(orderId: number) {

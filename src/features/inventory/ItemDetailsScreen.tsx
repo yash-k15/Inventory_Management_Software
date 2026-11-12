@@ -553,11 +553,7 @@ function ItemDetailsScreen({ itemId, onBack, onEdit }: Props) {
                         <td>{stone.stoneName}</td>
                         <td>{stone.pieces ?? '—'}</td>
                         <td>
-                          {formatWeight(
-                            stone.weightMilli,
-                            stone.weightUnit === 'g' ? 'g' : 'ct',
-                            2,
-                          )}
+                          {formatWeight(stone.weightMilli, 'ct', 2)}
                         </td>
                       </tr>
                     ))}

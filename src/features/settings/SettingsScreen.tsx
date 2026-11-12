@@ -26,8 +26,7 @@ type StoneType = {
   id: number;
   name: string;
   tagLabel: string;
-  weightUnit: 'ct' | 'g';
-  ratePaisePerUnit: number;
+  ratePaisePerCt: number;
   isArchived: number;
 };
 type GoldType = { id: number; name: string; isArchived: number };
@@ -52,7 +51,6 @@ type ReferenceDraft = {
   quality: string;
   rate: string;
   tagLabel: string;
-  weightUnit: 'ct' | 'g';
 };
 type CategoryDraft = {
   id?: number;
@@ -149,7 +147,7 @@ function SettingsScreen({ onDirtyChange }: Props) {
           'SELECT dc.id, dc.shape_id AS shapeId, ds.code AS shapeCode, ds.name AS shapeName, dc.quality, dc.rate_per_ct_paise AS ratePerCtPaise, dc.is_archived AS isArchived FROM diamond_combination dc JOIN diamond_shape ds ON ds.id = dc.shape_id ORDER BY dc.is_archived, ds.sort_order, dc.quality',
         ),
         db.select<StoneType[]>(
-          'SELECT id, name, tag_label AS tagLabel, weight_unit AS weightUnit, rate_paise_per_unit AS ratePaisePerUnit, is_archived AS isArchived FROM stone_type ORDER BY is_archived, sort_order, name',
+          'SELECT id, name, tag_label AS tagLabel, rate_paise_per_ct AS ratePaisePerCt, is_archived AS isArchived FROM stone_type ORDER BY is_archived, sort_order, name',
         ),
         db.select<GoldType[]>(
           'SELECT id, name, is_archived AS isArchived FROM gold_type ORDER BY is_archived, sort_order, name',
@@ -359,7 +357,6 @@ function SettingsScreen({ onDirtyChange }: Props) {
         quality: '',
         rate: '',
         tagLabel: '',
-        weightUnit: 'ct',
       });
     } else if (kind === 'shape') {
       const item = row as Shape | undefined;
@@ -372,7 +369,6 @@ function SettingsScreen({ onDirtyChange }: Props) {
         quality: '',
         rate: '',
         tagLabel: item?.code ?? '',
-        weightUnit: 'ct',
       });
     } else if (kind === 'combination') {
       const item = row as Combination | undefined;
@@ -387,7 +383,6 @@ function SettingsScreen({ onDirtyChange }: Props) {
         quality: item?.quality ?? '',
         rate: item ? moneyInput(item.ratePerCtPaise) : '0',
         tagLabel: '',
-        weightUnit: 'ct',
       });
     } else if (kind === 'stone') {
       const item = row as StoneType | undefined;
@@ -398,9 +393,8 @@ function SettingsScreen({ onDirtyChange }: Props) {
         percent: '',
         shapeId: '',
         quality: '',
-        rate: item ? moneyInput(item.ratePaisePerUnit) : '0',
+        rate: item ? moneyInput(item.ratePaisePerCt) : '0',
         tagLabel: item?.tagLabel ?? '',
-        weightUnit: item?.weightUnit ?? 'ct',
       });
     } else {
       const item = row as GoldType | undefined;
@@ -413,7 +407,6 @@ function SettingsScreen({ onDirtyChange }: Props) {
         quality: '',
         rate: '',
         tagLabel: '',
-        weightUnit: 'ct',
       });
     }
   }
@@ -521,19 +514,13 @@ function SettingsScreen({ onDirtyChange }: Props) {
           throw new Error('This stone tag label is already in use.');
         if (draft.id)
           await db.execute(
-            "UPDATE stone_type SET name = ?, tag_label = ?, weight_unit = ?, rate_paise_per_unit = ?, updated_at = datetime('now','localtime') WHERE id = ?",
-            [
-              name,
-              tagLabel,
-              draft.weightUnit,
-              Math.round(rate * 100),
-              draft.id,
-            ],
+            "UPDATE stone_type SET name = ?, tag_label = ?, rate_paise_per_ct = ?, updated_at = datetime('now','localtime') WHERE id = ?",
+            [name, tagLabel, Math.round(rate * 100), draft.id],
           );
         else
           await db.execute(
-            'INSERT INTO stone_type (name, tag_label, weight_unit, rate_paise_per_unit) VALUES (?, ?, ?, ?)',
-            [name, tagLabel, draft.weightUnit, Math.round(rate * 100)],
+            'INSERT INTO stone_type (name, tag_label, rate_paise_per_ct) VALUES (?, ?, ?)',
+            [name, tagLabel, Math.round(rate * 100)],
           );
       } else {
         if (draft.id)
@@ -1093,7 +1080,7 @@ function SettingsScreen({ onDirtyChange }: Props) {
               <div>
                 <h2>Other stones</h2>
                 <p>
-                  Rate per unit for each stone type. The unit is set per stone.
+                  Rate per carat for each stone type.
                 </p>
               </div>
               <button
@@ -1109,8 +1096,7 @@ function SettingsScreen({ onDirtyChange }: Props) {
                 <thead>
                   <tr>
                     <th>Stone type</th>
-                    <th>Unit</th>
-                    <th>Rate per unit</th>
+                    <th>Rate per carat</th>
                     <th>Status</th>
                     <th></th>
                   </tr>
@@ -1124,9 +1110,8 @@ function SettingsScreen({ onDirtyChange }: Props) {
                       <td>
                         <strong>{row.name}</strong>
                       </td>
-                      <td>{row.weightUnit === 'ct' ? 'Carat' : 'Gram'}</td>
                       <td className='settings-number-cell'>
-                        {formatMoney(row.ratePaisePerUnit)} / {row.weightUnit}
+                        {formatMoney(row.ratePaisePerCt)} / ct
                       </td>
                       <td>
                         <span
@@ -1583,8 +1568,7 @@ function SettingsScreen({ onDirtyChange }: Props) {
                   <div>
                     <strong>{row.name}</strong>
                     <span>
-                      {row.tagLabel} · {formatMoney(row.ratePaisePerUnit)} /{' '}
-                      {row.weightUnit}
+                      {row.tagLabel} · {formatMoney(row.ratePaisePerCt)} / ct
                     </span>
                   </div>
                   <div>
@@ -1863,22 +1847,7 @@ function SettingsScreen({ onDirtyChange }: Props) {
                       />
                     </label>
                     <label>
-                      Weight unit
-                      <select
-                        value={referenceDraft.weightUnit}
-                        onChange={(e) =>
-                          setReferenceDraft({
-                            ...referenceDraft,
-                            weightUnit: e.target.value as 'ct' | 'g',
-                          })
-                        }
-                      >
-                        <option value='ct'>Carats (ct)</option>
-                        <option value='g'>Grams (g)</option>
-                      </select>
-                    </label>
-                    <label>
-                      Rate per {referenceDraft.weightUnit} (₹)
+                      Rate per carat (₹)
                       <input
                         type='text'
                         inputMode='decimal'

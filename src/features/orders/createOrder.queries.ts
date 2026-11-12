@@ -217,7 +217,7 @@ export interface OrderPricingContext {
     certificationPaisePerCarat: number;
     gstRateBp: number;
     diamondRatesPaisePerCarat: Record<string, number>;
-    stoneRatesPaisePerUnit: Record<string, number>;
+    stoneRatesPaisePerCarat: Record<string, number>;
   };
   items: Array<{
     inventoryItemId: number;
@@ -238,7 +238,6 @@ export interface OrderPricingContext {
     stones: Array<{
       stoneTypeId: number;
       stone: string;
-      weightUnit: 'ct' | 'g';
       weightMilli: number;
       pieces: number | null;
     }>;
@@ -264,7 +263,7 @@ export async function getOrderPricingContext(
     `SELECT id, COALESCE((SELECT rate_per_ct_paise FROM diamond_combination dc WHERE dc.shape_id = diamond_shape.id AND dc.is_archived = 0 ORDER BY dc.id LIMIT 1), 0) AS rate FROM diamond_shape WHERE is_archived = 0`,
   );
   const stoneRates = await db.select<{ id: number; rate: number }[]>(
-    `SELECT id, rate_paise_per_unit AS rate FROM stone_type WHERE is_archived = 0`,
+    `SELECT id, rate_paise_per_ct AS rate FROM stone_type WHERE is_archived = 0`,
   );
   const rateMap = Object.fromEntries(
     rateRows.map((r) => [r.rateKey, Number(r.value) || 0]),
@@ -311,12 +310,11 @@ export async function getOrderPricingContext(
         itemId: number;
         stoneTypeId: number;
         stone: string;
-        weightUnit: 'ct' | 'g';
         weightMilli: number;
         pieces: number | null;
       }>
     >(
-      `SELECT s.item_id AS itemId, s.stone_type_id AS stoneTypeId, st.name AS stone, st.weight_unit AS weightUnit, s.weight_milli AS weightMilli, s.pieces FROM item_stone s JOIN stone_type st ON st.id=s.stone_type_id WHERE s.item_id IN (${marks})`,
+      `SELECT s.item_id AS itemId, s.stone_type_id AS stoneTypeId, st.name AS stone, s.weight_milli AS weightMilli, s.pieces FROM item_stone s JOIN stone_type st ON st.id=s.stone_type_id WHERE s.item_id IN (${marks})`,
       ids,
     );
     for (const row of base)
@@ -345,7 +343,7 @@ export async function getOrderPricingContext(
         ...combinations.map((r) => [String(r.id), Number(r.rate) || 0]),
         ...shapes.map((r) => [String(r.id), Number(r.rate) || 0]),
       ]),
-      stoneRatesPaisePerUnit: Object.fromEntries(
+      stoneRatesPaisePerCarat: Object.fromEntries(
         stoneRates.map((r) => [String(r.id), Number(r.rate) || 0]),
       ),
     },

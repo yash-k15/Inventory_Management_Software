@@ -29,7 +29,6 @@ export const INITIAL_INVENTORY_FILTERS: InventoryFilterValues = {
   stonePresence: 'any',
   stonePiecesMin: null,
   stonePiecesMax: null,
-  stoneWeightUnit: 'ct',
   stoneWeightMin: null,
   stoneWeightMax: null,
   grossWeightMin: null,
@@ -228,18 +227,14 @@ export function getActiveInventoryFilterChips(
     stonePiecesMax: null,
   });
 
-  const stoneWeight =
-    filters.stoneWeightUnit === 'ct' || filters.stoneWeightUnit === 'g'
-      ? rangeLabel(
-          'Other stone weight',
-          filters.stoneWeightMin,
-          filters.stoneWeightMax,
-          filters.stoneWeightUnit,
-        )
-      : null;
+  const stoneWeight = rangeLabel(
+    'Other stone weight',
+    filters.stoneWeightMin,
+    filters.stoneWeightMax,
+    'ct',
+  );
 
   add('stone-weight', stoneWeight, {
-    stoneWeightUnit: 'ct',
     stoneWeightMin: null,
     stoneWeightMax: null,
   });
@@ -534,7 +529,6 @@ function InventoryFilters({ filters, options, onApply }: Props) {
     setDraft({
       ...INITIAL_INVENTORY_FILTERS,
       ...filters,
-      stoneWeightUnit: 'ct',
     });
     setExpanded({
       item: true,

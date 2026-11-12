@@ -308,9 +308,9 @@ export default function CreateOrderModal({
         ...baseRates.diamondRatesPaisePerCarat,
         ...(override?.diamondRatesPaisePerCarat || {}),
       },
-      stoneRatesPaisePerUnit: {
-        ...baseRates.stoneRatesPaisePerUnit,
-        ...(override?.stoneRatesPaisePerUnit || {}),
+      stoneRatesPaisePerCarat: {
+        ...baseRates.stoneRatesPaisePerCarat,
+        ...(override?.stoneRatesPaisePerCarat || {}),
       },
     } as PricingRates;
   }
@@ -372,7 +372,7 @@ export default function CreateOrderModal({
       (key) =>
         (stoneRates[key] = common(
           effective
-            .map((rates) => rates.stoneRatesPaisePerUnit[key] ?? 0)
+            .map((rates) => rates.stoneRatesPaisePerCarat[key] ?? 0)
             .map((value) => value / 100),
         )),
     );
@@ -393,7 +393,7 @@ export default function CreateOrderModal({
       ) ||
       stoneKeys.some((key) =>
         hasMixed(
-          effective.map((rates) => rates.stoneRatesPaisePerUnit[key] ?? 0),
+          effective.map((rates) => rates.stoneRatesPaisePerCarat[key] ?? 0),
         ),
       );
     setCustomRateHasMixedValues(hasMixedValues);
@@ -502,8 +502,8 @@ export default function CreateOrderModal({
           };
         } else if (dirty.startsWith('stone:')) {
           const key = dirty.slice('stone:'.length);
-          current.stoneRatesPaisePerUnit = {
-            ...(current.stoneRatesPaisePerUnit || {}),
+          current.stoneRatesPaisePerCarat = {
+            ...(current.stoneRatesPaisePerCarat || {}),
             [key]: parseAmount(customRateDraft.stoneRates[key] ?? ''),
           };
         } else if (dirty === 'extraCost')
@@ -541,9 +541,9 @@ export default function CreateOrderModal({
             ...pricingContext.rates.diamondRatesPaisePerCarat,
             ...(override.diamondRatesPaisePerCarat || {}),
           },
-          stoneRatesPaisePerUnit: {
-            ...pricingContext.rates.stoneRatesPaisePerUnit,
-            ...(override.stoneRatesPaisePerUnit || {}),
+          stoneRatesPaisePerCarat: {
+            ...pricingContext.rates.stoneRatesPaisePerCarat,
+            ...(override.stoneRatesPaisePerCarat || {}),
           },
         } as PricingRates;
         const pricingItem = {
@@ -672,9 +672,9 @@ export default function CreateOrderModal({
                 ...defaultRates.diamondRatesPaisePerCarat,
                 ...(override?.diamondRatesPaisePerCarat || {}),
               },
-              stoneRatesPaisePerUnit: {
-                ...defaultRates.stoneRatesPaisePerUnit,
-                ...(override?.stoneRatesPaisePerUnit || {}),
+              stoneRatesPaisePerCarat: {
+                ...defaultRates.stoneRatesPaisePerCarat,
+                ...(override?.stoneRatesPaisePerCarat || {}),
               },
             } as PricingRates;
             const pricingItem = {
@@ -2161,7 +2161,7 @@ export default function CreateOrderModal({
                 >();
                 const stoneMap = new Map<
                   string,
-                  { key: string; label: string; unit: 'ct' | 'g' }
+                  { key: string; label: string }
                 >();
                 customizeSelected.forEach((id) => {
                   const source = pricingContext.items.find(
@@ -2181,7 +2181,6 @@ export default function CreateOrderModal({
                     stoneMap.set(key, {
                       key,
                       label: stone.stone,
-                      unit: stone.weightUnit,
                     });
                   });
                 });
@@ -2234,12 +2233,9 @@ export default function CreateOrderModal({
                               className='create-order-custom-field'
                               key={stone.key}
                             >
-                              <span>
-                                {stone.label} (₹/
-                                {stone.unit === 'ct' ? 'ct' : 'g'})
-                              </span>
+                              <span>{stone.label} (₹/ct)</span>
                               <div className='create-order-settings-input'>
-                                <span>₹/{stone.unit}</span>
+                                <span>₹/ct</span>
                                 <input
                                   inputMode='decimal'
                                   value={

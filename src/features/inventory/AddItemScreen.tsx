@@ -39,7 +39,6 @@ type StoneType = {
   id: number;
   name: string;
   tag_label: string;
-  weight_unit: string;
 };
 
 type DiamondFormRow = {
@@ -55,7 +54,6 @@ type StoneFormRow = {
   stoneTypeId: number;
   name: string;
   tagLabel: string;
-  weightUnit: string;
   pieces: string;
   weight: string;
 };
@@ -399,7 +397,7 @@ function AddItemScreen({ onCancel, onCreated, itemId, onUpdated }: Props) {
              ORDER BY CASE WHEN quality = 'EF-VVS' THEN 0 ELSE 1 END, quality`,
           ),
           db.select<StoneType[]>(
-            `SELECT id, name, tag_label, weight_unit
+            `SELECT id, name, tag_label
              FROM stone_type
              WHERE is_archived = 0
              ORDER BY sort_order, name`,
@@ -496,13 +494,8 @@ function AddItemScreen({ onCancel, onCreated, itemId, onUpdated }: Props) {
                 stoneTypeId: stone.stoneTypeId,
                 name: stoneType?.name ?? stone.stoneName,
                 tagLabel: stoneType?.tag_label ?? stone.tagLabel,
-                weightUnit: stoneType?.weight_unit ?? stone.weightUnit,
                 pieces: stone.pieces == null ? '' : String(stone.pieces),
-                weight: (stone.weightMilli / 1000).toFixed(
-                  (stoneType?.weight_unit ?? stone.weightUnit).toLowerCase() === 'ct'
-                    ? 2
-                    : 3,
-                ),
+                weight: (stone.weightMilli / 1000).toFixed(2),
               };
             }),
           );
@@ -639,7 +632,6 @@ function AddItemScreen({ onCancel, onCreated, itemId, onUpdated }: Props) {
         stoneTypeId: stone.id,
         name: stone.name,
         tagLabel: stone.tag_label,
-        weightUnit: stone.weight_unit,
         pieces: '',
         weight: '',
       },
@@ -748,12 +740,7 @@ function AddItemScreen({ onCancel, onCreated, itemId, onUpdated }: Props) {
       const stoneWeightMilli = stones.reduce((sum, stone) => {
         const weightMilli = toMilliUnits(stone.weight, `${stone.name} weight`);
 
-        return (
-          sum +
-          (stone.weightUnit.toLowerCase() === 'ct'
-            ? Math.round(weightMilli / 5)
-            : weightMilli)
-        );
+        return sum + Math.round(weightMilli / 5);
       }, 0);
 
       const netWeightMilli =
@@ -869,8 +856,7 @@ function AddItemScreen({ onCancel, onCreated, itemId, onUpdated }: Props) {
   const totalStoneWeightGrams = completeStones.reduce(
     (sum, stone) =>
       sum +
-      (Number(stone.weight) || 0) *
-        (stone.weightUnit.toLowerCase() === 'ct' ? 0.2 : 1),
+      (Number(stone.weight) || 0) * 0.2,
     0,
   );
 
@@ -1245,26 +1231,20 @@ function AddItemScreen({ onCancel, onCreated, itemId, onUpdated }: Props) {
                             <label
                               htmlFor={`stone-weight-${stone.stoneTypeId}`}
                             >
-                              Weight ({stone.weightUnit})
+                              Weight (ct)
                             </label>
                             <input
                               id={`stone-weight-${stone.stoneTypeId}`}
                               className='app-input add-item-number-input'
                               type='number'
                               min='0'
-                              step={
-                                stone.weightUnit.toLowerCase() === 'ct'
-                                  ? '0.01'
-                                  : '0.001'
-                              }
+                              step='0.01'
                               value={stone.weight}
                               onChange={(event) =>
                                 updateStone(
                                   stone.stoneTypeId,
                                   'weight',
-                                  stone.weightUnit.toLowerCase() === 'ct'
-                                    ? limitDecimalPlaces(event.target.value, 2)
-                                    : event.target.value,
+                                  limitDecimalPlaces(event.target.value, 2),
                                 )
                               }
                               onWheel={(event) => event.currentTarget.blur()}
@@ -1459,9 +1439,7 @@ function AddItemScreen({ onCancel, onCreated, itemId, onUpdated }: Props) {
                   <div>
                     <span>Other stones</span>
                     <strong>
-                      {totalStonePieces} pcs · {totalStoneWeight.toFixed(
-                        completeStones.every((stone) => stone.weightUnit.toLowerCase() === 'ct') ? 2 : 3,
-                      )} ct
+                      {totalStonePieces} pcs · {totalStoneWeight.toFixed(2)} ct
                     </strong>
                   </div>
                 )}

@@ -8,7 +8,7 @@ const diamondDetails = (entries: SelectionRow['diamonds']) =>
   entries.map((entry) => `${entry.label}: ${(entry.weight_milli == null ? 0 : entry.weight_milli / 1000).toFixed(2)} ct${entry.pieces == null ? '' : ` (${entry.pieces} pcs)`}`).join('\n');
 
 const stoneDetails = (entries: SelectionRow['stones']) =>
-  entries.map((entry) => `${entry.label}: ${(entry.weight_milli == null ? 0 : entry.weight_milli / 1000).toFixed(entry.weight_unit === 'g' ? 3 : 2)} ${entry.weight_unit ?? 'ct'}${entry.pieces == null ? '' : ` (${entry.pieces} pcs)`}`).join('\n');
+  entries.map((entry) => `${entry.label}: ${(entry.weight_milli == null ? 0 : entry.weight_milli / 1000).toFixed(2)} ct${entry.pieces == null ? '' : ` (${entry.pieces} pcs)`}`).join('\n');
 
 export const SELECTION_EXPORT_COLUMNS: ExportColumn<SelectionRow>[] = [
   { key: 'itemNumber', label: 'Item number', value: (item) => item.itemNumber },
@@ -60,7 +60,6 @@ export interface SelectionOrderItemExportRow {
   }>;
   stoneBreakdown: Array<{
     tagLabel: string;
-    weightUnit: 'ct' | 'g';
     weightMilli: number;
     pieces: number;
   }>;
@@ -83,12 +82,10 @@ const orderItemDetails = (entries: Array<{
   label: string;
   pieces: number | null;
   weight_milli: number | null;
-  weight_unit?: 'ct' | 'g' | null;
 }>) => entries.map((entry) => {
-  const unit = entry.weight_unit ?? 'ct';
   const weight = entry.weight_milli == null
     ? ''
-    : `${(entry.weight_milli / 1000).toFixed(unit === 'g' ? 3 : 2)} ${unit}`;
+    : `${(entry.weight_milli / 1000).toFixed(2)} ct`;
   const pieces = entry.pieces == null ? '' : ` (${entry.pieces} pcs)`;
   return `${entry.label}${weight ? `: ${weight}` : ''}${pieces}`;
 }).join('\n');
@@ -131,7 +128,6 @@ export function toSelectionOrderItemExportRow(
     })),
     stoneBreakdown: item.stones.map((entry) => ({
       tagLabel: entry.label,
-      weightUnit: entry.weight_unit === 'g' ? 'g' : 'ct',
       weightMilli: entry.weight_milli ?? 0,
       pieces: entry.pieces ?? 0,
     })),

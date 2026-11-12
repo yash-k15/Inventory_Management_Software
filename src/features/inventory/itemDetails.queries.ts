@@ -40,7 +40,6 @@ export type ItemStoneDetail = {
   stoneTypeId: number;
   stoneName: string;
   tagLabel: string;
-  weightUnit: string;
   pieces: number | null;
   weightMilli: number;
 };
@@ -120,7 +119,6 @@ export async function getItemStoneDetails(
         s.stone_type_id AS stoneTypeId,
         st.name AS stoneName,
         st.tag_label AS tagLabel,
-        st.weight_unit AS weightUnit,
         s.pieces,
         s.weight_milli AS weightMilli
     FROM item_stone s

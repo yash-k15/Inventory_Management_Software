@@ -374,7 +374,7 @@ export async function getOrderDetails(
       ),
       ...stones.map(
         (s: any) =>
-          `${s.stone || 'Stone'} · ${((Number(s.weightMilli) || 0) / 1000).toFixed(3)} ${s.weightUnit || 'ct'}${s.pieces == null ? '' : ` (${s.pieces} pcs)`}`,
+          `${s.stone || 'Stone'} · ${((Number(s.weightMilli) || 0) / 1000).toFixed(2)} ct${s.pieces == null ? '' : ` (${s.pieces} pcs)`}`,
       ),
     ];
     const imageCandidate =

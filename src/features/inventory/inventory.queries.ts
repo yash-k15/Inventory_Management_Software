@@ -37,16 +37,9 @@ const SORT_EXPRESSIONS: Record<InventorySort['field'], string> = {
     FROM item_stone s
     WHERE s.item_id = i.id
   )`,
-  // Normalize to carat-equivalent milli-units for comparable physical mass.
   stoneWeight: `(
-    SELECT COALESCE(SUM(
-      CASE WHEN st.weight_unit = 'g'
-        THEN s.weight_milli * 5
-        ELSE s.weight_milli
-      END
-    ), 0)
+    SELECT COALESCE(SUM(s.weight_milli), 0)
     FROM item_stone s
-    JOIN stone_type st ON st.id = s.stone_type_id
     WHERE s.item_id = i.id
   )`,
 };
@@ -247,17 +240,11 @@ export async function getInventoryItems(
     params.push(...(filters.stoneTypeIds ?? []), filters.stonePiecesMax);
   }
 
-  // Stone weight ranges must specify ct or g; mixed units aren't added together.
-  if (
-    filters.stoneWeightUnit &&
-    (filters.stoneWeightMin != null || filters.stoneWeightMax != null)
-  ) {
+  if (filters.stoneWeightMin != null || filters.stoneWeightMax != null) {
     const stoneWeightTotal = `(
       SELECT COALESCE(SUM(s.weight_milli), 0)
       FROM item_stone s
-      JOIN stone_type st ON st.id = s.stone_type_id
       WHERE s.item_id = i.id
-        AND st.weight_unit = ?
         ${
           filters.stoneTypeIds?.length
             ? `AND s.stone_type_id IN (${filters.stoneTypeIds.map(() => '?').join(', ')})`
@@ -268,7 +255,6 @@ export async function getInventoryItems(
     if (filters.stoneWeightMin != null) {
       conditions.push(`${stoneWeightTotal} >= ?`);
       params.push(
-        filters.stoneWeightUnit,
         ...(filters.stoneTypeIds ?? []),
         filters.stoneWeightMin * 1000,
       );
@@ -277,7 +263,6 @@ export async function getInventoryItems(
     if (filters.stoneWeightMax != null) {
       conditions.push(`${stoneWeightTotal} <= ?`);
       params.push(
-        filters.stoneWeightUnit,
         ...(filters.stoneTypeIds ?? []),
         filters.stoneWeightMax * 1000,
       );
@@ -346,8 +331,7 @@ export async function getInventoryItems(
       (
         SELECT GROUP_CONCAT(
           st.tag_label || ': ' ||
-          (CASE WHEN st.weight_unit = 'ct' THEN printf('%.2f', s.weight_milli / 1000.0) ELSE printf('%.3f', s.weight_milli / 1000.0) END) || ' ' ||
-          st.weight_unit ||
+          printf('%.2f', s.weight_milli / 1000.0) || ' ct' ||
           ' (' || COALESCE(s.pieces, 0) || ' pcs)',
           char(10)
         )
@@ -394,20 +378,18 @@ export async function getInventoryItems(
     database.select<Array<{
       itemId: number;
       tagLabel: string;
-      weightUnit: 'ct' | 'g';
       weightMilli: number;
       pieces: number;
     }>>(
       `SELECT
          s.item_id AS itemId,
          st.tag_label AS tagLabel,
-         st.weight_unit AS weightUnit,
          COALESCE(SUM(s.weight_milli), 0) AS weightMilli,
          COALESCE(SUM(COALESCE(s.pieces, 0)), 0) AS pieces
        FROM item_stone s
        JOIN stone_type st ON st.id = s.stone_type_id
        WHERE s.item_id IN (${placeholders})
-       GROUP BY s.item_id, s.stone_type_id, st.tag_label, st.weight_unit
+       GROUP BY s.item_id, s.stone_type_id, st.tag_label
        ORDER BY st.sort_order ASC, st.tag_label COLLATE NOCASE ASC`,
       itemIds,
     ),
@@ -429,7 +411,6 @@ export async function getInventoryItems(
     const list = stonesByItem.get(stone.itemId) ?? [];
     list.push({
       tagLabel: stone.tagLabel,
-      weightUnit: stone.weightUnit,
       weightMilli: stone.weightMilli,
       pieces: stone.pieces,
     });
@@ -508,8 +489,7 @@ export async function getInventoryFilterOptions(): Promise<InventoryFilterOption
       SELECT
         id,
         name,
-        tag_label AS tagLabel,
-        weight_unit AS weightUnit
+        tag_label AS tagLabel
       FROM stone_type
       WHERE is_archived = 0
       ORDER BY sort_order ASC, name COLLATE NOCASE ASC

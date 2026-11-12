@@ -189,36 +189,32 @@ function getPdfMaterialCell(
               : snapshot?.weightMilli != null
                 ? n(snapshot.weightMilli) / 1000
                 : null))
-      : (breakdown?.weight ??
+      : (breakdown?.weight_ct ??
+        breakdown?.weight ??
         (breakdown?.weightMilli != null
           ? n(breakdown.weightMilli) / 1000
           : snapshot?.weightMilli != null
             ? n(snapshot.weightMilli) / 1000
             : null));
-  const unit =
-    kind === 'diamond'
-      ? 'ct'
-      : String(
-          breakdown?.unit ??
-            breakdown?.weightUnit ??
-            snapshot?.weightUnit ??
-            'ct',
-        );
+  // Diamond and other-stone weights are both stored and exported in carats.
+  const unit = 'ct';
   const pieceCount = pieces(item, kind, breakdown ?? snapshot ?? {});
   const weight =
     rawWeight == null
       ? '—'
-      : `${number(rawWeight, unit.toLowerCase() === 'ct' ? 2 : 3)} ${unit}${pieceCount == null ? '' : ` (${pieceCount} pcs)`}`;
+      : `${number(rawWeight, 2)} ${unit}${pieceCount == null ? '' : ` (${pieceCount} pcs)`}`;
   const costPaise =
     breakdown?.value_paise == null ? null : n(breakdown.value_paise);
+  // Older saved order snapshots used rate_paise_per_unit; retain that
+  // fallback for historical exports while all stone rates are now per ct.
   const ratePaise =
     kind === 'diamond'
       ? breakdown?.rate_paise_per_ct == null
         ? null
         : n(breakdown.rate_paise_per_ct)
-      : breakdown?.rate_paise_per_unit == null
+      : (breakdown?.rate_paise_per_ct ?? breakdown?.rate_paise_per_unit) == null
         ? null
-        : n(breakdown.rate_paise_per_unit);
+        : n(breakdown?.rate_paise_per_ct ?? breakdown?.rate_paise_per_unit);
   const cost = costPaise == null ? '—' : money(costPaise);
   const rate = ratePaise == null ? '—' : money(ratePaise);
   return {
@@ -294,25 +290,13 @@ function materialRateText(
         rate:
           kind === 'diamond'
             ? n(line.rate_paise_per_ct)
-            : n(line.rate_paise_per_unit),
-        unit:
-          kind === 'diamond'
-            ? 'ct'
-            : String(
-                line.unit ??
-                  line.weightUnit ??
-                  arr(item.itemSnapshot?.stones).find(
-                    (entry) => materialTypeKey('stone', entry) === key,
-                  )?.weightUnit ??
-                  'ct',
-              ),
+            : n(line.rate_paise_per_ct ?? line.rate_paise_per_unit),
+        unit: 'ct',
       }))
       .filter((entry) => entry.rate > 0);
   });
-  const units = [...new Set(matching.map((entry) => entry.unit))];
   const rates = matching.map((entry) => entry.rate);
-  const suffix = units.length === 1 ? `/${units[0]}` : '/unit';
-  return uniqueRateText(rates, suffix);
+  return uniqueRateText(rates, '/ct');
 }
 
 function materialRatesSubtitle(
@@ -615,21 +599,9 @@ export async function exportOrderExcel(order: OrderDetails): Promise<void> {
         );
       });
       const row = add(rowValues);
-      stoneTypes.forEach((type, index) => {
+      stoneTypes.forEach((_, index) => {
         const base = 1 + index * 3;
-        if (rowValues[base] !== '—') {
-          const unit = order.items
-            .flatMap((item) => [
-              ...arr(item.pricingBreakdown?.stone_lines),
-              ...arr(item.itemSnapshot?.stones),
-            ])
-            .find((line) => materialTypeKey('stone', line) === type.key);
-          markWeight(
-            row,
-            base,
-            String(unit?.unit ?? unit?.weightUnit ?? 'ct').toLowerCase(),
-          );
-        }
+        if (rowValues[base] !== '—') markWeight(row, base, 'ct');
         if (rowValues[base + 2] !== '—') markCurrency(row, base + 2);
       });
     });

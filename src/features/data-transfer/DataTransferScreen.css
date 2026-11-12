@@ -63,3 +63,50 @@
 .data-transfer-danger-button:hover:not(:disabled) {
   background: #742d26;
 }
+
+.data-transfer-notice {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.data-transfer-notice-message {
+  min-width: 0;
+  flex: 1;
+}
+
+.data-transfer-notice-close {
+  display: grid;
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  margin: -4px -5px -4px 0;
+  padding: 3px;
+  place-items: center;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: currentColor;
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+.data-transfer-notice-close:hover {
+  background: rgb(0 0 0 / 6%);
+  opacity: 1;
+}
+
+.data-transfer-notice-close:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.data-transfer-notice-close svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}

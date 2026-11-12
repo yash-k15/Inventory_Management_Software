@@ -11,6 +11,7 @@
     "dialog:allow-open",
     "dialog:allow-message",
     "dialog:allow-save",
-    "core:webview:allow-print"
+    "core:webview:allow-print",
+    "process:allow-restart"
   ]
 }

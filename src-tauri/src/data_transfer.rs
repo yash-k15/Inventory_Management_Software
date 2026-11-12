@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
-use std::{fs, path::{Path, PathBuf}, process::Command, time::{SystemTime, UNIX_EPOCH}};
+use std::{fs, io::{Read, Seek, Write}, path::{Path, PathBuf}, time::{SystemTime, UNIX_EPOCH}};
+use zip::{write::SimpleFileOptions, CompressionMethod, ZipArchive, ZipWriter};
 use tauri::{AppHandle, Manager};
 
 const SCHEMA_VERSION: u32 = 16;
@@ -36,6 +37,70 @@ fn copy_directory(source: &Path, destination: &Path) -> Result<usize, String> {
 
 fn remove_staging(path: &Path) {
     let _ = fs::remove_dir_all(path);
+}
+
+
+fn zip_options() -> SimpleFileOptions {
+    SimpleFileOptions::default().compression_method(CompressionMethod::Deflated)
+}
+
+fn add_file_to_zip<W: Write + Seek>(
+    archive: &mut ZipWriter<W>,
+    source: &Path,
+    archive_name: &str,
+) -> Result<(), String> {
+    let mut file = fs::File::open(source)
+        .map_err(|error| format!("Could not open {} for ZIP export: {error}", source.display()))?;
+    archive.start_file(archive_name, zip_options())
+        .map_err(|error| format!("Could not add {archive_name} to transfer ZIP: {error}"))?;
+    std::io::copy(&mut file, archive)
+        .map_err(|error| format!("Could not write {archive_name} to transfer ZIP: {error}"))?;
+    Ok(())
+}
+
+fn add_directory_to_zip<W: Write + Seek>(
+    archive: &mut ZipWriter<W>,
+    source: &Path,
+    archive_prefix: &str,
+) -> Result<usize, String> {
+    archive.add_directory(format!("{}/", archive_prefix.trim_end_matches('/')), zip_options())
+        .map_err(|error| format!("Could not add {archive_prefix} folder to transfer ZIP: {error}"))?;
+    let mut count = 0usize;
+    if !source.is_dir() {
+        return Ok(count);
+    }
+
+    for entry in fs::read_dir(source)
+        .map_err(|error| format!("Could not read {} for ZIP export: {error}", source.display()))?
+    {
+        let entry = entry.map_err(|error| format!("Could not read item photo entry: {error}"))?;
+        let file_type = entry.file_type()
+            .map_err(|error| format!("Could not inspect item photo: {error}"))?;
+        let file_name = entry.file_name().to_string_lossy().into_owned();
+        let archive_name = format!("{}/{}", archive_prefix.trim_end_matches('/'), file_name);
+
+        if file_type.is_dir() {
+            count += add_directory_to_zip(archive, &entry.path(), &archive_name)?;
+        } else if file_type.is_file() {
+            add_file_to_zip(archive, &entry.path(), &archive_name)?;
+            count += 1;
+        } else {
+            return Err("The item-images folder contains an unsupported filesystem entry.".to_string());
+        }
+    }
+    Ok(count)
+}
+
+fn read_zip_entry<R: Read + Seek>(
+    archive: &mut ZipArchive<R>,
+    name: &str,
+) -> Result<Vec<u8>, String> {
+    let mut entry = archive.by_name(name)
+        .map_err(|error| format!("Could not read {name} from transfer ZIP: {error}"))?;
+    let mut bytes = Vec::new();
+    entry.read_to_end(&mut bytes)
+        .map_err(|error| format!("Could not extract {name} from transfer ZIP: {error}"))?;
+    Ok(bytes)
 }
 
 #[tauri::command]
@@ -89,15 +154,22 @@ pub fn export_master_package(app: AppHandle, destination: String) -> Result<Stri
         let manifest_bytes = serde_json::to_vec_pretty(&manifest).map_err(|e| format!("Could not create transfer manifest: {e}"))?;
         fs::write(staging.join("manifest.json"), manifest_bytes).map_err(|e| format!("Could not write transfer manifest: {e}"))?;
 
-        let output = Command::new("/usr/bin/zip")
-            .args(["-q", "-r", archive_staging.to_string_lossy().as_ref(), "manifest.json", "inventory.db", "item-images"])
-            .current_dir(&staging)
-            .output()
-            .map_err(|e| format!("Could not start the macOS ZIP utility: {e}"))?;
-        if !output.status.success() {
-            let _ = fs::remove_file(&archive_staging);
-            return Err(format!("Could not create transfer ZIP: {}", String::from_utf8_lossy(&output.stderr).trim()));
+        let archive_file = fs::File::create(&archive_staging)
+            .map_err(|error| format!("Could not create transfer ZIP: {error}"))?;
+        let mut zip = ZipWriter::new(archive_file);
+        add_file_to_zip(&mut zip, &staging.join("manifest.json"), "manifest.json")?;
+        add_file_to_zip(&mut zip, &staged_db, "inventory.db")?;
+        let zipped_image_count = add_directory_to_zip(
+            &mut zip,
+            &staging.join("item-images"),
+            "item-images",
+        )?;
+        if zipped_image_count != image_count {
+            return Err(format!(
+                "Photo count changed while creating the transfer ZIP (copied {image_count}, archived {zipped_image_count})."
+            ));
         }
+        zip.finish().map_err(|error| format!("Could not finish transfer ZIP: {error}"))?;
         fs::rename(&archive_staging, &destination)
             .map_err(|e| format!("Could not save completed transfer ZIP: {e}"))?;
         Ok(format!("Master package exported successfully. Included {image_count} item photo file(s)."))
@@ -130,21 +202,6 @@ pub struct TransferValidationResult {
     message: String,
 }
 
-fn run_unzip(args: &[&str], archive: &Path) -> Result<Vec<u8>, String> {
-    let mut command = Command::new("/usr/bin/unzip");
-    if args.first() == Some(&"-p") {
-        command.arg("-p").arg(archive).args(&args[1..]);
-    } else {
-        command.args(args).arg(archive);
-    }
-    let output = command.output()
-        .map_err(|error| format!("Could not start ZIP validation: {error}"))?;
-    if !output.status.success() {
-        return Err(format!("Could not read transfer ZIP: {}", String::from_utf8_lossy(&output.stderr).trim()));
-    }
-    Ok(output.stdout)
-}
-
 #[tauri::command]
 pub fn validate_master_package(source: String) -> Result<TransferValidationResult, String> {
     use rusqlite::OpenFlags;
@@ -154,28 +211,35 @@ pub fn validate_master_package(source: String) -> Result<TransferValidationResul
         return Err("Select a valid .zip Master Transfer package.".to_string());
     }
 
-    let listing = run_unzip(&["-Z1"], &archive)?;
-    let listing = String::from_utf8(listing).map_err(|_| "The ZIP file contains invalid entry names.".to_string())?;
+    let archive_file = fs::File::open(&archive)
+        .map_err(|error| format!("Could not open transfer ZIP: {error}"))?;
+    let mut zip = ZipArchive::new(archive_file)
+        .map_err(|error| format!("Could not read transfer ZIP: {error}"))?;
     let mut has_manifest = false;
     let mut has_database = false;
     let mut image_files = 0usize;
     let mut seen_entries = std::collections::HashSet::new();
-    for raw_name in listing.lines() {
+    for index in 0..zip.len() {
+        let entry = zip.by_index(index)
+            .map_err(|error| format!("Could not inspect transfer ZIP entry: {error}"))?;
+        let raw_name = entry.name().to_string();
         let name = raw_name.trim_end_matches('/');
-        if !seen_entries.insert(raw_name.to_string()) {
+        if !seen_entries.insert(raw_name.clone()) {
             return Err(format!("The ZIP contains a duplicate entry: {raw_name}"));
         }
-        if name.is_empty() || name.starts_with('/') || name.contains('\\') || name.split('/').any(|part| part == ".." || part == ".") {
+        if name.is_empty() || name.starts_with('/') || name.contains('\\')
+            || name.split('/').any(|part| part == ".." || part == ".")
+        {
             return Err("The ZIP contains an unsafe file path.".to_string());
         }
         if name == "manifest.json" { has_manifest = true; }
         else if name == "inventory.db" { has_database = true; }
-        else if name.starts_with("item-images/") && !name.ends_with('/') {
+        else if name.starts_with("item-images/") && !entry.is_dir() {
             if name.len() <= "item-images/".len() {
                 return Err("The ZIP contains an invalid photo path.".to_string());
             }
             image_files += 1;
-        } else if name != "item-images" {
+        } else if name != "item-images" && name != "item-images/" && !name.starts_with("item-images/") {
             return Err(format!("The ZIP contains an unexpected entry: {name}"));
         }
     }
@@ -183,7 +247,7 @@ pub fn validate_master_package(source: String) -> Result<TransferValidationResul
         return Err("The package must contain manifest.json and inventory.db.".to_string());
     }
 
-    let manifest_bytes = run_unzip(&["-p", "manifest.json"], &archive)?;
+    let manifest_bytes = read_zip_entry(&mut zip, "manifest.json")?;
     let manifest: ImportedTransferManifest = serde_json::from_slice(&manifest_bytes)
         .map_err(|error| format!("The transfer manifest is invalid: {error}"))?;
     if manifest.package_format_version != 1 {
@@ -201,7 +265,7 @@ pub fn validate_master_package(source: String) -> Result<TransferValidationResul
 
     let stamp = SystemTime::now().duration_since(UNIX_EPOCH).map_err(|error| error.to_string())?.as_millis();
     let staged_db = std::env::temp_dir().join(format!("inventory-validate-{stamp}.db"));
-    let database_bytes = run_unzip(&["-p", "inventory.db"], &archive)?;
+    let database_bytes = read_zip_entry(&mut zip, "inventory.db")?;
     fs::write(&staged_db, database_bytes).map_err(|error| format!("Could not stage database for validation: {error}"))?;
     let validation = (|| {
         let db = rusqlite::Connection::open_with_flags(&staged_db, OpenFlags::SQLITE_OPEN_READ_ONLY)
@@ -324,26 +388,39 @@ pub fn prepare_master_import(app: AppHandle, source: String) -> Result<PreparedI
     if let Err(error) = fs::create_dir_all(&staging_dir) {
         return Err(format!("The backup was created at {}, but staging could not be created: {error}", backup_dir.display()));
     }
-    // Extract each validated regular-file entry through `unzip -p` instead of
-    // asking unzip to materialize the archive. This prevents archived symlinks
-    // from being created in the staging tree.
-    let listing = run_unzip(&["-Z1"], &archive)
-        .and_then(|bytes| String::from_utf8(bytes).map_err(|_| "The ZIP contains invalid entry names.".to_string()));
-    let extraction = listing.and_then(|listing| {
-        for entry in listing.lines().filter(|entry| !entry.ends_with('/')) {
-            let relative = Path::new(entry);
-            if relative.is_absolute() || relative.components().any(|part| !matches!(part, std::path::Component::Normal(_))) {
+    // Extract entries directly through the ZIP library. Files are written as
+    // regular files, so archived symlink metadata is never materialized.
+    let extraction = (|| {
+        let archive_file = fs::File::open(&archive)
+            .map_err(|error| format!("Could not reopen transfer ZIP for staging: {error}"))?;
+        let mut zip = ZipArchive::new(archive_file)
+            .map_err(|error| format!("Could not read transfer ZIP for staging: {error}"))?;
+        for index in 0..zip.len() {
+            let mut entry = zip.by_index(index)
+                .map_err(|error| format!("Could not inspect transfer ZIP entry: {error}"))?;
+            if entry.is_dir() {
+                continue;
+            }
+            let entry_name = entry.name().to_string();
+            let relative = Path::new(&entry_name);
+            if relative.is_absolute()
+                || relative.components().any(|part| !matches!(part, std::path::Component::Normal(_)))
+            {
                 return Err("The ZIP contains an unsafe staging path.".to_string());
             }
             let destination = staging_dir.join(relative);
             if let Some(parent) = destination.parent() {
-                fs::create_dir_all(parent).map_err(|error| format!("Could not create staging folder: {error}"))?;
+                fs::create_dir_all(parent)
+                    .map_err(|error| format!("Could not create staging folder: {error}"))?;
             }
-            let bytes = run_unzip(&["-p", entry], &archive)?;
-            fs::write(&destination, bytes).map_err(|error| format!("Could not write staged package file: {error}"))?;
+            let mut bytes = Vec::new();
+            entry.read_to_end(&mut bytes)
+                .map_err(|error| format!("Could not extract {entry_name} from transfer ZIP: {error}"))?;
+            fs::write(&destination, bytes)
+                .map_err(|error| format!("Could not write staged package file: {error}"))?;
         }
-        Ok(())
-    });
+        Ok::<(), String>(())
+    })();
     if let Err(error) = extraction {
         let _ = fs::remove_dir_all(&staging_dir);
         return Err(format!("Backup was safely created at {}. Staging failed and live data was not changed. {error}", backup_dir.display()));
@@ -516,10 +593,38 @@ pub fn schedule_master_import(app: AppHandle, operation_id: String) -> Result<St
         created_at_unix_millis: now,
     })?;
 
-    // Exit rather than replacing a database while the frontend SQL plugin may
-    // still hold a connection. The user reopens the app to apply the journal.
-    app.exit(0);
-    Ok("Import scheduled. The application is closing; reopen it to apply the Master package.".to_string())
+    #[cfg(debug_assertions)]
+{
+    eprintln!("[schedule_master_import] Debug restart block reached.");
+
+    let restart_marker = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join(".dev-restart-request");
+
+    eprintln!(
+        "[schedule_master_import] Writing marker: {}",
+        restart_marker.display()
+    );
+
+    fs::write(&restart_marker, b"restart")
+        .map_err(|error| {
+            format!(
+                "Import is safely scheduled, but the development restart signal could not be written: {error}"
+            )
+        })?;
+
+    eprintln!("[schedule_master_import] Marker written successfully.");
+
+    let app_handle = app.clone();
+
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(300));
+
+        eprintln!("[schedule_master_import] Requesting application exit.");
+        app_handle.exit(0);
+    });
+}
+
+Ok("Import scheduled. The application will restart and apply the Master package.".to_string())
 }
 
 /// Runs from Tauri setup before the React frontend loads. An interrupted
@@ -533,6 +638,10 @@ pub fn get_data_transfer_import_result(app: AppHandle) -> Result<Option<serde_js
     }
     let bytes = fs::read(&result_path).map_err(|error| format!("Could not read last import result: {error}"))?;
     let value = serde_json::from_slice(&bytes).map_err(|error| format!("Last import result is invalid: {error}"))?;
+    // This is a one-time completion notice. Remove the persisted result after
+    // reading it so revisiting Data Transfer does not replay an old message.
+    fs::remove_file(&result_path)
+        .map_err(|error| format!("Could not acknowledge the previous import result: {error}"))?;
     Ok(Some(value))
 }
 

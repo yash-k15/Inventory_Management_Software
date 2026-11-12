@@ -339,71 +339,42 @@ function DataTransferScreen() {
 
       {showImportConfirmation && (
         <div
+          className='data-transfer-confirm-backdrop'
           role='presentation'
           onMouseDown={(event) => {
             if (event.target === event.currentTarget && !busy) {
               setShowImportConfirmation(false);
             }
           }}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 10000,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: 24,
-            background: 'rgba(25, 20, 17, 0.48)',
-          }}
         >
           <section
+            className='data-transfer-confirm-dialog'
             role='alertdialog'
             aria-modal='true'
             aria-labelledby='data-transfer-confirm-title'
             aria-describedby='data-transfer-confirm-description'
-            style={{
-              width: '100%',
-              maxWidth: 480,
-              padding: 28,
-              border: '1px solid var(--border-color, #e6ddd2)',
-              borderRadius: 12,
-              background: 'var(--surface-primary, #fffdf9)',
-              boxShadow: '0 18px 60px rgba(0, 0, 0, 0.22)',
-            }}
           >
-            <h2 id='data-transfer-confirm-title' style={{ margin: '0 0 12px' }}>
+            <h2
+              id='data-transfer-confirm-title'
+              className='data-transfer-confirm-title'
+            >
               Apply Master Package?
             </h2>
             <p
               id='data-transfer-confirm-description'
-              style={{ margin: '0 0 22px', lineHeight: 1.6 }}
+              className='data-transfer-confirm-description'
             >
               This will replace the complete local database and item photos. A
               verified backup has already been created. The application will
               restart automatically in the installed version. In development
               mode, you will need to restart it from the terminal.
             </p>
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'flex-end',
-                gap: 10,
-                flexWrap: 'wrap',
-              }}
-            >
+            <div className='data-transfer-confirm-actions'>
               <button
                 type='button'
+                className='data-transfer-confirm-cancel'
                 disabled={busy}
                 onClick={() => setShowImportConfirmation(false)}
-                style={{
-                  minHeight: 40,
-                  padding: '0 16px',
-                  border: '1px solid var(--border-color, #d8cec2)',
-                  borderRadius: 7,
-                  background: 'transparent',
-                  color: 'inherit',
-                  cursor: busy ? 'not-allowed' : 'pointer',
-                }}
               >
                 Cancel
               </button>

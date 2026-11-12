@@ -279,11 +279,13 @@ function MultiSelectDropdown({
   const selectedLabels = options
     .filter((option) => selectedValues.includes(option.value))
     .map((option) => option.label);
-  const valueLabel = allSelected
-    ? allLabel
-    : selectedLabels.length === 1
-      ? selectedLabels[0]
-      : `${selectedLabels.length} selected`;
+  const valueLabel = selectedValues.includes('__none__')
+    ? 'None selected'
+    : allSelected
+      ? allLabel
+      : selectedLabels.length === 1
+        ? selectedLabels[0]
+        : `${selectedLabels.length} selected`;
 
   useEffect(() => {
     if (!open) return;

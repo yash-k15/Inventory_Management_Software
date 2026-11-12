@@ -23,33 +23,6 @@ fn open_database(app: &AppHandle) -> Result<Connection, String> {
 }
 
 #[tauri::command]
-pub fn save_wastage_settings(app: AppHandle, mode: String, value: i64) -> Result<(), String> {
-    if !matches!(mode.as_str(), "percent" | "per_gram") {
-        return Err("Invalid wastage mode.".to_string());
-    }
-    if value < 0 || (mode == "percent" && value > 10_000) {
-        return Err("Wastage value is outside the supported range.".to_string());
-    }
-
-    let mut connection = open_database(&app)?;
-    let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)
-        .map_err(|error| format!("Could not start settings transaction: {error}"))?;
-
-    let rate_key = if mode == "percent" { "wastage_percent_bp" } else { "wastage_per_g_paise" };
-    transaction.execute(
-        "UPDATE global_rate SET value = ?, updated_at = datetime('now','localtime') WHERE rate_key = ?",
-        params![value, rate_key],
-    ).map_err(|error| format!("Could not save wastage rate: {error}"))?;
-    transaction.execute(
-        "INSERT INTO app_setting (key, value) VALUES ('wastage_mode', ?)
-         ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now','localtime')",
-        [&mode],
-    ).map_err(|error| format!("Could not save wastage mode: {error}"))?;
-    transaction.commit().map_err(|error| format!("Could not commit wastage settings: {error}"))?;
-    Ok(())
-}
-
-#[tauri::command]
 pub fn save_gst_settings(app: AppHandle, gst_rate_bp: i64, business_state: String) -> Result<(), String> {
     if !(0..=10_000).contains(&gst_rate_bp) {
         return Err("GST rate must be between 0% and 100%.".to_string());

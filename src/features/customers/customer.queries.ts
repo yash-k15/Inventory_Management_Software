@@ -9,7 +9,9 @@ import type {
   CustomerRecentPurchase,
 } from './customer.types';
 
-export async function getCustomers(filters: CustomerFilters): Promise<Customer[]> {
+export async function getCustomers(
+  filters: CustomerFilters,
+): Promise<Customer[]> {
   const database = await getDatabase();
   const conditions: string[] = [];
   const params: (string | number)[] = [];
@@ -34,13 +36,24 @@ export async function getCustomers(filters: CustomerFilters): Promise<Customer[]
         )
       )
     `);
-    params.push(searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern);
+    params.push(
+      searchPattern,
+      searchPattern,
+      searchPattern,
+      searchPattern,
+      searchPattern,
+      searchPattern,
+      searchPattern,
+    );
   }
 
   if (filters.archiveStatus === 'active') conditions.push('c.is_archived = 0');
-  else if (filters.archiveStatus === 'archived') conditions.push('c.is_archived = 1');
+  else if (filters.archiveStatus === 'archived')
+    conditions.push('c.is_archived = 1');
 
-  const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  const whereClause = conditions.length
+    ? `WHERE ${conditions.join(' AND ')}`
+    : '';
 
   const sql = `
     SELECT
@@ -75,7 +88,9 @@ export async function getCustomers(filters: CustomerFilters): Promise<Customer[]
   return database.select<Customer[]>(sql, params);
 }
 
-export async function getCustomerContacts(customerId: number): Promise<CustomerContact[]> {
+export async function getCustomerContacts(
+  customerId: number,
+): Promise<CustomerContact[]> {
   const database = await getDatabase();
   return database.select<CustomerContact[]>(
     `SELECT id, customer_id AS customerId, name, phone_1 AS phone1, phone_2 AS phone2, is_primary AS isPrimary, notes
@@ -85,7 +100,9 @@ export async function getCustomerContacts(customerId: number): Promise<CustomerC
   );
 }
 
-export async function getCustomerDetailsSummary(customerId: number): Promise<CustomerDetailsSummary> {
+export async function getCustomerDetailsSummary(
+  customerId: number,
+): Promise<CustomerDetailsSummary> {
   const database = await getDatabase();
   const rows = await database.select<CustomerDetailsSummary[]>(
     `
@@ -109,10 +126,19 @@ export async function getCustomerDetailsSummary(customerId: number): Promise<Cus
     `,
     [customerId],
   );
-  return rows[0] ?? { purchaseCount: 0, lifetimeValuePaise: 0, averageOrderValuePaise: 0, lastPurchaseDate: null };
+  return (
+    rows[0] ?? {
+      purchaseCount: 0,
+      lifetimeValuePaise: 0,
+      averageOrderValuePaise: 0,
+      lastPurchaseDate: null,
+    }
+  );
 }
 
-export async function getCustomerOrderHistory(customerId: number): Promise<CustomerOrderHistoryRow[]> {
+export async function getCustomerOrderHistory(
+  customerId: number,
+): Promise<CustomerOrderHistoryRow[]> {
   const database = await getDatabase();
   return database.select<CustomerOrderHistoryRow[]>(
     `
@@ -134,13 +160,21 @@ export async function getCustomerOrderHistory(customerId: number): Promise<Custo
   );
 }
 
-export async function getCustomerPaymentHistory(customerId: number): Promise<CustomerPaymentHistoryRow[]> {
+export async function getCustomerPaymentHistory(
+  customerId: number,
+): Promise<CustomerPaymentHistoryRow[]> {
   const database = await getDatabase();
   return database.select<CustomerPaymentHistoryRow[]>(
     `
-      SELECT p.id, p.payment_date AS paymentDate, e.name AS exhibitionName,
-             p.amount_paise AS amountPaise, p.payment_method AS paymentMethod, p.notes
-      FROM payment p JOIN exhibition e ON e.id = p.exhibition_id
+      SELECT
+        p.id,
+        p.payment_date AS paymentDate,
+        e.name AS exhibitionName,
+        p.amount_paise AS amountPaise,
+        p.payment_method AS paymentMethod,
+        p.notes
+      FROM payment p
+      LEFT JOIN exhibition e ON e.id = p.exhibition_id
       WHERE p.customer_id = ?
       ORDER BY p.payment_date DESC, p.id DESC
     `,
@@ -148,7 +182,9 @@ export async function getCustomerPaymentHistory(customerId: number): Promise<Cus
   );
 }
 
-export async function getCustomerRecentPurchases(customerId: number): Promise<CustomerRecentPurchase[]> {
+export async function getCustomerRecentPurchases(
+  customerId: number,
+): Promise<CustomerRecentPurchase[]> {
   const database = await getDatabase();
   return database.select<CustomerRecentPurchase[]>(
     `

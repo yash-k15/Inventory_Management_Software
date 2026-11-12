@@ -46,7 +46,7 @@ export interface CustomerOrderHistoryRow {
 export interface CustomerPaymentHistoryRow {
   id: number;
   paymentDate: string;
-  exhibitionName: string;
+  exhibitionName: string | null;
   amountPaise: number;
   paymentMethod: string | null;
   notes: string | null;

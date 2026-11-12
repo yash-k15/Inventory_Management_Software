@@ -70,12 +70,141 @@ fn open_print_preview(bytes: Vec<u8>) -> Result<(), String> {
     }
 }
 
+fn build_tag_print_job(bitmap: &[u8]) -> Vec<u8> {
+    let mut job = Vec::with_capacity(256 + bitmap.len());
+    job.extend_from_slice(
+        b"SIZE 100 mm,13 mm\r\nGAP 3 mm,0 mm\r\nSPEED 2\r\nDENSITY 13\r\nSET RIBBON ON\r\nDIRECTION 0,0\r\nREFERENCE 0,0\r\nOFFSET 0 mm\r\nSET PEEL OFF\r\nSET CUTTER OFF\r\nSET PARTIAL_CUTTER OFF\r\nSET TEAR ON\r\nCLS\r\nBITMAP 0,0,100,104,1,"
+    );
+    job.extend_from_slice(bitmap);
+    job.extend_from_slice(b"\r\nPRINT 1,1\r\n");
+    job
+}
+
+#[cfg(target_os = "windows")]
+mod windows_raw_printer {
+    use std::ffi::c_void;
+    use std::ptr;
+
+    type Handle = *mut c_void;
+    type Bool = i32;
+    type Dword = u32;
+
+    #[repr(C)]
+    struct DocInfo1W {
+        document_name: *mut u16,
+        output_file: *mut u16,
+        data_type: *mut u16,
+    }
+
+    #[link(name = "Winspool.drv")]
+    extern "system" {
+        fn OpenPrinterW(
+            printer_name: *const u16,
+            printer: *mut Handle,
+            defaults: *const c_void,
+        ) -> Bool;
+        fn ClosePrinter(printer: Handle) -> Bool;
+        fn StartDocPrinterW(
+            printer: Handle,
+            level: Dword,
+            document_info: *const DocInfo1W,
+        ) -> Dword;
+        fn EndDocPrinter(printer: Handle) -> Bool;
+        fn StartPagePrinter(printer: Handle) -> Bool;
+        fn EndPagePrinter(printer: Handle) -> Bool;
+        fn WritePrinter(
+            printer: Handle,
+            buffer: *const c_void,
+            bytes_to_write: Dword,
+            bytes_written: *mut Dword,
+        ) -> Bool;
+    }
+
+    fn win_error(action: &str) -> String {
+        format!("{action}: {}", std::io::Error::last_os_error())
+    }
+
+    pub fn print_raw(printer_queue: &str, data: &[u8]) -> Result<String, String> {
+        let mut printer_name: Vec<u16> = printer_queue.encode_utf16().chain(Some(0)).collect();
+        let mut document_name: Vec<u16> = "Jewelry tag".encode_utf16().chain(Some(0)).collect();
+        let mut data_type: Vec<u16> = "RAW".encode_utf16().chain(Some(0)).collect();
+
+        let mut printer: Handle = ptr::null_mut();
+        let opened = unsafe {
+            OpenPrinterW(printer_name.as_mut_ptr(), &mut printer, ptr::null())
+        };
+        if opened == 0 {
+            return Err(win_error(&format!(
+                "Could not open Windows printer queue '{printer_queue}'"
+            )));
+        }
+
+        let mut result = Ok(String::new());
+        let document_info = DocInfo1W {
+            document_name: document_name.as_mut_ptr(),
+            output_file: ptr::null_mut(),
+            data_type: data_type.as_mut_ptr(),
+        };
+
+        let job_id = unsafe { StartDocPrinterW(printer, 1, &document_info) };
+        if job_id == 0 {
+            result = Err(win_error("Could not start the RAW printer job"));
+        } else {
+            let page_started = unsafe { StartPagePrinter(printer) };
+            if page_started == 0 {
+                result = Err(win_error("Could not start the printer page"));
+            } else {
+                let mut offset = 0usize;
+                while offset < data.len() {
+                    let remaining = data.len() - offset;
+                    let chunk_len = remaining.min(Dword::MAX as usize) as Dword;
+                    let mut bytes_written: Dword = 0;
+                    let written = unsafe {
+                        WritePrinter(
+                            printer,
+                            data[offset..].as_ptr() as *const c_void,
+                            chunk_len,
+                            &mut bytes_written,
+                        )
+                    };
+
+                    if written == 0 {
+                        result = Err(win_error("Could not write tag data to the printer"));
+                        break;
+                    }
+                    if bytes_written == 0 {
+                        result = Err(
+                            "The Windows printer accepted zero bytes for the tag print job."
+                                .to_string(),
+                        );
+                        break;
+                    }
+                    offset += bytes_written as usize;
+                }
+
+                if unsafe { EndPagePrinter(printer) } == 0 && result.is_ok() {
+                    result = Err(win_error("Could not finish the printer page"));
+                }
+            }
+
+            if unsafe { EndDocPrinter(printer) } == 0 && result.is_ok() {
+                result = Err(win_error("Could not finish the RAW printer job"));
+            }
+        }
+
+        if unsafe { ClosePrinter(printer) } == 0 && result.is_ok() {
+            result = Err(win_error("Could not close the Windows printer queue"));
+        }
+
+        result.map(|_| format!("Tag print job {job_id} submitted to {printer_queue}."))
+    }
+}
+
 #[tauri::command]
 fn print_tag_bitmap(bitmap: Vec<u8>) -> Result<String, String> {
-    use std::io::Write;
-    use std::process::{Command, Stdio};
-
     const EXPECTED_BITMAP_BYTES: usize = 100 * 104;
+    const PRINTER_QUEUE: &str = "TSC_TE244";
+
     if bitmap.len() != EXPECTED_BITMAP_BYTES {
         return Err(format!(
             "Invalid tag bitmap: expected {EXPECTED_BITMAP_BYTES} bytes, received {}.",
@@ -83,28 +212,30 @@ fn print_tag_bitmap(bitmap: Vec<u8>) -> Result<String, String> {
         ));
     }
 
+    let job = build_tag_print_job(&bitmap);
+
     #[cfg(target_os = "macos")]
     {
+        use std::io::Write;
+        use std::process::{Command, Stdio};
+
         let mut child = Command::new("lp")
-            .args(["-d", "TSC_TE244", "-o", "raw"])
+            .args(["-d", PRINTER_QUEUE, "-o", "raw"])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
             .map_err(|error| format!("Could not start macOS printing: {error}"))?;
 
-        let mut job = Vec::with_capacity(128 + EXPECTED_BITMAP_BYTES);
-        job.extend_from_slice(
-            b"SIZE 100 mm,13 mm\r\nGAP 3 mm,0 mm\r\nSPEED 2\r\nDENSITY 13\r\nSET RIBBON ON\r\nDIRECTION 0,0\r\nREFERENCE 0,0\r\nOFFSET 0 mm\r\nSET PEEL OFF\r\nSET CUTTER OFF\r\nSET PARTIAL_CUTTER OFF\r\nSET TEAR ON\r\nCLS\r\nBITMAP 0,0,100,104,1,"
-        );
-        job.extend_from_slice(&bitmap);
-        job.extend_from_slice(b"\r\nPRINT 1,1\r\n");
-
         if let Some(mut stdin) = child.stdin.take() {
-            stdin.write_all(&job).map_err(|error| format!("Could not send tag data to the print queue: {error}"))?;
+            stdin
+                .write_all(&job)
+                .map_err(|error| format!("Could not send tag data to the print queue: {error}"))?;
         }
 
-        let output = child.wait_with_output().map_err(|error| format!("Could not finish submitting the print job: {error}"))?;
+        let output = child
+            .wait_with_output()
+            .map_err(|error| format!("Could not finish submitting the print job: {error}"))?;
         if !output.status.success() {
             let details = String::from_utf8_lossy(&output.stderr).trim().to_string();
             return Err(if details.is_empty() {
@@ -116,16 +247,21 @@ fn print_tag_bitmap(bitmap: Vec<u8>) -> Result<String, String> {
 
         let message = String::from_utf8_lossy(&output.stdout).trim().to_string();
         Ok(if message.is_empty() {
-            "Tag print job submitted to TSC_TE244.".to_string()
+            format!("Tag print job submitted to {PRINTER_QUEUE}.")
         } else {
             message
         })
     }
 
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "windows")]
     {
-        let _ = bitmap;
-        Err("Direct tag printing is currently configured for macOS and the TSC_TE244 queue.".to_string())
+        windows_raw_printer::print_raw(PRINTER_QUEUE, &job)
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        let _ = job;
+        Err("Direct tag printing is supported only on macOS and Windows.".to_string())
     }
 }
 

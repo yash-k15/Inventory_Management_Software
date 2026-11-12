@@ -230,7 +230,7 @@ export default function JewelryTagPreview({
             onClick={() => void handlePrintAll()}
             disabled={isPrintingAll}
           >
-            {isPrintingAll ? 'Printing all tags…' : 'Print all tags'}
+            {isPrintingAll ? 'Printing all tags…' : 'Print'}
           </button>
         </footer>
       </section>

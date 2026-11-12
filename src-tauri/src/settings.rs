@@ -65,8 +65,11 @@ pub fn save_category_settings(
     if name.is_empty() {
         return Err("Category name is required.".to_string());
     }
-    if next_number < 1 || number_width < 0 || range_end.is_some_and(|end| end < 1) {
-        return Err("Category numbering values are invalid.".to_string());
+    if next_number < 1 || number_width < 0 || range_end.is_some_and(|end| end < next_number) {
+        return Err(
+            "Category numbering values are invalid. Range end must be greater than or equal to the next number."
+                .to_string(),
+        );
     }
 
     let mut connection = open_database(&app)?;

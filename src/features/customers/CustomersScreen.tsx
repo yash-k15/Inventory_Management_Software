@@ -279,13 +279,6 @@ export default function CustomersScreenRedesigned({
           archiveStatus: nextArchiveStatus,
         });
         setCustomers(result);
-        if (
-          expandedCustomerId !== null &&
-          !result.some((customer) => customer.id === expandedCustomerId)
-        ) {
-          setExpandedCustomerId(null);
-          setContactError(null);
-        }
       } catch (err) {
         console.error('Failed to load customers:', err);
         setError('Unable to load customers. Please try again.');
@@ -293,7 +286,7 @@ export default function CustomersScreenRedesigned({
         setLoading(false);
       }
     },
-    [search, archiveStatus, expandedCustomerId],
+    [search, archiveStatus],
   );
 
   useEffect(() => {
@@ -303,6 +296,18 @@ export default function CustomersScreenRedesigned({
   useEffect(() => {
     void loadCustomers();
   }, [loadCustomers]);
+
+  // Keep the expanded row valid when the customer list changes, without
+  // making row expansion itself trigger a full customer-list reload.
+  useEffect(() => {
+    if (
+      expandedCustomerId !== null &&
+      !customers.some((customer) => customer.id === expandedCustomerId)
+    ) {
+      setExpandedCustomerId(null);
+      setContactError(null);
+    }
+  }, [customers, expandedCustomerId]);
 
   const showNotice = (kind: Notice['kind'], message: string) => {
     const nextId = noticeId + 1;

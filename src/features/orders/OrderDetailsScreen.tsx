@@ -841,54 +841,56 @@ export default function OrderDetailsScreen({
   const isDirect = order.exhibitionId === null;
   return (
     <section className='order-details-screen'>
-      <div className='od-top-actions'>
-        <button type='button' className='order-details-back' onClick={onBack}>
-          ← {backLabel}
-        </button>
-        <button
-          type='button'
-          className='od-export-button'
-          onClick={() => {
-            setExportError(null);
-            setExportOpen(true);
-          }}
-        >
-          <svg
-            aria-hidden='true'
-            width='15'
-            height='15'
-            viewBox='0 0 24 24'
-            fill='none'
-            stroke='currentColor'
-            strokeWidth='2'
-            strokeLinecap='round'
-            strokeLinejoin='round'
-          >
-            <path d='M12 3v12' />
-            <path d='m7 10 5 5 5-5' />
-            <path d='M5 19h14' />
-          </svg>
-          Export order
-        </button>
-      </div>
-      <header className='order-details-heading'>
-        <div className='order-details-title-row'>
-          <h1>{orderNumber(order.id)}</h1>
-          <span
-            className={`order-detail-badge order-detail-status order-detail-status--${order.status.toLowerCase().replace(/ /g, '-')}`}
-          >
-            {order.status}
-          </span>
-          <span
-            className={`order-detail-badge ${isDirect ? 'order-detail-source--direct' : 'order-detail-source--exhibition'}`}
-          >
-            {isDirect ? 'Direct' : 'Exhibition'}
-          </span>
+      <button type='button' className='order-details-back' onClick={onBack}>
+        ← {backLabel}
+      </button>
+      <header className='page-header order-details-heading'>
+        <div className='page-header__heading'>
+          <div className='order-details-title-row'>
+            <h1 className='page-title'>{orderNumber(order.id)}</h1>
+            <span
+              className={`order-detail-badge order-detail-status order-detail-status--${order.status.toLowerCase().replace(/ /g, '-')}`}
+            >
+              {order.status}
+            </span>
+            <span
+              className={`order-detail-badge ${isDirect ? 'order-detail-source--direct' : 'order-detail-source--exhibition'}`}
+            >
+              {isDirect ? 'Direct' : 'Exhibition'}
+            </span>
+          </div>
+          <p className='page-subtitle'>
+            {order.items.length} {order.items.length === 1 ? 'item' : 'items'} ·
+            Created {formatDate(order.createdAt)}
+          </p>
         </div>
-        <p>
-          {order.items.length} {order.items.length === 1 ? 'item' : 'items'} ·
-          Created {formatDate(order.createdAt)}
-        </p>
+        <div className='page-header__actions'>
+          <button
+            type='button'
+            className='btn btn--export od-export-button'
+            onClick={() => {
+              setExportError(null);
+              setExportOpen(true);
+            }}
+          >
+            <svg
+              aria-hidden='true'
+              width='15'
+              height='15'
+              viewBox='0 0 24 24'
+              fill='none'
+              stroke='currentColor'
+              strokeWidth='2'
+              strokeLinecap='round'
+              strokeLinejoin='round'
+            >
+              <path d='M12 3v12' />
+              <path d='m7 10 5 5 5-5' />
+              <path d='M5 19h14' />
+            </svg>
+            Export order
+          </button>
+        </div>
       </header>
       <div className='od-context-grid'>
         <section className='order-detail-card od-context-card'>

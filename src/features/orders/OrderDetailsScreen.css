@@ -32,20 +32,9 @@
   flex-wrap  : wrap;
 }
 
-.order-details-title-row h1 {
-  margin        : 0;
-  font-family   : Georgia, 'Times New Roman', serif;
-  font-size     : 42px;
-  line-height   : 1.12;
-  font-weight   : 500;
-  letter-spacing: -1.2px;
-}
+.order-details-title-row h1 {}
 
-.order-details-heading>p {
-  margin   : 6px 0 0;
-  color    : var(--text-secondary, #766d66);
-  font-size: 13px;
-}
+.order-details-heading>p {}
 
 .order-detail-badge {
   display        : inline-flex;
@@ -544,9 +533,7 @@
 }
 
 @media (max-width:640px) {
-  .order-details-title-row h1 {
-    font-size: 32px;
-  }
+  .order-details-title-row h1 {}
 
   .od-context-grid {
     grid-template-columns: 1fr;
@@ -674,37 +661,13 @@
 }
 
 
-.od-top-actions {
-  display        : flex;
-  align-items    : center;
-  justify-content: space-between;
-  gap            : 12px;
-}
+.od-top-actions {}
 
-.od-top-actions .order-details-back {
-  margin-bottom: 10px;
-}
+.od-top-actions .order-details-back {}
 
-.od-export-button {
-  display        : inline-flex;
-  align-items    : center;
-  justify-content: center;
-  min-height     : 36px;
-  padding        : 0 14px;
-  border         : 1px solid #d8c7b4;
-  border-radius  : 9px;
-  background     : #fff;
-  color          : #4d3d30;
-  font           : inherit;
-  font-size      : 12px;
-  font-weight    : 700;
-  cursor         : pointer;
-}
+.od-export-button {}
 
-.od-export-button:hover {
-  background  : #f8f3ed;
-  border-color: #bda486;
-}
+.od-export-button:hover {}
 
 .od-export-backdrop {
   position   : fixed;
@@ -869,11 +832,7 @@
 
 
 /* Order details typography and action polish. */
-.order-details-heading>p {
-  margin-top : 7px;
-  font-size  : 12px;
-  line-height: 1.5;
-}
+.order-details-heading>p {}
 
 .od-context-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -959,34 +918,11 @@
   justify-self: end;
 }
 
-.od-export-button {
-  display        : inline-flex;
-  align-items    : center;
-  justify-content: center;
-  gap            : 8px;
-  min-height     : 38px;
-  padding        : 8px 13px;
-  border         : 1px solid #a87540;
-  border-radius  : 9px;
-  background     : #fff;
-  color          : #8a5a2b;
-  font           : inherit;
-  font-size      : 13px;
-  font-weight    : 600;
-  white-space    : nowrap;
-  cursor         : pointer;
-  transition     : background-color 150ms ease, border-color 150ms ease;
-}
+.od-export-button {}
 
-.od-export-button:hover {
-  background  : #fbf7f1;
-  border-color: #946332;
-}
+.od-export-button:hover {}
 
-.od-export-button:focus-visible {
-  outline       : 2px solid rgb(157 117 70 / 35%);
-  outline-offset: 2px;
-}
+.od-export-button:focus-visible {}
 
 @media (max-width: 1100px) {
   .od-context-grid {
@@ -1175,38 +1111,13 @@
 }
 
 /* Match the Customer History export action. */
-.od-export-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 38px;
-  padding: 8px 13px;
-  border: 1px solid #a87540;
-  border-radius: 9px;
-  background: var(--color-surface, #fff);
-  color: #8a5a2b;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  white-space: nowrap;
-  cursor: pointer;
-  transition: background-color 150ms ease, border-color 150ms ease;
-}
+.od-export-button {}
 
-.od-export-button:hover:not(:disabled) {
-  background: #fbf7f1;
-}
+.od-export-button:hover:not(:disabled) {}
 
-.od-export-button:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
+.od-export-button:disabled {}
 
-.od-export-button:focus-visible {
-  outline: 2px solid rgb(157 117 70 / 35%);
-  outline-offset: 2px;
-}
+.od-export-button:focus-visible {}
 
 
 /* Give diamond and stone tables a clear boundary; keep regular item rows white. */
@@ -1273,4 +1184,10 @@
   background: transparent;
   box-shadow: 0 12px 32px rgb(48 40 35 / 24%);
   object-fit: contain;
+}
+
+/* Center every breakdown table column except the descriptive first column. */
+.od-breakdown-table th:not(:first-child),
+.od-breakdown-table td:not(:first-child) {
+  text-align: center;
 }

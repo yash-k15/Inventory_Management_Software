@@ -19,11 +19,6 @@
 }
 
 .customers-header h1 {
-  margin        : 0;
-  font-size     : 30px;
-  line-height   : 1.2;
-  font-weight   : 700;
-  letter-spacing: -0.035em;
 }
 
 .customers-header p {
@@ -148,7 +143,7 @@
   flex-shrink  : 0;
   gap          : 3px;
   padding      : 4px;
-  background   : #eee7de;
+  background   : #fff;
   border       : 1px solid #e3d8ca;
   border-radius: 9px;
 }
@@ -528,7 +523,7 @@
     font-size: 26px;
   }
 
-  .customers-primary-button {
+  .customers-header .page-header__actions {
     align-self: flex-start;
   }
 
@@ -1265,8 +1260,6 @@
 
 
 .customers-header .app-button {
-  flex-shrink: 0;
-  white-space: nowrap;
 }
 
 .customers-result-count {

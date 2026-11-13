@@ -758,20 +758,22 @@ export default function CustomersScreenRedesigned({
         </div>
       )}
 
-      <header className='customers-header'>
-        <div>
-          <h1 className='app-page-title'>Customers</h1>
+      <header className='page-header customers-header'>
+        <div className='page-header__heading'>
+          <h1 className='page-title'>Customers</h1>
         </div>
-        <button
-          type='button'
-          className='app-button app-button--primary'
-          onClick={() => {
-            setNotice(null);
-            setIsAddModalOpen(true);
-          }}
-        >
-          <span aria-hidden='true'>+</span> Add customer
-        </button>
+        <div className='page-header__actions'>
+          <button
+            type='button'
+            className='btn btn--primary'
+            onClick={() => {
+              setNotice(null);
+              setIsAddModalOpen(true);
+            }}
+          >
+            <span aria-hidden='true'>+</span> Add customer
+          </button>
+        </div>
       </header>
 
       <div className='customers-toolbar'>

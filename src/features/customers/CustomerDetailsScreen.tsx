@@ -344,7 +344,7 @@ export default function CustomerDetailsScreen({
   if (loading) {
     return (
       <section className='customer-details-screen'>
-        <button className='app-button app-button--secondary app-back-link customer-details-back' type='button' onClick={onBack}>
+        <button className='customer-details-back' type='button' onClick={onBack}>
           ← Back to customers
         </button>
         <div className='customer-details-state'>Loading customer details…</div>
@@ -355,7 +355,7 @@ export default function CustomerDetailsScreen({
   if (error || !customer) {
     return (
       <section className='customer-details-screen'>
-        <button className='app-button app-button--secondary app-back-link customer-details-back' type='button' onClick={onBack}>
+        <button className='customer-details-back' type='button' onClick={onBack}>
           ← Back to customers
         </button>
         <div className='customer-details-state customer-details-state--error'>
@@ -369,7 +369,7 @@ export default function CustomerDetailsScreen({
   return (
     <section className='customer-details-screen'>
       <div className='customer-details-topbar'>
-        <button className='app-button app-button--secondary app-back-link customer-details-back' type='button' onClick={onBack}>
+        <button className='customer-details-back' type='button' onClick={onBack}>
           <span aria-hidden='true'>←</span> Back to customers
         </button>
       </div>

@@ -12,21 +12,9 @@
   margin         : 4px 0 28px;
 }
 
-.exhibitions-page-header h1 {
-  margin        : 5px 0 8px;
-  color         : #302720;
-  font-family   : Georgia, 'Times New Roman', serif;
-  font-size     : clamp(2rem, 3vw, 2.65rem);
-  font-weight   : 500;
-  letter-spacing: -.035em;
-}
 
-.exhibitions-page-header p {
-  margin     : 0;
-  color      : #81766d;
-  font-size  : .94rem;
-  line-height: 1.6;
-}
+
+
 
 .exhibitions-eyebrow {
   display       : block;
@@ -184,24 +172,11 @@
   color     : #684827;
 }
 
-.exhibitions-list-heading {
-  display        : flex;
-  justify-content: space-between;
-  align-items    : center;
-  margin         : 0 2px 13px;
-  color          : #8a7c70;
-  font-size      : .8rem;
-}
 
-.exhibitions-quiet-button {
-  padding   : 5px 8px;
-  background: transparent;
-  color     : #80694f;
-}
 
-.exhibitions-quiet-button:hover {
-  background: #f1e9df;
-}
+
+
+
 
 .exhibitions-state,
 .exhibitions-empty {
@@ -795,17 +770,9 @@
   margin     : 0 0 20px;
 }
 
-.exhibitions-page-header h1 {
-  font-size     : 42px;
-  letter-spacing: -1.5px;
-  line-height   : 1.15;
-  margin        : 0;
-}
 
-.exhibitions-page-header p {
-  margin-top: 5px;
-  font-size : 14px;
-}
+
+
 
 .exhibitions-eyebrow {
   display: none;
@@ -900,26 +867,11 @@
   color     : #fff;
 }
 
-.exhibitions-list-heading {
-  margin   : 0 2px 12px;
-  color    : #766d65;
-  font-size: 12px;
-}
 
-.exhibitions-quiet-button {
-  min-height   : 38px;
-  padding      : 0 12px;
-  border       : 1px solid #ded2c4;
-  border-radius: 10px;
-  background   : #fff;
-  color        : #302823;
-  font-size    : 12px;
-  font-weight  : 550;
-}
 
-.exhibitions-quiet-button:hover {
-  background: #faf7f2;
-}
+
+
+
 
 .exhibitions-list {
   display       : flex;
@@ -1208,31 +1160,7 @@
     align-items   : flex-start;
   }
 
-  .exhibitions-page-header h1 {
-    font-size: 34px;
-  }
-
-  .exhibitions-page-header>.exhibitions-primary-button {
-    width: auto;
-  }
-
-  .exhibition-row {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .exhibition-row-info {
-    border-right : 0;
-    border-bottom: 1px solid #eee6dd;
-  }
-
-  .exhibition-row-selection {
-    grid-column: auto;
-  }
-
-  .exhibition-category-tiles {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
+  
 
 
 /* Step 1: make exhibition rows open their workspace. */

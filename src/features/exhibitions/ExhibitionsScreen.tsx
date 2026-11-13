@@ -502,27 +502,22 @@ export default function ExhibitionsScreen({
         </div>
       )}
 
-      <header className='exhibitions-page-header'>
-        <div>
-          <span className='exhibitions-eyebrow'>
-            EVENTS & CUSTOMER SELECTIONS
-          </span>
-          <h1>Exhibitions</h1>
-          <p>
-            Plan events, register inventory, and keep customer selections
-            organized.
-          </p>
+      <header className='page-header exhibitions-page-header'>
+        <div className='page-header__heading'>
+          <h1 className='page-title'>Exhibitions</h1>
         </div>
-        <button
-          type='button'
-          className='exhibitions-primary-button'
-          onClick={() => {
-            setNotice(null);
-            setModal({ mode: 'create' });
-          }}
-        >
-          <span aria-hidden='true'>+</span> Add exhibition
-        </button>
+        <div className='page-header__actions'>
+          <button
+            type='button'
+            className='btn btn--primary'
+            onClick={() => {
+              setNotice(null);
+              setModal({ mode: 'create' });
+            }}
+          >
+            <span aria-hidden='true'>+</span> Add exhibition
+          </button>
+        </div>
       </header>
 
       <div className='exhibitions-toolbar'>
@@ -566,22 +561,6 @@ export default function ExhibitionsScreen({
             </button>
           ))}
         </div>
-      </div>
-
-      <div className='exhibitions-list-heading'>
-        <span>
-          {loading
-            ? 'Loading exhibitions…'
-            : `${filteredExhibitions.length} ${filteredExhibitions.length === 1 ? 'exhibition' : 'exhibitions'}`}
-        </span>
-        <button
-          type='button'
-          className='exhibitions-quiet-button'
-          onClick={() => void load()}
-          disabled={loading}
-        >
-          ↻ Refresh
-        </button>
       </div>
 
       {error && (

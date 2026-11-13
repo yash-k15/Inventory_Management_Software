@@ -192,13 +192,9 @@ function DataTransferScreen() {
 
   return (
     <section className='data-transfer-screen'>
-      <header className='data-transfer-heading'>
+      <header className='page-header data-transfer-heading'>
         <div>
-          <p className='data-transfer-eyebrow'>SYSTEM</p>
-          <h1 className='app-page-title'>Data Transfer</h1>
-          <p className='app-page-description'>
-            Create a portable copy of your Master database and item photos.
-          </p>
+          <h1 className='page-title'>Data Transfer</h1>
         </div>
       </header>
 
@@ -222,120 +218,132 @@ function DataTransferScreen() {
         </div>
       )}
 
-      <article className='data-transfer-card'>
-        <div className='data-transfer-card-icon' aria-hidden='true'>
-          <svg viewBox='0 0 24 24' fill='none'>
-            <path d='M12 3v12m0 0 4-4m-4 4-4-4M4 17v3h16v-3' />
-          </svg>
-        </div>
-        <div className='data-transfer-card-content'>
-          <h2>Export Master Package</h2>
-          <p>
-            Export a consistent SQLite database backup together with the
-            complete item-images folder in one ZIP file.
-          </p>
-          <ul>
-            <li>Complete application database</li>
-            <li>All files from the item-images folder</li>
-            <li>Transfer manifest and database integrity check</li>
-          </ul>
-          <button
-            type='button'
-            className='data-transfer-primary-button'
-            onClick={exportPackage}
-            disabled={busy}
-          >
-            {busy ? 'Creating package…' : 'Export Master Package'}
-          </button>
-        </div>
-      </article>
+      <div className='data-transfer-card-grid'>
+        <article className='card data-transfer-card'>
+                <div className='data-transfer-card-icon' aria-hidden='true'>
+                  <svg viewBox='0 0 24 24' fill='none'>
+                    <path d='M4 4h16v16H4zM8 8h8M8 12h8M8 16h5' />
+                  </svg>
+                </div>
+                <div className='data-transfer-card-content'>
+                  <h2>Validate Master Package</h2>
+                  <p>
+                    Select a transfer ZIP to check its structure, manifest, database
+                    integrity, migration history and photo entries. This step does not
+                    modify your current data.
+                  </p>
+                  <button
+                    type='button'
+                    className='btn btn--primary'
+                    onClick={validatePackage}
+                    disabled={busy}
+                  >
+                    {busy ? 'Validating package…' : 'Select Package & Validate'}
+                  </button>
 
-      <article className='data-transfer-card'>
-        <div className='data-transfer-card-icon' aria-hidden='true'>
-          <svg viewBox='0 0 24 24' fill='none'>
-            <path d='M4 4h16v16H4zM8 8h8M8 12h8M8 16h5' />
-          </svg>
-        </div>
-        <div className='data-transfer-card-content'>
-          <h2>Validate Master Package</h2>
-          <p>
-            Select a transfer ZIP to check its structure, manifest, database
-            integrity, migration history and photo entries. This step does not
-            modify your current data.
-          </p>
-          <button
-            type='button'
-            className='data-transfer-primary-button'
-            onClick={validatePackage}
-            disabled={busy}
-          >
-            {busy ? 'Validating package…' : 'Select Package & Validate'}
-          </button>
-          {validation && (
-            <div className='data-transfer-validation-result' role='status'>
-              <h3>Validation successful</h3>
-              <p>Transfer ID: {validation.transferId}</p>
-              <p>Database schema: {validation.schemaVersion}</p>
-              <p>Database integrity: {validation.databaseIntegrity}</p>
+                </div>
+                </article>
+        <article className='card data-transfer-card'>
+                <div className='data-transfer-card-icon' aria-hidden='true'>
+                  <svg viewBox='0 0 24 24' fill='none'>
+                    <path d='M12 3v12m0 0 4-4m-4 4-4-4M4 17v3h16v-3' />
+                  </svg>
+                </div>
+                <div className='data-transfer-card-content'>
+                  <h2>Export Master Package</h2>
+                  <p>
+                    Export a consistent SQLite database backup together with the
+                    complete item-images folder in one ZIP file.
+                  </p>
+                  <ul>
+                    <li>Your complete inventory and business data</li>
+                    <li>All item photos</li>
+                    
+                  </ul>
+                  <button
+                    type='button'
+                    className='btn btn--primary'
+                    onClick={exportPackage}
+                    disabled={busy}
+                  >
+                    {busy ? 'Creating package…' : 'Export Master Package'}
+                  </button>
+                </div>
+              </article>
+      </div>
+
+      {validation && selectedPackage && (
+        <article className='card data-transfer-import-card'>
+          <div className='data-transfer-import-header'>
+            <div>
+              <h2>Import Master Package</h2>
+              <p>Follow the steps below to safely replace this computer's data with the selected Master package.</p>
+            </div>
+            <span className='data-transfer-step-status data-transfer-step-status--success'>
+              Package validated
+            </span>
+          </div>
+
+          <div className='data-transfer-import-steps'>
+            <section className='data-transfer-import-step'>
+              <div className='data-transfer-import-step-heading'>
+                <span className='data-transfer-step-number data-transfer-step-number--complete'>1</span>
+                <h3>Package validated</h3>
+                <span className='data-transfer-step-status data-transfer-step-status--success'>Complete</span>
+              </div>
               <p>Photo files: {validation.imageCount}</p>
               <p>
-                Exported:{' '}
-                {new Date(
-                  validation.exportedAtUnixSeconds * 1000,
-                ).toLocaleString()}
+                Exported: {new Date(validation.exportedAtUnixSeconds * 1000).toLocaleString()}
               </p>
-            </div>
-          )}
-          {validation && selectedPackage && !preparedImport && (
-            <div className='data-transfer-prepare-import'>
-              <p>
-                <strong>Next:</strong> Create a verified backup of this
-                computer's current database and photos, then stage the incoming
-                package. This step will not replace your live data.
-              </p>
+            </section>
+
+            <section className='data-transfer-import-step'>
+              <div className='data-transfer-import-step-heading'>
+                <span className={`data-transfer-step-number ${preparedImport ? 'data-transfer-step-number--complete' : ''}`}>2</span>
+                <h3>Create backup & prepare import</h3>
+                {preparedImport && (
+                  <span className='data-transfer-step-status data-transfer-step-status--success'>Complete</span>
+                )}
+              </div>
+              {preparedImport ? (
+                <p>Backup created and {preparedImport.imageCount} photos are ready to import. Your current data has not been replaced.</p>
+              ) : (
+                <>
+                  <p>Create a verified backup of the current data and prepare the incoming package. This step does not replace your live data.</p>
+                  <button
+                    type='button'
+                    className='btn btn--primary'
+                    onClick={prepareImport}
+                    disabled={busy}
+                  >
+                    {busy ? 'Preparing backup…' : 'Create Backup & Prepare Import'}
+                  </button>
+                </>
+              )}
+            </section>
+
+            <section className='data-transfer-import-step'>
+              <div className='data-transfer-import-step-heading'>
+                <span className={`data-transfer-step-number ${preparedImport ? 'data-transfer-step-number--ready' : ''}`}>3</span>
+                <h3>Review & apply import</h3>
+                <span className={`data-transfer-step-status ${preparedImport ? 'data-transfer-step-status--warning' : ''}`}>
+                  {preparedImport ? 'Ready' : 'Waiting'}
+                </span>
+              </div>
+              <p>Replace the data and item photos on this computer with the selected Master package. A verified backup is available for recovery.</p>
               <button
                 type='button'
-                className='data-transfer-primary-button'
-                onClick={prepareImport}
-                disabled={busy}
+                className='btn btn--danger'
+                onClick={() => setShowImportConfirmation(true)}
+                disabled={busy || !preparedImport}
               >
-                {busy ? 'Preparing backup…' : 'Create Backup & Prepare Import'}
+                Review & Apply Import
               </button>
-            </div>
-          )}
-          {preparedImport && (
-            <div className='data-transfer-validation-result' role='status'>
-              <h3>Backup and staging completed</h3>
-              <p>Transfer ID: {preparedImport.transferId}</p>
-              <p>Photos staged: {preparedImport.imageCount}</p>
-              <p>
-                <strong>Backup location:</strong>{' '}
-                {preparedImport.backupDirectory}
-              </p>
-              <p>
-                <strong>Staging location:</strong>{' '}
-                {preparedImport.stagingDirectory}
-              </p>
-              <p>Your current database and photos have not been replaced.</p>
-              <div className='data-transfer-prepare-import'>
-                <p>
-                  <strong>Ready for final import:</strong> This will replace all
-                  local database records and photos with the Master package. A
-                  verified backup is available for recovery.
-                </p>
-                <button
-                  type='button'
-                  className='data-transfer-primary-button data-transfer-danger-button'
-                  onClick={() => setShowImportConfirmation(true)}
-                  disabled={busy}
-                >
-                  Review & Apply Import
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      </article>
+            </section>
+          </div>
+        </article>
+      )}
+
 
       {showImportConfirmation && (
         <div
@@ -372,7 +380,7 @@ function DataTransferScreen() {
             <div className='data-transfer-confirm-actions'>
               <button
                 type='button'
-                className='data-transfer-confirm-cancel'
+                className='btn btn--secondary'
                 disabled={busy}
                 onClick={() => setShowImportConfirmation(false)}
               >
@@ -380,7 +388,7 @@ function DataTransferScreen() {
               </button>
               <button
                 type='button'
-                className='data-transfer-primary-button data-transfer-danger-button'
+                className='btn btn--danger'
                 disabled={busy}
                 onClick={scheduleImport}
               >
@@ -390,12 +398,6 @@ function DataTransferScreen() {
           </section>
         </div>
       )}
-
-      <p className='data-transfer-footnote'>
-        Import replaces the complete local database and item-images folder. A
-        verified backup is created first. The application restarts automatically
-        and applies the import before opening the main screen.
-      </p>
     </section>
   );
 }

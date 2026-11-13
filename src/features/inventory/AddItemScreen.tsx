@@ -854,9 +854,7 @@ function AddItemScreen({ onCancel, onCreated, itemId, onUpdated }: Props) {
   const totalDiamondWeightGrams = totalDiamondWeight * 0.2;
 
   const totalStoneWeightGrams = completeStones.reduce(
-    (sum, stone) =>
-      sum +
-      (Number(stone.weight) || 0) * 0.2,
+    (sum, stone) => sum + (Number(stone.weight) || 0) * 0.2,
     0,
   );
 
@@ -872,8 +870,8 @@ function AddItemScreen({ onCancel, onCreated, itemId, onUpdated }: Props) {
 
   return (
     <section className='add-item-screen'>
-      <div className='add-item-heading'>
-        <div>
+      <div className='page-header add-item-heading'>
+        <div className='page-header__heading'>
           <button
             type='button'
             className='add-item-back-link'
@@ -882,14 +880,9 @@ function AddItemScreen({ onCancel, onCreated, itemId, onUpdated }: Props) {
           >
             {isEditMode ? '← Item details' : '← Inventory'}
           </button>
-          <h2 className='app-page-title'>
+          <h2 className='page-title'>
             {isEditMode ? 'Edit jewelry item' : 'Add jewelry item'}
           </h2>
-          <p className='app-page-description'>
-            {isEditMode
-              ? 'Update this design. The item number and category cannot be changed.'
-              : 'Register a new design. The item number is generated from the category.'}
-          </p>
         </div>
       </div>
 
@@ -1167,7 +1160,7 @@ function AddItemScreen({ onCancel, onCreated, itemId, onUpdated }: Props) {
                     </div>
                     <button
                       type='button'
-                      className='app-button app-button--secondary add-item-add-button'
+                      className='btn btn--secondary add-item-add-button'
                       onClick={addDiamondRow}
                       disabled={saving || !selectedShapeId}
                     >
@@ -1301,7 +1294,7 @@ function AddItemScreen({ onCancel, onCreated, itemId, onUpdated }: Props) {
                     </div>
                     <button
                       type='button'
-                      className='app-button app-button--secondary add-item-add-button'
+                      className='btn btn--secondary add-item-add-button'
                       onClick={addStoneRow}
                       disabled={saving || !selectedStoneTypeId}
                     >
@@ -1379,7 +1372,7 @@ function AddItemScreen({ onCancel, onCreated, itemId, onUpdated }: Props) {
                       <div className='add-item-image-actions'>
                         <button
                           type='button'
-                          className='app-button app-button--secondary'
+                          className='btn btn--secondary'
                           onClick={() => void chooseImage()}
                           disabled={saving}
                         >
@@ -1407,7 +1400,7 @@ function AddItemScreen({ onCancel, onCreated, itemId, onUpdated }: Props) {
                       </div>
                       <button
                         type='button'
-                        className='app-button app-button--secondary'
+                        className='btn btn--secondary'
                         onClick={() => void chooseImage()}
                         disabled={saving}
                       >
@@ -1481,7 +1474,7 @@ function AddItemScreen({ onCancel, onCreated, itemId, onUpdated }: Props) {
               <div className='add-item-form-actions'>
                 <button
                   type='button'
-                  className='app-button app-button--secondary add-item-cancel-button'
+                  className='btn btn--secondary add-item-cancel-button'
                   onClick={onCancel}
                   disabled={saving}
                 >
@@ -1489,7 +1482,7 @@ function AddItemScreen({ onCancel, onCreated, itemId, onUpdated }: Props) {
                 </button>
                 <button
                   type='submit'
-                  className='app-button app-button--primary add-item-save-button'
+                  className='btn btn--primary add-item-save-button'
                   disabled={saving || !preview}
                 >
                   {saving

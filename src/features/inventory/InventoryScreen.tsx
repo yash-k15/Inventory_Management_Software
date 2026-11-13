@@ -344,9 +344,9 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
 
   return (
     <div className='inventory-screen'>
-      <header className='inventory-page-header'>
-        <div>
-          <h2 className='app-page-title'>Inventory</h2>
+      <header className='page-header inventory-page-header'>
+        <div className='page-header__heading'>
+          <h2 className='page-title'>Inventory</h2>
         </div>
       </header>
 
@@ -376,7 +376,7 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
         <div className='inventory-sort-menu' ref={sortMenuRef}>
           <button
             type='button'
-            className='inventory-toolbar-button inventory-sort-button'
+            className='btn btn--secondary inventory-toolbar-button inventory-sort-button'
             aria-haspopup='dialog'
             aria-expanded={showSortMenu}
             title='Change inventory sorting'
@@ -435,7 +435,7 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
 
         <button
           type='button'
-          className='inventory-toolbar-button inventory-export-button'
+          className='btn btn--export inventory-toolbar-button inventory-export-button'
           onClick={() => setShowExportDialog(true)}
           disabled={isLoading || Boolean(error)}
           title={selectedTagItems.length ? `Export inventory records or print ${selectedTagItems.length} selected tags` : 'Export inventory records'}
@@ -460,7 +460,7 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
 
         <button
           type='button'
-          className='inventory-toolbar-button inventory-print-tags-button'
+          className='btn btn--secondary inventory-toolbar-button inventory-print-tags-button'
           onClick={() => setTagPreviewItems(selectedTagItems)}
           disabled={selectedTagItems.length === 0}
           title={
@@ -475,7 +475,7 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
 
         <button
           type='button'
-          className='inventory-add-button'
+          className='btn btn--primary inventory-add-button'
           onClick={onAddItem}
         >
           <span aria-hidden='true'>+</span> Add item
@@ -510,7 +510,7 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
             <p>{error}</p>
             <button
               type='button'
-              className='inventory-add-button'
+              className='btn btn--primary inventory-add-button'
               onClick={() => void loadInventory()}
             >
               Try again
@@ -525,7 +525,7 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
             <p>Try changing your search or filters.</p>
             <button
               type='button'
-              className='inventory-toolbar-button'
+              className='btn btn--secondary inventory-toolbar-button'
               onClick={resetFilters}
             >
               Clear filters
@@ -823,7 +823,7 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
               </span>
               <button
                 type='button'
-                className='inventory-page-button'
+                className='btn btn--secondary btn--sm inventory-page-button'
                 onClick={() => setCurrentPage(1)}
                 disabled={currentPage === 1}
                 aria-label='First page'
@@ -832,7 +832,7 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
               </button>
               <button
                 type='button'
-                className='inventory-page-button'
+                className='btn btn--secondary btn--sm inventory-page-button'
                 onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
                 disabled={currentPage === 1}
               >
@@ -840,7 +840,7 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
               </button>
               <button
                 type='button'
-                className='inventory-page-button'
+                className='btn btn--secondary btn--sm inventory-page-button'
                 onClick={() =>
                   setCurrentPage((page) => Math.min(totalPages, page + 1))
                 }
@@ -850,7 +850,7 @@ function InventoryScreen({ onAddItem, onViewItem }: Props) {
               </button>
               <button
                 type='button'
-                className='inventory-page-button'
+                className='btn btn--secondary btn--sm inventory-page-button'
                 onClick={() => setCurrentPage(totalPages)}
                 disabled={currentPage >= totalPages}
                 aria-label='Last page'

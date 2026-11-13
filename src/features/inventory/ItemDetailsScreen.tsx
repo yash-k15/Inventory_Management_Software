@@ -332,7 +332,7 @@ function ItemDetailsScreen({ itemId, onBack, onEdit }: Props) {
   if (error || !data) {
     return (
       <section className='item-details-screen'>
-        <button className='app-back-link item-details-back' type='button' onClick={onBack}>
+        <button className='item-details-back' type='button' onClick={onBack}>
           ← Inventory
         </button>
         <p className='item-details-message item-details-error'>
@@ -363,14 +363,14 @@ function ItemDetailsScreen({ itemId, onBack, onEdit }: Props) {
 
   return (
     <section className='item-details-screen'>
-      <header className='item-details-header'>
-        <div className='item-details-heading'>
-          <button className='app-back-link item-details-back' type='button' onClick={onBack}>
+      <header className='page-header item-details-header'>
+        <div className='page-header__heading item-details-heading'>
+          <button className='item-details-back' type='button' onClick={onBack}>
             ← Inventory
           </button>
 
           <div className='item-details-title-row'>
-            <h1>{item.itemNumber}</h1>
+            <h1 className='page-title'>{item.itemNumber}</h1>
             <span
               className={`item-details-status ${
                 item.isArchived ? 'is-archived' : 'is-active'
@@ -380,7 +380,7 @@ function ItemDetailsScreen({ itemId, onBack, onEdit }: Props) {
             </span>
           </div>
 
-          <p className='item-details-subtitle'>
+          <p className='page-subtitle item-details-subtitle'>
             {item.categoryName}
             {item.createdAt
               ? ` · Added ${formatDate(item.createdAt).split(',')[0]}`
@@ -391,7 +391,7 @@ function ItemDetailsScreen({ itemId, onBack, onEdit }: Props) {
         <div className='item-details-actions'>
           <button
             type='button'
-            className='app-button app-button--secondary'
+            className='btn btn--secondary'
             onClick={() => void handlePrintTag()}
             disabled={tagLoading}
           >
@@ -399,7 +399,7 @@ function ItemDetailsScreen({ itemId, onBack, onEdit }: Props) {
           </button>
           <button
             type='button'
-            className='app-button app-button--primary'
+            className='btn btn--primary'
             onClick={onEdit}
           >
             Edit Item
@@ -407,7 +407,7 @@ function ItemDetailsScreen({ itemId, onBack, onEdit }: Props) {
 
           <button
             type='button'
-            className='app-button app-button--secondary'
+            className='btn btn--secondary'
             onClick={() => {
               setActionError(null);
               setShowArchiveDialog(true);
@@ -420,7 +420,7 @@ function ItemDetailsScreen({ itemId, onBack, onEdit }: Props) {
           {item.isArchived === 1 && (
             <button
               type='button'
-              className='app-button app-button--danger'
+              className='btn btn--danger'
               onClick={() => {
                 setActionError(null);
                 setShowDeleteDialog(true);
@@ -620,7 +620,7 @@ function ItemDetailsScreen({ itemId, onBack, onEdit }: Props) {
             />
             <button
               type='button'
-              className='app-button app-button--secondary item-details-certification-button'
+              className='btn btn--secondary item-details-certification-button'
               onClick={() => {
                 setIgiNumber(item.igiCertificateNumber ?? '');
                 setHuidValue(item.huid ?? '');
@@ -720,7 +720,7 @@ function ItemDetailsScreen({ itemId, onBack, onEdit }: Props) {
             <div className='item-details-modal-actions'>
               <button
                 type='button'
-                className='app-button app-button--secondary'
+                className='btn btn--secondary'
                 onClick={() => setShowArchiveDialog(false)}
                 disabled={archiveBusy}
               >
@@ -729,7 +729,7 @@ function ItemDetailsScreen({ itemId, onBack, onEdit }: Props) {
 
               <button
                 type='button'
-                className='app-button app-button--primary'
+                className='btn btn--primary'
                 onClick={() => void handleArchiveToggle()}
                 disabled={archiveBusy}
               >
@@ -787,7 +787,7 @@ function ItemDetailsScreen({ itemId, onBack, onEdit }: Props) {
               <div className='item-details-modal-actions'>
                 <button
                   type='button'
-                  className='app-button app-button--secondary'
+                  className='btn btn--secondary'
                   onClick={() => setShowCertificationDialog(false)}
                   disabled={certificationBusy}
                 >
@@ -796,7 +796,7 @@ function ItemDetailsScreen({ itemId, onBack, onEdit }: Props) {
 
                 <button
                   type='submit'
-                  className='app-button app-button--primary'
+                  className='btn btn--primary'
                   disabled={certificationBusy}
                 >
                   {certificationBusy ? 'Saving…' : 'Save Certification'}
@@ -830,7 +830,7 @@ function ItemDetailsScreen({ itemId, onBack, onEdit }: Props) {
             <div className='item-details-modal-actions'>
               <button
                 type='button'
-                className='app-button app-button--secondary'
+                className='btn btn--secondary'
                 onClick={() => setShowDeleteDialog(false)}
                 disabled={deleteBusy}
               >
@@ -839,7 +839,7 @@ function ItemDetailsScreen({ itemId, onBack, onEdit }: Props) {
 
               <button
                 type='button'
-                className='app-button app-button--danger'
+                className='btn btn--danger'
                 onClick={() => void handleDeleteItem()}
                 disabled={deleteBusy}
               >

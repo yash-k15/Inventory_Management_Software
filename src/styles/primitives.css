@@ -4,6 +4,7 @@
   align-items    : flex-start;
   justify-content: space-between;
   gap            : var(--space-5);
+  margin-bottom  : var(--space-5);
 }
 
 .page-header__heading {

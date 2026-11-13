@@ -389,20 +389,9 @@
 }
 
 .settings-table th {
-    padding       : 11px 12px;
-    background    : #faf7f3;
-    color         : #82776d;
-    font-size     : 9px;
-    font-weight   : 800;
-    letter-spacing: .55px;
-    text-transform: uppercase;
 }
 
 .settings-table td {
-    padding      : 13px 12px;
-    border-bottom: 1px solid #eee8e0;
-    font-size    : 11px;
-    text-align   : center;
 }
 
 .settings-table tbody tr:last-child td {
@@ -453,31 +442,49 @@
 .settings-reference-grid {
     display              : grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    align-items          : start;
+    grid-auto-flow       : row;
+    align-items          : stretch;
     gap                  : 16px;
 }
 
 .settings-reference-card {
-    padding: 19px;
+    display       : flex;
+    flex-direction: column;
+    height        : 100%;
+    min-width     : 0;
+    padding       : 19px;
+}
+
+.settings-reference-card .settings-card-heading p {
+    display: none;
+}
+
+.settings-category-table th:first-child,
+.settings-category-table td:first-child {
+    text-align: center;
 }
 
 .settings-reference-list {
-    margin-top: 14px;
-    border-top: 1px solid #eee8e0;
+    display       : flex;
+    flex          : 0 0 auto;
+    flex-direction: column;
+    margin-top    : 14px;
+    border-top    : 1px solid #eee8e0;
 }
 
 .settings-reference-row {
     display        : flex;
+    flex           : 0 0 auto;
     align-items    : center;
     justify-content: space-between;
     gap            : 12px;
+    min-height     : 48px;
     padding        : 12px 0;
     border-bottom  : 1px solid #eee8e0;
 }
 
 .settings-reference-row:last-child {
-    padding-bottom: 0;
-    border-bottom : 0;
+    border-bottom: 0;
 }
 
 .settings-reference-row>div:first-child {
@@ -489,12 +496,12 @@
 
 .settings-reference-row strong {
     overflow-wrap: anywhere;
-    font-size    : 11px;
+    font-size    : 15px;
 }
 
 .settings-reference-row span {
     color      : #82776d;
-    font-size  : 10px;
+    font-size  : 13px;
     line-height: 1.4;
 }
 
@@ -880,21 +887,13 @@
 
 .settings-table {
     border-color: var(--settings-border);
-    font-size   : 12px;
 }
 
 .settings-table th {
-    background    : #f8f5f1;
-    color         : #7c7166;
-    font-size     : 10px;
-    letter-spacing: .5px;
-    text-transform: uppercase;
 }
 
 .settings-table td,
 .settings-table th {
-    border-bottom-color: #eee8e1;
-    padding            : 12px 13px;
 }
 
 .settings-status {
@@ -1136,11 +1135,9 @@
 }
 
 .settings-table th {
-    padding: 9px 12px;
 }
 
 .settings-table td {
-    padding: 10px 12px;
 }
 
 .settings-number-cell {
@@ -1365,8 +1362,6 @@
 
 .settings-table th,
 .settings-table td {
-    box-sizing    : border-box;
-    vertical-align: middle;
 }
 
 /* Numeric columns align their headings with the right-aligned values. */
@@ -1574,4 +1569,159 @@
     border-color: #aa8759;
     background: #fbf6ef;
     box-shadow: inset 0 0 0 1px rgb(170 135 89 / 18%);
+}
+
+
+/* Settings visual feedback pass */
+.settings-screen {
+    row-gap: 0;
+}
+
+.settings-heading {
+    margin: 0 0 0;
+    padding: 0;
+    min-height: 0;
+}
+
+.settings-heading .page-title {
+    margin: 0;
+}
+
+/* Center the identifying values in the three reference tables. */
+.settings-pricing-content .settings-table th:first-child,
+.settings-pricing-content .settings-table td:first-child {
+    text-align: center;
+}
+
+/* Secondary explanatory copy should remain comfortably readable. */
+.settings-screen .settings-card-heading p,
+.settings-screen .settings-rate-help,
+.settings-screen .settings-rate-help span,
+.settings-screen .settings-field-caption,
+.settings-screen .settings-gst-splits span,
+.settings-screen .settings-gst-rate-display span,
+.settings-screen .settings-gst-rate-display em {
+    font-size: 12px;
+}
+
+.settings-screen .settings-gst-splits strong {
+    font-size: 12px;
+}
+
+/* Give the Certification and GST cards a clearer information hierarchy. */
+.settings-certification-card,
+.settings-gst-card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.settings-certification-card .settings-card-heading,
+.settings-gst-card .settings-card-heading {
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--settings-border, #e7e0d8);
+}
+
+.settings-certification-card .settings-field-caption,
+.settings-gst-card .settings-field-caption {
+    margin: 0;
+    color: var(--settings-muted, #786f66);
+    font-size: 12px;
+    font-weight: 650;
+}
+
+.settings-certification-card .settings-inline-edit {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    width: 100%;
+    min-height: 42px;
+    padding: 4px;
+    border: 1px solid #e4d8c9;
+    border-radius: 9px;
+    background: #fbf8f3;
+}
+
+.settings-certification-card .settings-inline-edit .settings-input-prefix,
+.settings-certification-card .settings-inline-edit .settings-input-unit {
+    padding: 0 10px;
+    color: var(--settings-muted, #786f66);
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.settings-certification-card .settings-inline-edit input {
+    flex: 1;
+    min-width: 0;
+    border: 0;
+    background: transparent;
+    text-align: right;
+    font-weight: 700;
+}
+
+.settings-certification-card .settings-inline-edit input:focus {
+    outline: none;
+}
+
+.settings-certification-card .settings-inline-edit button {
+    margin-left: 6px;
+}
+
+.settings-gst-rate-display {
+    box-sizing: border-box;
+    max-width: none;
+    min-height: 44px;
+    margin: 0;
+    padding: 8px 12px;
+    border-color: #e4d8c9;
+    border-radius: 9px;
+    background: #fbf8f3;
+}
+
+.settings-gst-rate-display strong {
+    font-size: 18px;
+}
+
+.settings-gst-rate-display em {
+    padding: 5px 9px;
+    border: 1px solid #e4d8c9;
+    border-radius: 6px;
+    background: #fff;
+}
+
+.settings-gst-splits {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 0;
+}
+
+.settings-gst-splits div {
+    min-width: 0;
+    gap: 5px;
+    padding: 12px;
+    border-color: #e9e1d8;
+    border-radius: 9px;
+    background: #fcfaf7;
+}
+
+.settings-gst-splits strong {
+    color: var(--settings-ink, #302824);
+    font-size: 12px;
+}
+
+.settings-gst-splits span {
+    color: var(--settings-muted, #786f66);
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.settings-gst-form {
+    margin-top: 0;
+}
+
+@media (max-width: 700px) {
+    .settings-gst-splits {
+        grid-template-columns: 1fr;
+    }
 }

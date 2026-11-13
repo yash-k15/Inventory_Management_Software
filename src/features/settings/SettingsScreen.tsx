@@ -96,7 +96,9 @@ function SettingsScreen({ onDirtyChange }: Props) {
   const [wastagePerGramValue, setWastagePerGramValue] = useState('0.00');
   const [savedWastagePercent, setSavedWastagePercent] = useState('8');
   const [savedWastagePerGram, setSavedWastagePerGram] = useState('0.00');
-  const [wastagePricingMethod, setWastagePricingMethod] = useState<'percent' | 'per_gram'>('percent');
+  const [wastagePricingMethod, setWastagePricingMethod] = useState<
+    'percent' | 'per_gram'
+  >('percent');
   const [referenceError, setReferenceError] = useState<string | null>(null);
   const [editingRate, setEditingRate] = useState<RateKey | 'wastage' | null>(
     null,
@@ -179,7 +181,9 @@ function SettingsScreen({ onDirtyChange }: Props) {
       setGstRate(String(Number(setting('gst_rate_bp') ?? '300') / 100));
       setBusinessState(setting('business_state') ?? 'Maharashtra');
       setWastagePricingMethod(
-        setting('wastage_pricing_method') === 'per_gram' ? 'per_gram' : 'percent',
+        setting('wastage_pricing_method') === 'per_gram'
+          ? 'per_gram'
+          : 'percent',
       );
       setPurities(purityRows);
       setShapes(shapeRows);
@@ -245,14 +249,18 @@ function SettingsScreen({ onDirtyChange }: Props) {
       );
       setNotice({
         kind: 'success',
-        text: mode === 'percent'
-          ? 'Global wastage rule set to percentage.'
-          : 'Global wastage rule set to fixed charge per gram.',
+        text:
+          mode === 'percent'
+            ? 'Global wastage rule set to percentage.'
+            : 'Global wastage rule set to fixed charge per gram.',
       });
     } catch (error) {
       setNotice({
         kind: 'error',
-        text: error instanceof Error ? error.message : 'Could not update the global wastage rule.',
+        text:
+          error instanceof Error
+            ? error.message
+            : 'Could not update the global wastage rule.',
       });
     }
   }
@@ -704,14 +712,9 @@ function SettingsScreen({ onDirtyChange }: Props) {
 
   return (
     <div className='settings-screen'>
-      <header className='settings-heading'>
+      <header className='page-header settings-heading'>
         <div>
-          <p className='settings-eyebrow'>APPLICATION CONFIGURATION</p>
-          <h1 className='app-page-title'>Settings</h1>
-          <p className='app-page-description'>
-            Pricing rules and reference data used when adding inventory,
-            estimating jewelry cost and preparing customer selections.
-          </p>
+          <h1 className='page-title'>Settings</h1>
         </div>
       </header>
       {notice && (
@@ -755,18 +758,7 @@ function SettingsScreen({ onDirtyChange }: Props) {
 
       {section === 'pricing' && (
         <div className='settings-content settings-pricing-content'>
-          <aside className='settings-prototype-note'>
-            <span className='settings-prototype-note__icon' aria-hidden='true'>
-              i
-            </span>
-            <p>
-              <strong>These are default rates.</strong> A customer selection can
-              override them for that selection only. Editing a rate here never
-              changes a negotiated selection price or an existing order.{' '}
-            </p>
-          </aside>
-
-          <section className='settings-card settings-gold-card'>
+          <section className='card settings-card settings-gold-card'>
             <div className='settings-card-heading'>
               <div>
                 <h2>Gold</h2>
@@ -801,7 +793,7 @@ function SettingsScreen({ onDirtyChange }: Props) {
                   {parseNumericInput(goldRate) !==
                     parseNumericInput(savedGoldRate) && (
                     <button
-                      className='settings-button settings-button--primary'
+                      className='btn btn--primary btn--sm'
                       disabled={busy}
                     >
                       Save
@@ -826,14 +818,14 @@ function SettingsScreen({ onDirtyChange }: Props) {
               <strong>Purity reference</strong>
               <button
                 type='button'
-                className='settings-button'
+                className='btn btn--primary btn--sm'
                 onClick={() => openReference('purity')}
               >
                 + Add purity
               </button>
             </div>
             <div className='settings-table-wrap'>
-              <table className='settings-table'>
+              <table className='data-table data-table--compact settings-table'>
                 <thead>
                   <tr>
                     <th>Purity</th>
@@ -856,7 +848,7 @@ function SettingsScreen({ onDirtyChange }: Props) {
                       </td>
                       <td>
                         <span
-                          className={`settings-status ${row.isArchived ? 'settings-status--archived' : ''}`}
+                          className={`badge ${row.isArchived ? 'badge--neutral' : 'badge--success'}`}
                         >
                           {row.isArchived ? 'Archived' : 'Active'}
                         </span>
@@ -893,7 +885,7 @@ function SettingsScreen({ onDirtyChange }: Props) {
             </div>
           </section>
 
-          <section className='settings-card settings-wastage-card'>
+          <section className='card settings-card settings-wastage-card'>
             <div className='settings-card-heading'>
               <div>
                 <h2>Wastage</h2>
@@ -941,10 +933,7 @@ function SettingsScreen({ onDirtyChange }: Props) {
                 </span>
                 {parseNumericInput(wastagePercentValue) !==
                   parseNumericInput(savedWastagePercent) && (
-                  <button
-                    className='settings-button settings-button--primary'
-                    disabled={busy}
-                  >
+                  <button className='btn btn--primary btn--sm' disabled={busy}>
                     Save percentage
                   </button>
                 )}
@@ -984,10 +973,7 @@ function SettingsScreen({ onDirtyChange }: Props) {
                 </span>
                 {parseNumericInput(wastagePerGramValue) !==
                   parseNumericInput(savedWastagePerGram) && (
-                  <button
-                    className='settings-button settings-button--primary'
-                    disabled={busy}
-                  >
+                  <button className='btn btn--primary btn--sm' disabled={busy}>
                     Save fixed charge
                   </button>
                 )}
@@ -995,7 +981,7 @@ function SettingsScreen({ onDirtyChange }: Props) {
             </div>
           </section>
 
-          <section className='settings-card settings-table-card'>
+          <section className='card settings-card settings-table-card'>
             <div className='settings-card-heading'>
               <div>
                 <h2>Diamond pricing</h2>
@@ -1006,14 +992,14 @@ function SettingsScreen({ onDirtyChange }: Props) {
               </div>
               <button
                 type='button'
-                className='settings-button settings-button--primary'
+                className='btn btn--primary btn--sm'
                 onClick={() => openReference('combination')}
               >
                 + Add combination
               </button>
             </div>
             <div className='settings-table-wrap'>
-              <table className='settings-table'>
+              <table className='data-table data-table--compact settings-table'>
                 <thead>
                   <tr>
                     <th>Shape + quality</th>
@@ -1038,7 +1024,7 @@ function SettingsScreen({ onDirtyChange }: Props) {
                       </td>
                       <td>
                         <span
-                          className={`settings-status ${row.isArchived ? 'settings-status--archived' : ''}`}
+                          className={`badge ${row.isArchived ? 'badge--neutral' : 'badge--success'}`}
                         >
                           {row.isArchived ? 'Archived' : 'Active'}
                         </span>
@@ -1075,24 +1061,22 @@ function SettingsScreen({ onDirtyChange }: Props) {
             </div>
           </section>
 
-          <section className='settings-card settings-table-card'>
+          <section className='card settings-card settings-table-card'>
             <div className='settings-card-heading'>
               <div>
                 <h2>Other stones</h2>
-                <p>
-                  Rate per carat for each stone type.
-                </p>
+                <p>Rate per carat for each stone type.</p>
               </div>
               <button
                 type='button'
-                className='settings-button settings-button--primary'
+                className='btn btn--primary btn--sm'
                 onClick={() => openReference('stone')}
               >
                 + Add stone
               </button>
             </div>
             <div className='settings-table-wrap'>
-              <table className='settings-table'>
+              <table className='data-table data-table--compact settings-table'>
                 <thead>
                   <tr>
                     <th>Stone type</th>
@@ -1115,7 +1099,7 @@ function SettingsScreen({ onDirtyChange }: Props) {
                       </td>
                       <td>
                         <span
-                          className={`settings-status ${row.isArchived ? 'settings-status--archived' : ''}`}
+                          className={`badge ${row.isArchived ? 'badge--neutral' : 'badge--success'}`}
                         >
                           {row.isArchived ? 'Archived' : 'Active'}
                         </span>
@@ -1153,7 +1137,7 @@ function SettingsScreen({ onDirtyChange }: Props) {
           </section>
 
           <div className='settings-bottom-grid'>
-            <section className='settings-card settings-certification-card'>
+            <section className='card settings-card settings-certification-card'>
               <div className='settings-card-heading'>
                 <div>
                   <h2>Certification</h2>
@@ -1190,16 +1174,13 @@ function SettingsScreen({ onDirtyChange }: Props) {
                 <span className='settings-input-unit'>per diamond carat</span>
                 {parseNumericInput(certificationRate) !==
                   parseNumericInput(savedCertificationRate) && (
-                  <button
-                    className='settings-button settings-button--primary'
-                    disabled={busy}
-                  >
+                  <button className='btn btn--primary btn--sm' disabled={busy}>
                     Save
                   </button>
                 )}
               </form>
             </section>
-            <section className='settings-card settings-gst-card'>
+            <section className='card settings-card settings-gst-card'>
               <div className='settings-card-heading'>
                 <div>
                   <h2>GST</h2>
@@ -1214,7 +1195,7 @@ function SettingsScreen({ onDirtyChange }: Props) {
                   className='settings-gst-form'
                   onSubmit={(e) => void saveGst(e)}
                 >
-                  <label>
+                  <label className='field'>
                     GST rate (%)
                     <input
                       type='text'
@@ -1223,7 +1204,7 @@ function SettingsScreen({ onDirtyChange }: Props) {
                       onChange={(e) => setGstRate(e.target.value)}
                     />
                   </label>
-                  <label>
+                  <label className='field'>
                     Business state
                     <input
                       value={businessState}
@@ -1233,14 +1214,14 @@ function SettingsScreen({ onDirtyChange }: Props) {
                   </label>
                   <div className='settings-form-actions'>
                     <button
-                      className='settings-button settings-button--primary'
+                      className='btn btn--primary btn--sm'
                       disabled={busy}
                     >
                       Save GST
                     </button>
                     <button
                       type='button'
-                      className='settings-button'
+                      className='btn btn--secondary btn--sm'
                       onClick={() => {
                         setGstEditing(false);
                         void load();
@@ -1283,7 +1264,7 @@ function SettingsScreen({ onDirtyChange }: Props) {
       )}
 
       {section === 'categories' && (
-        <section className='settings-card settings-table-card'>
+        <section className='card settings-card settings-table-card'>
           <div className='settings-card-heading'>
             <div>
               <h2>Categories &amp; item numbering</h2>
@@ -1294,14 +1275,14 @@ function SettingsScreen({ onDirtyChange }: Props) {
             </div>
             <button
               type='button'
-              className='settings-button settings-button--primary'
+              className='btn btn--primary btn--sm'
               onClick={() => startCategoryEdit()}
             >
               + Add category
             </button>
           </div>
           <div className='settings-table-wrap'>
-            <table className='settings-table'>
+            <table className='data-table data-table--compact settings-table settings-category-table'>
               <thead>
                 <tr>
                   <th>Category</th>
@@ -1334,7 +1315,7 @@ function SettingsScreen({ onDirtyChange }: Props) {
                     <td>{row.rangeEnd ?? 'Open'}</td>
                     <td>
                       <span
-                        className={`settings-status ${row.isArchived ? 'settings-status--archived' : ''}`}
+                        className={`badge ${row.isArchived ? 'badge--neutral' : 'badge--success'}`}
                       >
                         {row.isArchived ? 'Archived' : 'Active'}
                       </span>
@@ -1342,7 +1323,7 @@ function SettingsScreen({ onDirtyChange }: Props) {
                     <td className='settings-row-actions'>
                       <button
                         type='button'
-                        className='settings-button'
+                        className='btn btn--secondary btn--sm'
                         disabled={busy || !!row.isArchived}
                         onClick={() => startCategoryEdit(row)}
                       >
@@ -1350,7 +1331,7 @@ function SettingsScreen({ onDirtyChange }: Props) {
                       </button>
                       <button
                         type='button'
-                        className='settings-button'
+                        className='btn btn--secondary btn--sm'
                         disabled={busy}
                         onClick={() =>
                           void toggleArchive(
@@ -1374,15 +1355,14 @@ function SettingsScreen({ onDirtyChange }: Props) {
 
       {section === 'reference' && (
         <div className='settings-reference-grid'>
-          <section className='settings-card settings-reference-card'>
+          <section className='card settings-card settings-reference-card'>
             <div className='settings-card-heading'>
               <div>
                 <h2>Purity</h2>
-                <p>Gold purity percentage</p>
               </div>
               <button
                 type='button'
-                className='settings-button settings-button--primary'
+                className='btn btn--primary btn--sm'
                 onClick={() => openReference('purity')}
               >
                 + Add
@@ -1403,7 +1383,7 @@ function SettingsScreen({ onDirtyChange }: Props) {
                   <div>
                     <button
                       type='button'
-                      className='settings-button'
+                      className='btn btn--secondary btn--sm'
                       disabled={busy || !!row.isArchived}
                       onClick={() => openReference('purity', row)}
                     >
@@ -1411,7 +1391,7 @@ function SettingsScreen({ onDirtyChange }: Props) {
                     </button>
                     <button
                       type='button'
-                      className='settings-button'
+                      className='btn btn--secondary btn--sm'
                       disabled={busy}
                       onClick={() =>
                         void toggleArchive(
@@ -1429,15 +1409,66 @@ function SettingsScreen({ onDirtyChange }: Props) {
               ))}
             </div>
           </section>
-          <section className='settings-card settings-reference-card'>
+          <section className='card settings-card settings-reference-card'>
             <div className='settings-card-heading'>
               <div>
-                <h2>Diamond shapes</h2>
-                <p>Codes printed on jewelry tags</p>
+                <h2>Gold types</h2>
               </div>
               <button
                 type='button'
-                className='settings-button settings-button--primary'
+                className='btn btn--primary btn--sm'
+                onClick={() => openReference('gold')}
+              >
+                + Add
+              </button>
+            </div>
+            <div className='settings-reference-list'>
+              {goldTypes.map((row) => (
+                <div
+                  className={`settings-reference-row ${row.isArchived ? 'is-archived' : ''}`}
+                  key={row.id}
+                >
+                  <div>
+                    <strong>{row.name}</strong>
+                    {row.isArchived ? <span>Archived</span> : null}
+                  </div>
+                  <div>
+                    <button
+                      type='button'
+                      className='btn btn--secondary btn--sm'
+                      disabled={busy || !!row.isArchived}
+                      onClick={() => openReference('gold', row)}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type='button'
+                      className='btn btn--secondary btn--sm'
+                      disabled={busy}
+                      onClick={() =>
+                        void toggleArchive(
+                          'gold_type',
+                          row.id,
+                          row.isArchived,
+                          row.name,
+                        )
+                      }
+                    >
+                      {row.isArchived ? 'Restore' : 'Archive'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+          <section className='card settings-card settings-reference-card'>
+            <div className='settings-card-heading'>
+              <div>
+                <h2>Diamond shapes</h2>
+              </div>
+              <button
+                type='button'
+                className='btn btn--primary btn--sm'
                 onClick={() => openReference('shape')}
               >
                 + Add
@@ -1453,16 +1484,12 @@ function SettingsScreen({ onDirtyChange }: Props) {
                     <strong>
                       {row.code} · {row.name}
                     </strong>
-                    <span>
-                      {row.isArchived
-                        ? 'Archived'
-                        : 'Available for combinations'}
-                    </span>
+                    {row.isArchived ? <span>Archived</span> : null}
                   </div>
                   <div>
                     <button
                       type='button'
-                      className='settings-button'
+                      className='btn btn--secondary btn--sm'
                       disabled={busy || !!row.isArchived}
                       onClick={() => openReference('shape', row)}
                     >
@@ -1470,7 +1497,7 @@ function SettingsScreen({ onDirtyChange }: Props) {
                     </button>
                     <button
                       type='button'
-                      className='settings-button'
+                      className='btn btn--secondary btn--sm'
                       disabled={busy}
                       onClick={() =>
                         void toggleArchive(
@@ -1488,15 +1515,14 @@ function SettingsScreen({ onDirtyChange }: Props) {
               ))}
             </div>
           </section>
-          <section className='settings-card settings-reference-card'>
+          <section className='card settings-card settings-reference-card'>
             <div className='settings-card-heading'>
               <div>
                 <h2>Diamond combinations</h2>
-                <p>Quality and rate per carat</p>
               </div>
               <button
                 type='button'
-                className='settings-button settings-button--primary'
+                className='btn btn--primary btn--sm'
                 onClick={() => openReference('combination')}
               >
                 + Add
@@ -1519,7 +1545,7 @@ function SettingsScreen({ onDirtyChange }: Props) {
                   <div>
                     <button
                       type='button'
-                      className='settings-button'
+                      className='btn btn--secondary btn--sm'
                       disabled={busy || !!row.isArchived}
                       onClick={() => openReference('combination', row)}
                     >
@@ -1527,7 +1553,7 @@ function SettingsScreen({ onDirtyChange }: Props) {
                     </button>
                     <button
                       type='button'
-                      className='settings-button'
+                      className='btn btn--secondary btn--sm'
                       disabled={busy}
                       onClick={() =>
                         void toggleArchive(
@@ -1545,15 +1571,14 @@ function SettingsScreen({ onDirtyChange }: Props) {
               ))}
             </div>
           </section>
-          <section className='settings-card settings-reference-card'>
+          <section className='card settings-card settings-reference-card'>
             <div className='settings-card-heading'>
               <div>
                 <h2>Stone types</h2>
-                <p>Tag label, unit, and rate</p>
               </div>
               <button
                 type='button'
-                className='settings-button settings-button--primary'
+                className='btn btn--primary btn--sm'
                 onClick={() => openReference('stone')}
               >
                 + Add
@@ -1574,7 +1599,7 @@ function SettingsScreen({ onDirtyChange }: Props) {
                   <div>
                     <button
                       type='button'
-                      className='settings-button'
+                      className='btn btn--secondary btn--sm'
                       disabled={busy || !!row.isArchived}
                       onClick={() => openReference('stone', row)}
                     >
@@ -1582,66 +1607,11 @@ function SettingsScreen({ onDirtyChange }: Props) {
                     </button>
                     <button
                       type='button'
-                      className='settings-button'
+                      className='btn btn--secondary btn--sm'
                       disabled={busy}
                       onClick={() =>
                         void toggleArchive(
                           'stone_type',
-                          row.id,
-                          row.isArchived,
-                          row.name,
-                        )
-                      }
-                    >
-                      {row.isArchived ? 'Restore' : 'Archive'}
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-          <section className='settings-card settings-reference-card'>
-            <div className='settings-card-heading'>
-              <div>
-                <h2>Gold types</h2>
-                <p>Available gold colors</p>
-              </div>
-              <button
-                type='button'
-                className='settings-button settings-button--primary'
-                onClick={() => openReference('gold')}
-              >
-                + Add
-              </button>
-            </div>
-            <div className='settings-reference-list'>
-              {goldTypes.map((row) => (
-                <div
-                  className={`settings-reference-row ${row.isArchived ? 'is-archived' : ''}`}
-                  key={row.id}
-                >
-                  <div>
-                    <strong>{row.name}</strong>
-                    <span>
-                      {row.isArchived ? 'Archived' : 'Available for inventory'}
-                    </span>
-                  </div>
-                  <div>
-                    <button
-                      type='button'
-                      className='settings-button'
-                      disabled={busy || !!row.isArchived}
-                      onClick={() => openReference('gold', row)}
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type='button'
-                      className='settings-button'
-                      disabled={busy}
-                      onClick={() =>
-                        void toggleArchive(
-                          'gold_type',
                           row.id,
                           row.isArchived,
                           row.name,
@@ -1709,7 +1679,7 @@ function SettingsScreen({ onDirtyChange }: Props) {
             <form onSubmit={(e) => void saveReference(e)}>
               <div className='settings-modal-body'>
                 {referenceDraft.kind !== 'combination' && (
-                  <label>
+                  <label className='field'>
                     {referenceDraft.kind === 'shape' ? 'Full name' : 'Name'}
                     <input
                       autoFocus
@@ -1725,7 +1695,7 @@ function SettingsScreen({ onDirtyChange }: Props) {
                   </label>
                 )}
                 {referenceDraft.kind === 'shape' && (
-                  <label>
+                  <label className='field'>
                     Tag code
                     <input
                       value={referenceDraft.tagLabel}
@@ -1741,7 +1711,7 @@ function SettingsScreen({ onDirtyChange }: Props) {
                   </label>
                 )}
                 {referenceDraft.kind === 'purity' && (
-                  <label>
+                  <label className='field'>
                     Gold content (%)
                     <input
                       type='text'
@@ -1768,7 +1738,7 @@ function SettingsScreen({ onDirtyChange }: Props) {
                 )}
                 {referenceDraft.kind === 'combination' && (
                   <>
-                    <label>
+                    <label className='field'>
                       Diamond shape
                       <select
                         value={referenceDraft.shapeId}
@@ -1790,7 +1760,7 @@ function SettingsScreen({ onDirtyChange }: Props) {
                           ))}
                       </select>
                     </label>
-                    <label>
+                    <label className='field'>
                       Quality / combination
                       <input
                         autoFocus
@@ -1805,7 +1775,7 @@ function SettingsScreen({ onDirtyChange }: Props) {
                         required
                       />
                     </label>
-                    <label>
+                    <label className='field'>
                       Rate per carat (₹)
                       <input
                         type='text'
@@ -1832,7 +1802,7 @@ function SettingsScreen({ onDirtyChange }: Props) {
                 )}
                 {referenceDraft.kind === 'stone' && (
                   <>
-                    <label>
+                    <label className='field'>
                       Tag label
                       <input
                         value={referenceDraft.tagLabel}
@@ -1846,7 +1816,7 @@ function SettingsScreen({ onDirtyChange }: Props) {
                         required
                       />
                     </label>
-                    <label>
+                    <label className='field'>
                       Rate per carat (₹)
                       <input
                         type='text'
@@ -1894,7 +1864,7 @@ function SettingsScreen({ onDirtyChange }: Props) {
               <footer>
                 <button
                   type='button'
-                  className='settings-button'
+                  className='btn btn--secondary btn--sm'
                   disabled={busy}
                   onClick={() => {
                     setReferenceError(null);
@@ -1905,7 +1875,7 @@ function SettingsScreen({ onDirtyChange }: Props) {
                 </button>
                 <button
                   type='submit'
-                  className='settings-button settings-button--primary'
+                  className='btn btn--primary btn--sm'
                   disabled={busy}
                 >
                   {busy ? 'Saving…' : 'Save'}
@@ -1952,7 +1922,7 @@ function SettingsScreen({ onDirtyChange }: Props) {
             </header>
             <form onSubmit={(e) => void saveCategory(e)}>
               <div className='settings-modal-body settings-category-form'>
-                <label className='settings-category-name'>
+                <label className='field settings-category-name'>
                   Name
                   <input
                     autoFocus
@@ -2052,7 +2022,7 @@ function SettingsScreen({ onDirtyChange }: Props) {
                 {categoryDraft.id && (
                   <button
                     type='button'
-                    className='settings-button settings-button--danger'
+                    className='btn btn--danger btn--sm'
                     disabled={busy}
                     onClick={() => {
                       const row = categories.find(
@@ -2075,7 +2045,7 @@ function SettingsScreen({ onDirtyChange }: Props) {
                 <div className='settings-category-footer-actions'>
                   <button
                     type='button'
-                    className='settings-button'
+                    className='btn btn--secondary btn--sm'
                     disabled={busy}
                     onClick={() => setCategoryDraft(null)}
                   >
@@ -2083,7 +2053,7 @@ function SettingsScreen({ onDirtyChange }: Props) {
                   </button>
                   <button
                     type='submit'
-                    className='settings-button settings-button--primary'
+                    className='btn btn--primary btn--sm'
                     disabled={busy}
                   >
                     {busy ? 'Saving…' : 'Save category'}

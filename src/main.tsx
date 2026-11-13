@@ -6,6 +6,7 @@ import ErrorBoundary from './components/ErrorBoundary/ErrorBoundary';
 import './styles/tokens.css';
 import './styles/global.css';
 import './styles/components.css';
+import './styles/primitives.css';
 import './App.css';
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(

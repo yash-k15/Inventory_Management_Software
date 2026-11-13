@@ -196,62 +196,68 @@ function CustomDropdown({
         </svg>
       </button>
 
-      {open && (() => {
-        const isRowStatus = className.includes('orders-row-status-dropdown');
-        const triggerRect = rootRef.current?.getBoundingClientRect();
-        const menu = (
-          <div
-            ref={menuRef}
-            className={`orders-dropdown-menu ${isRowStatus ? 'orders-dropdown-menu--row-status' : ''}`}
-            role='listbox'
-            aria-label={ariaLabel}
-            style={isRowStatus && triggerRect ? {
-              position: 'fixed',
-              top: `${triggerRect.bottom + 7}px`,
-              left: `${triggerRect.left}px`,
-              width: '190px',
-              minWidth: '190px',
-              maxWidth: '190px',
-              transform: 'none',
-            } : undefined}
-          >
-          {options.map((option, index) => (
-            <button
-              key={option.value}
-              ref={(element) => {
-                optionRefs.current[index] = element;
-              }}
-              type='button'
-              role='option'
-              aria-selected={option.value === value}
-              tabIndex={highlightedIndex === index ? 0 : -1}
-              className={`orders-dropdown-option ${
-                option.value === value ? 'orders-dropdown-option--selected' : ''
-              } ${
-                highlightedIndex === index
-                  ? 'orders-dropdown-option--highlighted'
-                  : ''
-              }`}
-              onMouseEnter={() => setHighlightedIndex(index)}
-              onClick={() => selectOption(option)}
-              onKeyDown={(event) => handleOptionKeyDown(event, index)}
+      {open &&
+        (() => {
+          const isRowStatus = className.includes('orders-row-status-dropdown');
+          const triggerRect = rootRef.current?.getBoundingClientRect();
+          const menu = (
+            <div
+              ref={menuRef}
+              className={`orders-dropdown-menu ${isRowStatus ? 'orders-dropdown-menu--row-status' : ''}`}
+              role='listbox'
+              aria-label={ariaLabel}
+              style={
+                isRowStatus && triggerRect
+                  ? {
+                      position: 'fixed',
+                      top: `${triggerRect.bottom + 7}px`,
+                      left: `${triggerRect.left}px`,
+                      width: '190px',
+                      minWidth: '190px',
+                      maxWidth: '190px',
+                      transform: 'none',
+                    }
+                  : undefined
+              }
             >
-              <span>{option.label}</span>
-              {option.value === value && (
-                <svg viewBox='0 0 20 20' fill='none' aria-hidden='true'>
-                  <path d='m4 10 4 4 8-8' />
-                </svg>
-              )}
-            </button>
-          ))}
-          </div>
-        );
-        return isRowStatus ? createPortal(menu, document.body) : menu;
-      })()}
+              {options.map((option, index) => (
+                <button
+                  key={option.value}
+                  ref={(element) => {
+                    optionRefs.current[index] = element;
+                  }}
+                  type='button'
+                  role='option'
+                  aria-selected={option.value === value}
+                  tabIndex={highlightedIndex === index ? 0 : -1}
+                  className={`orders-dropdown-option ${
+                    option.value === value
+                      ? 'orders-dropdown-option--selected'
+                      : ''
+                  } ${
+                    highlightedIndex === index
+                      ? 'orders-dropdown-option--highlighted'
+                      : ''
+                  }`}
+                  onMouseEnter={() => setHighlightedIndex(index)}
+                  onClick={() => selectOption(option)}
+                  onKeyDown={(event) => handleOptionKeyDown(event, index)}
+                >
+                  <span>{option.label}</span>
+                  {option.value === value && (
+                    <svg viewBox='0 0 20 20' fill='none' aria-hidden='true'>
+                      <path d='m4 10 4 4 8-8' />
+                    </svg>
+                  )}
+                </button>
+              ))}
+            </div>
+          );
+          return isRowStatus ? createPortal(menu, document.body) : menu;
+        })()}
     </div>
   );
 }
-
 
 interface MultiSelectDropdownProps {
   label: string;
@@ -275,7 +281,8 @@ function MultiSelectDropdown({
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const allSelected = selectedValues.length === 0 || selectedValues.length === options.length;
+  const allSelected =
+    selectedValues.length === 0 || selectedValues.length === options.length;
   const selectedLabels = options
     .filter((option) => selectedValues.includes(option.value))
     .map((option) => option.label);
@@ -294,7 +301,8 @@ function MultiSelectDropdown({
         rootRef.current &&
         !rootRef.current.contains(event.target as Node) &&
         !menuRef.current?.contains(event.target as Node)
-      ) setOpen(false);
+      )
+        setOpen(false);
     }
     function handleEscape(event: KeyboardEvent) {
       if (event.key === 'Escape') setOpen(false);
@@ -308,7 +316,9 @@ function MultiSelectDropdown({
   }, [open]);
 
   function toggleValue(value: string) {
-    const currentValues = selectedValues.includes('__none__') ? [] : selectedValues;
+    const currentValues = selectedValues.includes('__none__')
+      ? []
+      : selectedValues;
     if (currentValues.includes(value)) {
       onChange(currentValues.filter((entry) => entry !== value));
     } else {
@@ -333,16 +343,35 @@ function MultiSelectDropdown({
         onClick={() => setOpen((current) => !current)}
       >
         <span className='orders-dropdown-value'>{valueLabel}</span>
-        <svg className='orders-dropdown-chevron' viewBox='0 0 20 20' fill='none' aria-hidden='true'>
+        <svg
+          className='orders-dropdown-chevron'
+          viewBox='0 0 20 20'
+          fill='none'
+          aria-hidden='true'
+        >
           <path d='m5 7.5 5 5 5-5' />
         </svg>
       </button>
       {open && (
-        <div ref={menuRef} className='orders-dropdown-menu orders-multiselect-menu' role='group' aria-label={ariaLabel}>
+        <div
+          ref={menuRef}
+          className='orders-dropdown-menu orders-multiselect-menu'
+          role='group'
+          aria-label={ariaLabel}
+        >
           <div className='orders-multiselect-actions'>
-            <button type='button' onClick={() => onChange([])}>All</button>
-            <button type='button' onClick={() => onChange(options.map((option) => option.value))}>Select all</button>
-            <button type='button' onClick={() => onChange(['__none__'])}>Clear</button>
+            <button type='button' onClick={() => onChange([])}>
+              All
+            </button>
+            <button
+              type='button'
+              onClick={() => onChange(options.map((option) => option.value))}
+            >
+              Select all
+            </button>
+            <button type='button' onClick={() => onChange(['__none__'])}>
+              Clear
+            </button>
           </div>
           {options.map((option) => {
             const checked = selectedValues.includes(option.value);
@@ -358,7 +387,10 @@ function MultiSelectDropdown({
                 onClick={() => toggleValue(option.value)}
               >
                 <span>{option.label}</span>
-                <span className={`orders-multiselect-check ${checked ? 'is-checked' : ''}`} aria-hidden='true'>
+                <span
+                  className={`orders-multiselect-check ${checked ? 'is-checked' : ''}`}
+                  aria-hidden='true'
+                >
                   {checked ? '✓' : ''}
                 </span>
               </button>
@@ -410,7 +442,9 @@ function OrdersScreen() {
   const [pageSize, setPageSize] = useState(25);
   const [filters, setFilters] = useState<OrdersFilters>(initialFilters);
   const [orders, setOrders] = useState<OrderRow[]>([]);
-  const [selectedOrderIds, setSelectedOrderIds] = useState<Set<number>>(() => new Set());
+  const [selectedOrderIds, setSelectedOrderIds] = useState<Set<number>>(
+    () => new Set(),
+  );
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [summary, setSummary] = useState<OrdersSummary>(emptySummary);
   const [options, setOptions] = useState<OrderFilterOptions>(emptyOptions);
@@ -455,11 +489,6 @@ function OrdersScreen() {
     void loadOrders();
   }, [loadOrders]);
 
-  const headingDescription = useMemo(
-    () => 'Confirmed orders from exhibitions and direct sales.',
-    [],
-  );
-
   const sortedOrders = useMemo(() => {
     if (!tableSort) return orders;
 
@@ -500,7 +529,8 @@ function OrdersScreen() {
 
   const totalPages = Math.max(1, Math.ceil(sortedOrders.length / pageSize));
   const paginatedOrders = useMemo(
-    () => sortedOrders.slice((currentPage - 1) * pageSize, currentPage * pageSize),
+    () =>
+      sortedOrders.slice((currentPage - 1) * pageSize, currentPage * pageSize),
     [sortedOrders, currentPage, pageSize],
   );
 
@@ -623,11 +653,12 @@ function OrdersScreen() {
     { value: '365', label: 'Last 12 months' },
   ];
 
-  const statusDropdownOptions: DropdownOption[] = statusOptions.map((status) => ({
-    value: status,
-    label: status,
-  }));
-
+  const statusDropdownOptions: DropdownOption[] = statusOptions.map(
+    (status) => ({
+      value: status,
+      label: status,
+    }),
+  );
 
   async function handleStatusChange(order: OrderRow, value: string) {
     try {
@@ -702,30 +733,53 @@ function OrdersScreen() {
 
   return (
     <section className='orders-screen'>
-      <header className='orders-page-heading'>
-        <div>
-          <h1 className='orders-page-title'>Orders</h1>
-          <p className='orders-page-description'>{headingDescription}</p>
+      <header className='page-header orders-page-heading'>
+        <div className='page-header__heading'>
+          <h1 className='page-title orders-page-title'>Orders</h1>
         </div>
 
-        <div className='orders-heading-actions'>
+        <div className='page-header__actions orders-heading-actions'>
           <button
             type='button'
-            className='orders-export-button'
+            className='btn btn--export orders-export-button'
             onClick={() => setShowExportDialog(true)}
             disabled={loading || Boolean(error)}
-            title={selectedOrdersForExport.length > 0 ? `Export ${selectedOrdersForExport.length} selected orders` : 'Export filtered orders'}
+            title={
+              selectedOrdersForExport.length > 0
+                ? `Export ${selectedOrdersForExport.length} selected orders`
+                : 'Export filtered orders'
+            }
           >
             <svg viewBox='0 0 20 20' fill='none' aria-hidden='true'>
-              <path d='M10 2.5v9' stroke='currentColor' strokeWidth='1.6' strokeLinecap='round' />
-              <path d='m6.5 8.5 3.5 3.5 3.5-3.5' stroke='currentColor' strokeWidth='1.6' strokeLinecap='round' strokeLinejoin='round' />
-              <path d='M3.5 13.5v3h13v-3' stroke='currentColor' strokeWidth='1.6' strokeLinecap='round' strokeLinejoin='round' />
+              <path
+                d='M10 2.5v9'
+                stroke='currentColor'
+                strokeWidth='1.6'
+                strokeLinecap='round'
+              />
+              <path
+                d='m6.5 8.5 3.5 3.5 3.5-3.5'
+                stroke='currentColor'
+                strokeWidth='1.6'
+                strokeLinecap='round'
+                strokeLinejoin='round'
+              />
+              <path
+                d='M3.5 13.5v3h13v-3'
+                stroke='currentColor'
+                strokeWidth='1.6'
+                strokeLinecap='round'
+                strokeLinejoin='round'
+              />
             </svg>
-            Export{selectedOrdersForExport.length > 0 ? ` (${selectedOrdersForExport.length})` : ''}
+            Export
+            {selectedOrdersForExport.length > 0
+              ? ` (${selectedOrdersForExport.length})`
+              : ''}
           </button>
           <button
             type='button'
-            className='orders-create-button'
+            className='btn btn--primary orders-create-button'
             onClick={() => setCreateOrderOpen(true)}
             title='Create a new order'
           >
@@ -799,7 +853,13 @@ function OrdersScreen() {
           label='Source'
           ariaLabel='Filter by order source'
           className='orders-source-filter'
-          selectedValues={Array.isArray(filters.exhibitionId) ? filters.exhibitionId : filters.exhibitionId === 'all' ? [] : [filters.exhibitionId]}
+          selectedValues={
+            Array.isArray(filters.exhibitionId)
+              ? filters.exhibitionId
+              : filters.exhibitionId === 'all'
+                ? []
+                : [filters.exhibitionId]
+          }
           options={sourceDropdownOptions}
           allLabel='All sources'
           onChange={(values) => updateFilter('exhibitionId', values)}
@@ -819,7 +879,13 @@ function OrdersScreen() {
           label='Status'
           ariaLabel='Filter by order status'
           className='orders-status-filter'
-          selectedValues={Array.isArray(filters.status) ? filters.status : filters.status === 'All' ? [] : [filters.status]}
+          selectedValues={
+            Array.isArray(filters.status)
+              ? filters.status
+              : filters.status === 'All'
+                ? []
+                : [filters.status]
+          }
           options={statusDropdownOptions}
           allLabel='All statuses'
           onChange={(values) => updateFilter('status', values as OrderStatus[])}
@@ -852,11 +918,16 @@ function OrdersScreen() {
                   <input
                     type='checkbox'
                     aria-label='Select all orders on this page'
-                    title={allCurrentPageSelected ? 'Deselect current page' : 'Select current page'}
+                    title={
+                      allCurrentPageSelected
+                        ? 'Deselect current page'
+                        : 'Select current page'
+                    }
                     checked={allCurrentPageSelected}
                     ref={(element) => {
                       if (element) {
-                        element.indeterminate = someCurrentPageSelected && !allCurrentPageSelected;
+                        element.indeterminate =
+                          someCurrentPageSelected && !allCurrentPageSelected;
                       }
                     }}
                     onChange={toggleCurrentPageSelection}
@@ -1002,8 +1073,10 @@ function OrdersScreen() {
 
         <footer className='orders-table-footer orders-table-pagination'>
           <span className='orders-pagination-range'>
-            Showing {sortedOrders.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}–
-            {Math.min(currentPage * pageSize, sortedOrders.length)} of {sortedOrders.length} orders
+            Showing{' '}
+            {sortedOrders.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}–
+            {Math.min(currentPage * pageSize, sortedOrders.length)} of{' '}
+            {sortedOrders.length} orders
           </span>
           <div className='orders-pagination-controls'>
             <label className='orders-page-size-control'>
@@ -1014,15 +1087,53 @@ function OrdersScreen() {
                 aria-label='Rows per page'
               >
                 {[10, 25, 50, 100].map((size) => (
-                  <option key={size} value={size}>{size}</option>
+                  <option key={size} value={size}>
+                    {size}
+                  </option>
                 ))}
               </select>
             </label>
-            <span className='orders-pagination-page'>Page {currentPage} of {totalPages}</span>
-            <button type='button' aria-label='First page' title='First page' disabled={currentPage === 1} onClick={() => setCurrentPage(1)}>«</button>
-            <button type='button' aria-label='Previous page' title='Previous page' disabled={currentPage === 1} onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}>‹</button>
-            <button type='button' aria-label='Next page' title='Next page' disabled={currentPage === totalPages} onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}>›</button>
-            <button type='button' aria-label='Last page' title='Last page' disabled={currentPage === totalPages} onClick={() => setCurrentPage(totalPages)}>»</button>
+            <span className='orders-pagination-page'>
+              Page {currentPage} of {totalPages}
+            </span>
+            <button
+              type='button'
+              aria-label='First page'
+              title='First page'
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage(1)}
+            >
+              «
+            </button>
+            <button
+              type='button'
+              aria-label='Previous page'
+              title='Previous page'
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+            >
+              ‹
+            </button>
+            <button
+              type='button'
+              aria-label='Next page'
+              title='Next page'
+              disabled={currentPage === totalPages}
+              onClick={() =>
+                setCurrentPage((page) => Math.min(totalPages, page + 1))
+              }
+            >
+              ›
+            </button>
+            <button
+              type='button'
+              aria-label='Last page'
+              title='Last page'
+              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage(totalPages)}
+            >
+              »
+            </button>
           </div>
         </footer>
       </section>
@@ -1044,7 +1155,11 @@ function OrdersScreen() {
                 sort: 'newest',
               }),
           }}
-          selectedRows={selectedOrdersForExport.length > 0 ? selectedOrdersForExport : undefined}
+          selectedRows={
+            selectedOrdersForExport.length > 0
+              ? selectedOrdersForExport
+              : undefined
+          }
           onClose={() => setShowExportDialog(false)}
         />
       )}

@@ -368,12 +368,9 @@ function PaymentsScreen({ onViewOrder }: PaymentsScreenProps) {
 
   return (
     <section className='payments-screen'>
-      <header className='payments-page-heading'>
+      <header className='page-header payments-page-heading'>
         <div>
-          <h1 className='payments-page-title'>Payments</h1>
-          <p className='payments-page-description'>
-            A history of payments recorded against orders.
-          </p>
+          <h1 className='page-title payments-page-title'>Payments</h1>
         </div>
         <div className='payments-heading-actions'>
           {selectedPaymentIds.length > 0 && (
@@ -392,7 +389,7 @@ function PaymentsScreen({ onViewOrder }: PaymentsScreenProps) {
           )}
           <button
             type='button'
-            className='payments-export-button'
+            className='btn btn--export payments-export-button'
             onClick={() => setShowExportDialog(true)}
             title={
               selectedPaymentIds.length > 0
@@ -434,18 +431,18 @@ function PaymentsScreen({ onViewOrder }: PaymentsScreenProps) {
       </header>
 
       <section className='payments-summary' aria-label='Payment summary'>
-        <div className='payments-summary-card'>
-          <span className='payments-summary-label'>Total received</span>
-          <strong className='payments-summary-value'>
+        <div className='stat payments-summary-card'>
+          <span className='stat__label payments-summary-label'>Total received</span>
+          <strong className='stat__value payments-summary-value'>
             {formatMoney(summary.totalReceivedPaise)}
           </strong>
           <span className='payments-summary-note'>
             All recorded payment transactions
           </span>
         </div>
-        <div className='payments-summary-card'>
-          <span className='payments-summary-label'>Transactions</span>
-          <strong className='payments-summary-value'>
+        <div className='stat payments-summary-card'>
+          <span className='stat__label payments-summary-label'>Transactions</span>
+          <strong className='stat__value payments-summary-value'>
             {summary.transactionCount}
           </strong>
           <span className='payments-summary-note'>
@@ -517,7 +514,7 @@ function PaymentsScreen({ onViewOrder }: PaymentsScreenProps) {
         aria-label='Payment transactions'
       >
         <div className='payments-table-scroll'>
-          <table className='payments-table'>
+          <table className='data-table payments-table'>
             <thead>
               <tr>
                 <th className='payments-checkbox-cell'>

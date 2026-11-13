@@ -19,6 +19,16 @@
 
   /* Borders and feedback */
   --color-border: #e5ddd3;
+
+  /* Semantic aliases for shared primitives; these preserve the current palette */
+  --color-ink: var(--color-text);
+  --color-ink-muted: var(--color-text-muted);
+  --color-border-soft: var(--color-border);
+  --color-border-strong: var(--color-border);
+  --color-surface-warm: var(--color-background);
+  --color-surface-warm-2: var(--color-surface-muted);
+  --color-accent-ink: var(--color-accent-hover);
+
   --color-success: #287a4b;
   --color-warning: #946200;
   --color-danger: #b42318;
@@ -33,6 +43,11 @@
   --font-size-lg: 1.125rem;
   --font-size-xl: 1.5rem;
   --font-size-2xl: 2rem;
+
+  /* Shared typography aliases for consistent component styling */
+  --font-size-h2: var(--font-size-xl);
+  --font-size-h3: var(--font-size-lg);
+  --font-size-small: var(--font-size-sm);
 
   /* Semantic typography */
   --font-family-heading: Georgia, "Times New Roman", serif;
@@ -59,11 +74,16 @@
   --space-6: 1.5rem;
   --space-8: 2rem;
   --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-14: 3.5rem;
+  --space-16: 4rem;
 
   /* Borders and shadows */
+  --radius-xs: 0.25rem;
   --radius-sm: 0.25rem;
   --radius-md: 0.5rem;
   --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
   --radius-full: 9999px;
   --shadow-sm: 0 1px 3px rgb(44 34 34 / 8%);
   --shadow-md: 0 4px 12px rgb(44 34 34 / 10%);

@@ -1,7 +1,7 @@
 {
   "name": "inventory_management_system",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -31,5 +31,6 @@
     "@vitejs/plugin-react": "^6.0.2",
     "typescript": "~6.0.3",
     "vite": "^8.0.16"
-  }
+  },
+  "description": "Offline-first inventory management software for jewellery businesses"
 }

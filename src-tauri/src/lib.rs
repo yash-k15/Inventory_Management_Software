@@ -21,6 +21,14 @@ mod data_transfer;
 fn allow_image_preview(app: tauri::AppHandle, path: String) -> Result<(), String> {
     use std::path::Path;
 
+    let image_directory = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("Could not resolve application data directory: {error}"))?
+        .join("item-images")
+        .canonicalize()
+        .map_err(|error| format!("Could not resolve item image directory: {error}"))?;
+
     let path = Path::new(&path)
         .canonicalize()
         .map_err(|error| format!("Could not resolve image path: {error}"))?;
@@ -29,9 +37,57 @@ fn allow_image_preview(app: tauri::AppHandle, path: String) -> Result<(), String
         return Err("The selected image is not a valid file.".to_string());
     }
 
+    if !path.starts_with(&image_directory) {
+        return Err("Only images stored in the application's item-images folder can be previewed here.".to_string());
+    }
+
     app.asset_protocol_scope()
         .allow_file(&path)
         .map_err(|error| format!("Could not authorize image preview: {error}"))
+}
+
+#[tauri::command]
+async fn pick_item_image(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let selected = app
+        .dialog()
+        .file()
+        .add_filter(
+            "Jewelry images",
+            &["jpg", "jpeg", "png", "webp", "heic", "heif"],
+        )
+        .blocking_pick_file();
+
+    let Some(selected) = selected else {
+        return Ok(None);
+    };
+
+    let selected_path = selected
+        .into_path()
+        .map_err(|error| format!("Could not resolve selected image: {error}"))?;
+    let selected_path = selected_path
+        .canonicalize()
+        .map_err(|error| format!("Could not resolve selected image: {error}"))?;
+
+    if !selected_path.is_file() {
+        return Err("The selected image is not a valid file.".to_string());
+    }
+
+    let extension = selected_path
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    if !["jpg", "jpeg", "png", "webp", "heic", "heif"].contains(&extension.as_str()) {
+        return Err("Please select a JPG, PNG, WEBP, HEIC, or HEIF image.".to_string());
+    }
+
+    app.asset_protocol_scope()
+        .allow_file(&selected_path)
+        .map_err(|error| format!("Could not authorize selected image preview: {error}"))?;
+
+    Ok(Some(selected_path.to_string_lossy().into_owned()))
 }
 
 
@@ -313,6 +369,7 @@ pub fn run() {
     let builder = builder.invoke_handler(tauri::generate_handler![
         greet,
         allow_image_preview,
+        pick_item_image,
         print_tag_bitmap,
         write_export_file,
         item_number::preview_item_number,
@@ -339,6 +396,7 @@ pub fn run() {
     let builder = builder.invoke_handler(tauri::generate_handler![
         greet,
         allow_image_preview,
+        pick_item_image,
         print_tag_bitmap,
         write_export_file,
         item_number::update_item,

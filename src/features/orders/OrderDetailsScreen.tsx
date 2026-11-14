@@ -105,11 +105,17 @@ function OrderItemImage({
         } catch (pathError) {
           lastError = pathError;
         }
-        // Some older records store an absolute path in a file URL or a path relative to the app data directory.
-        if (candidate.startsWith('file://'))
-          resolvedCandidates.push(
-            decodeURIComponent(candidate.replace(/^file:\/\//, '')),
-          );
+        // File URLs are accepted only when they resolve inside appData/item-images;
+        // the Rust authorization command enforces that boundary.
+        if (candidate.startsWith('file://')) {
+          try {
+            resolvedCandidates.push(
+              decodeURIComponent(candidate.replace(/^file:\/\//, '')),
+            );
+          } catch (pathError) {
+            lastError = pathError;
+          }
+        }
         for (const resolvedPath of [...new Set(resolvedCandidates)]) {
           try {
             await invoke('allow_image_preview', { path: resolvedPath });

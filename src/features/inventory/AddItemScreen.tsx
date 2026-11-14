@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import { appDataDir, join } from '@tauri-apps/api/path';
-import { open } from '@tauri-apps/plugin-dialog';
 import { getDatabase } from '../../db';
 import {
   getItemDetails,
@@ -643,20 +642,9 @@ function AddItemScreen({ onCancel, onCreated, itemId, onUpdated }: Props) {
     setError(null);
 
     try {
-      const selected = await open({
-        multiple: false,
-        directory: false,
-        filters: [
-          {
-            name: 'Jewelry images',
-            extensions: ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'],
-          },
-        ],
-      });
+      const selected = await invoke<string | null>('pick_item_image');
 
-      if (typeof selected === 'string') {
-        await invoke('allow_image_preview', { path: selected });
-
+      if (selected) {
         setImageSource(selected);
         setImageFileName(selected.split(/[\\/]/).pop() || selected);
         setExistingImageUrl(null);
